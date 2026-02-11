@@ -27,7 +27,7 @@ public class BankAccount {
     @Column(name = "bank_name", nullable = false)
     private String bankName;
 
-    @Column(name = "is_active")
+    @Column(name = "is_active", nullable = false)
     private Boolean isActive;
 
     public Long getBankId() {

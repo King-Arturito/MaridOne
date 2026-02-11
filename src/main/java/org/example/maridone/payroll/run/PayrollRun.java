@@ -24,6 +24,9 @@ public class PayrollRun {
     @Column(name = "period_end", nullable = false)
     private LocalDate periodEnd;
 
+    @Column(name = "period_description", nullable = true)
+    private String periodDescription;
+
     @Column(name = "payroll_status", nullable = false)
     @Enumerated(EnumType.STRING)
     private PayrollStatus payrollStatus;
@@ -32,7 +35,7 @@ public class PayrollRun {
     @Enumerated(EnumType.STRING)
     private RunType runType;
 
-    @OneToMany(mappedBy = "payrollRun")
+    @OneToMany(mappedBy = "payrollRun", fetch = FetchType.LAZY)
     private List<PayrollItem> items;
 
     public Long getPayId() {
@@ -61,6 +64,14 @@ public class PayrollRun {
 
     public void setPeriodEnd(LocalDate periodEnd) {
         this.periodEnd = periodEnd;
+    }
+
+    public String getPeriodDescription() {
+        return periodDescription;
+    }
+
+    public void setPeriodDescription(String periodDescription) {
+        this.periodDescription = periodDescription;
     }
 
     public RunType getRunType() {

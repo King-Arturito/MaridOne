@@ -33,7 +33,7 @@ public class OvertimeController {
     //request overtime for all
     @PostMapping("/create")
     @PreAuthorize("isAuthenticated()")
-    public ResponseEntity<Void> createOvertimeRequest(
+    public ResponseEntity<OvertimeRequest> createOvertimeRequest(
             @RequestBody @Valid OvertimeRequestDto requestDto,
             Authentication authentication) {
         OvertimeRequest request = overtimeService.createOvertimeRequest(requestDto, authentication.getName());
@@ -42,7 +42,7 @@ public class OvertimeController {
                 .path("/api/overtime/create/{id}")
                 .buildAndExpand(request.getOvertimeId())
                 .toUri();
-        return ResponseEntity.created(location).build();
+        return ResponseEntity.created(location).body(request);
     }
 
     //update Overtime Request status for HR

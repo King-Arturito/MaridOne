@@ -73,6 +73,7 @@ public class SampleRows {
         payrollRun.setRunType(RunType.REGULAR);
         payrollRun.setPeriodStart(LocalDate.now().minusDays(14));
         payrollRun.setPeriodEnd(LocalDate.now());
+        payrollRun.setPeriodDescription("Test1");
         payrollRunRepository.save(payrollRun);
 
         for (int i = 1; i <= 10; i++) {

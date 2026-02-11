@@ -1,6 +1,5 @@
 package org.example.maridone.core.bank;
 
-import jakarta.validation.Valid;
 import org.example.maridone.core.dto.BankAccountDto;
 import org.example.maridone.core.mapper.CoreMapper;
 import org.example.maridone.marker.OnCreate;

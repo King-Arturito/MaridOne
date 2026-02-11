@@ -1,7 +1,6 @@
-package org.example.maridone.log;
+package org.example.maridone.log.activity;
 
 import jakarta.persistence.*;
-import org.example.maridone.core.employee.Employee;
 import org.example.maridone.enums.Activity;
 
 import java.time.Instant;
@@ -12,7 +11,7 @@ public class ActivityLog {
     @Column(name = "activity_id")
     private Long activityId;
 
-    @Column(name = "emp_id")
+    @Column(name = "emp_id", nullable = false)
     private Long employeeId;
 
     @Column(name = "activity_type", nullable = false)

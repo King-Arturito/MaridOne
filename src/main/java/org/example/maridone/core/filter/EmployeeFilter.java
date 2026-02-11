@@ -1,4 +1,4 @@
-package org.example.maridone.core.spec;
+package org.example.maridone.core.filter;
 
 import org.example.maridone.enums.EmploymentStatus;
 import org.example.maridone.enums.Position;

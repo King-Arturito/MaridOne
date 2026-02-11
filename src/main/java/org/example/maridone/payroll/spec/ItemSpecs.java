@@ -6,7 +6,6 @@ import org.springframework.data.jpa.domain.Specification;
 
 public class ItemSpecs {
 
-
     public static Specification<PayrollItem> hasEmployeeId(Long empId) {
         return (root, query, cb) -> {
             if (empId == null) {

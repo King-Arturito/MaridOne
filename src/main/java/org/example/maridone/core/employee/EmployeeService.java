@@ -4,7 +4,7 @@ import org.example.maridone.core.dto.EmployeeDetailsDto;
 import org.example.maridone.core.dto.EmployeeRequestDto;
 import org.example.maridone.core.dto.EmployeeResponseDto;
 import org.example.maridone.core.mapper.CoreMapper;
-import org.example.maridone.core.spec.EmployeeFilter;
+import org.example.maridone.core.filter.EmployeeFilter;
 import org.example.maridone.core.spec.EmployeeSpecs;
 import org.example.maridone.embeddable.Address;
 import org.example.maridone.exception.EmployeeNotFoundException;
@@ -14,7 +14,6 @@ import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.List;
 import java.util.Optional;
 
 @Service

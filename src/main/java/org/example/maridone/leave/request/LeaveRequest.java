@@ -17,7 +17,7 @@ public class LeaveRequest {
 
     @JsonIgnore
     @ManyToOne
-    @JoinColumn(name = "emp_id")
+    @JoinColumn(name = "emp_id", nullable = false)
     private Employee employee;
 
     @Column(name = "start_date", nullable = false)

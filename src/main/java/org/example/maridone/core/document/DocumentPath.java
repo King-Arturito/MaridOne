@@ -9,20 +9,20 @@ public class DocumentPath {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "path_id")
+    @Column(name = "path_id", nullable = false)
     private Long pathId;
 
-    @Column(name = "file_path")
+    @Column(name = "file_path", nullable = false)
     private String filePath;
 
-    @Column(name = "file_name")
+    @Column(name = "file_name", nullable = false)
     private String fileName;
 
-    @Column(name = "file_type")
+    @Column(name = "file_type", nullable = false)
     private String fileType;
 
     @ManyToOne
-    @JoinColumn(name = "username")
+    @JoinColumn(name = "username", nullable = false)
     private UserAccount username;
 
     public Long getPathId() {

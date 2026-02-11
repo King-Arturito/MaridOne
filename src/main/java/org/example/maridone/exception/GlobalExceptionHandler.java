@@ -19,7 +19,8 @@ public class GlobalExceptionHandler {
             LeaveNotFoundException.class,
             ShiftsNotFoundException.class,
             BankNotFoundException.class,
-            CalendarEventNotFound.class
+            CalendarEventNotFound.class,
+            RuntimeException.class
     })
     public ResponseEntity<Map<String, String>> handleNotFoundExceptions(RuntimeException ex) {
         return ResponseEntity.status(HttpStatus.NOT_FOUND)

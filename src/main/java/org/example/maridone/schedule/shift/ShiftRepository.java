@@ -7,7 +7,7 @@ import java.util.List;
 
 @Repository
 public interface ShiftRepository extends JpaRepository<ShiftSchedule, Long> {
-    ShiftSchedule findByEmployeeId(Long empId);
-
     List<ShiftSchedule> findAllByEmployeeId(Long empId);
+
+    List<ShiftSchedule> findByEmployee_EmployeeIdIn(List<Long> employeeIds);
 }

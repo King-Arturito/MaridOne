@@ -21,13 +21,4 @@ public class LeaveSpecs {
             );
         };
     }
-
-    public static Specification<LeaveBalance> hasLeaveType(LeaveType leaveType) {
-        return (root, query, cb) -> {
-            if (leaveType == null) {
-                return cb.conjunction();
-            }
-            return cb.equal(root.get("leaveType"), leaveType);
-        };
-    }
 }

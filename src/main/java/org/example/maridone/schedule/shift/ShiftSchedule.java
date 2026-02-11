@@ -26,17 +26,17 @@ public class ShiftSchedule {
     @Column(name = "emp_id", insertable = false, updatable = false)
     private Long employeeId;
 
-    @Column(name = "start_time")
+    @Column(name = "start_time", nullable = false)
     private LocalTime startTime;
 
-    @Column(name = "end_time")
+    @Column(name = "end_time", nullable = false)
     private LocalTime endTime;
 
-    @Column(name = "day_of_week")
+    @Column(name = "day_of_week", nullable = false)
     @Enumerated(EnumType.STRING)
     private DayOfWeek dayOfWeek;
 
-    @Column(name = "shift_type")
+    @Column(name = "shift_type", nullable = false)
     @Enumerated(EnumType.STRING)
     private EarningsType earningsType;
 

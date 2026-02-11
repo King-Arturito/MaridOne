@@ -32,4 +32,7 @@ public class ItemComponentController {
     public List<DeductionsDto> getDeductions(@PathVariable Long itemId) {
         return deductionsService.getDeductions(itemId);
     }
+
+    //create earnings
+    //create deductions
 }

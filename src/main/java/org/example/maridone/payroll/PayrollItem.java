@@ -27,6 +27,7 @@ public class PayrollItem {
 
     @ManyToOne
     @JoinColumn(name = "pay_id", nullable = false)
+    @JsonIgnore
     private PayrollRun payrollRun;
 
     //calculate by earnings

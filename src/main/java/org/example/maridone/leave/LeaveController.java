@@ -79,7 +79,7 @@ public class LeaveController {
                 .path("/{requestId}")
                 .buildAndExpand(request.getRequestId())
                 .toUri();
-        return ResponseEntity.created(location).build();
+        return ResponseEntity.created(location).body(request);
     }
 
     @PatchMapping("update/{requestId}")

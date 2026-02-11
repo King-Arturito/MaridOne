@@ -1,5 +1,6 @@
 package org.example.maridone.notification;
 
+import org.example.maridone.common.CommonSpecs;
 import org.example.maridone.notification.spec.NotificationSpecs;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -21,7 +22,7 @@ public class NotificationService {
     @Transactional(readOnly = true)
     public Page<Notification> getUserNotifications(String username, Boolean status, Pageable pageable) {
         Specification<Notification> spec = Specification.allOf(
-                NotificationSpecs.hasStatus(status),
+                CommonSpecs.fieldEquals("readStatus", status),
                 NotificationSpecs.hasUsername(username)
         );
         return notificationRepository.findAll(spec, pageable);

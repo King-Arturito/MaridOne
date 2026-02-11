@@ -25,9 +25,11 @@ public class EarningsLine {
     @Column(name = "hours", nullable = true)
     private BigDecimal hours;
 
+    // employee_rate * this.rate
     @Column(name = "rate", nullable = true)
     private BigDecimal rate;
 
+    // employee_rate * this.rate * hours
     @Column(name = "amount", nullable = false)
     private BigDecimal amount;
 
@@ -35,7 +37,7 @@ public class EarningsLine {
     private LocalDate earningsDate;
 
     @Column(name = "is_overtime", nullable = false)
-    private boolean isOvertime;
+    private Boolean isOvertime;
 
     @OneToOne
     @JoinColumn(name = "earningsLine", nullable = true)
@@ -86,11 +88,11 @@ public class EarningsLine {
         this.earningsDate = earningsDate;
     }
 
-    public boolean getOvertime() {
+    public Boolean getOvertime() {
         return isOvertime;
     }
 
-    public void setOvertime(boolean overtime) {
+    public void setOvertime(Boolean overtime) {
         isOvertime = overtime;
     }
 

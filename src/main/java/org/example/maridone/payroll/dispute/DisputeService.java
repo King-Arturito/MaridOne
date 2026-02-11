@@ -1,5 +1,6 @@
 package org.example.maridone.payroll.dispute;
 
+import org.example.maridone.common.CommonSpecs;
 import org.example.maridone.enums.Status;
 import org.example.maridone.exception.DuplicateDisputeException;
 import org.example.maridone.exception.InvalidActionException;
@@ -18,8 +19,6 @@ import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import java.time.Instant;
-
-import static org.example.maridone.payroll.spec.DisputeSpecs.hasStatus;
 
 @Service
 public class DisputeService {
@@ -81,7 +80,7 @@ public class DisputeService {
     @Transactional(readOnly = true)
     public Page<DisputeResponseDto> getMyDisputeRequests(Long empId, Status status, Pageable pageable) {
         Specification<DisputeRequest> spec = Specification.allOf(
-                DisputeSpecs.hasStatus(status),
+                CommonSpecs.fieldEquals("status", status),
                 DisputeSpecs.hasEmployeeId(empId)
                 );
         Page<DisputeRequest> entityPage = disputeRepository.findAll(spec, pageable);

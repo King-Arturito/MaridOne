@@ -1,16 +1,14 @@
 package org.example.maridone.schedule.calendar;
 
+import org.example.maridone.common.CommonSpecs;
 import org.example.maridone.exception.CalendarEventNotFound;
 import org.example.maridone.schedule.dto.CalendarDto;
 import org.example.maridone.schedule.mapper.CalendarMapper;
-import org.example.maridone.schedule.shift.ShiftRepository;
-import org.example.maridone.schedule.spec.CalendarSpec;
+import org.example.maridone.schedule.spec.CalendarSpecs;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDate;
-import java.time.ZoneId;
 import java.util.List;
 
 @Service
@@ -58,8 +56,8 @@ public class CalendarService {
 
     public List<CompanyCalendar> getAllEvents(int month, int year) {
         Specification<CompanyCalendar> spec = Specification.allOf(
-                CalendarSpec.isWithinMonth(month, year),
-                CalendarSpec.isActive()
+                CalendarSpecs.isWithinMonth(month, year),
+                CommonSpecs.fieldEquals("isActive", Boolean.TRUE)
         );
         return calendarRepository.findAll(spec);
     }

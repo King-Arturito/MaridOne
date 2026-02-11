@@ -1,5 +1,6 @@
 package org.example.maridone.leave;
 
+import org.example.maridone.common.CommonSpecs;
 import org.example.maridone.core.employee.Employee;
 import org.example.maridone.core.employee.EmployeeRepository;
 import org.example.maridone.core.user.UserAccount;
@@ -49,7 +50,7 @@ public class LeaveService {
     public LeaveBalance createLeaveBalance(Long empId, BalanceRequestDto payload) {
         Specification<LeaveBalance> spec = Specification.allOf(
                 LeaveSpecs.hasEmployeeId(empId),
-                LeaveSpecs.hasLeaveType(payload.getLeaveType())
+                CommonSpecs.fieldEquals("leaveType", payload.getLeaveType())
         );
         Optional<LeaveBalance> check = leaveBalanceRepository.findOne(spec);
         Employee emp = employeeRepository.findById(empId).orElseThrow(() -> new EmployeeNotFoundException(empId));
@@ -70,7 +71,7 @@ public class LeaveService {
     public void updateBalance(Long empId, UpdateBalanceDto payload) {
         Specification<LeaveBalance> spec = Specification.allOf(
                 LeaveSpecs.hasEmployeeId(empId),
-                LeaveSpecs.hasLeaveType(payload.getLeaveType())
+                CommonSpecs.fieldEquals("leaveType",  payload.getLeaveType())
         );
         LeaveBalance lb = leaveBalanceRepository.findOne(spec).orElseThrow(() -> new LeaveNotFoundException
                 (

@@ -1,4 +1,4 @@
-package com.maridone.payroll.enums;
+package org.example.maridone.enums;
 
 /**
  * DeductionType defines the different categories of salary deductions
@@ -6,7 +6,7 @@ package com.maridone.payroll.enums;
  */
 public enum DeductionType {
     // --- Statutory Government Contributions ---
-    /** Home Development Mutual Fund (HDMF) - Fixed at ₱200 for salaries >₱10k */
+    /** Home Development Mutual Fund (HDMF) - Fixed at ₱200 for salaries >₱10k */   
     PAGIBIG,
     
     /** Social Security System - 15% total rate (5% EE Share) */

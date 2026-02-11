@@ -1,4 +1,4 @@
-package org.example.maridone.log;
+package org.example.maridone.log.attendance;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
@@ -11,13 +11,11 @@ public class AttendanceLog {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "attendance_id")
+    @Column(name = "attendance_id", nullable = false)
     private Long attendanceId;
 
-    @JsonIgnore
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "emp_id", nullable = false)
-    private Employee employee;
+    @Column(name = "emp_id", nullable = false)
+    private Long employeeId;
 
     @Column(name = "timestamp", nullable = false)
     private Instant timestamp;
@@ -29,12 +27,12 @@ public class AttendanceLog {
         return attendanceId;
     }
 
-    public Employee getEmployee() {
-        return employee;
+    public Long getEmployeeId() {
+        return employeeId;
     }
 
-    public void setEmployee(Employee employee) {
-        this.employee = employee;
+    public void setEmployeeId(Long employeeId) {
+        this.employeeId = employeeId;
     }
 
     public Instant getTimestamp() {

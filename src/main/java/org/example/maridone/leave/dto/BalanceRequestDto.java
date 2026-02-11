@@ -11,12 +11,10 @@ import java.math.BigDecimal;
 
 public class BalanceRequestDto {
     @NotNull
-    @NotEmpty
     @PositiveOrZero
     private Long empId;
 
     @NotNull
-    @NotEmpty
     @PositiveOrZero
     private BigDecimal balanceHours;
 

@@ -5,7 +5,7 @@ import org.example.maridone.enums.RunType;
 
 import java.time.LocalDate;
 
-public class RunDetailsDto {
+public class RunResponseDto {
 
     private Long id;
     private LocalDate periodStart;

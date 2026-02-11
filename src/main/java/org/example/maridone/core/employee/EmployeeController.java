@@ -3,7 +3,7 @@ package org.example.maridone.core.employee;
 import org.example.maridone.core.dto.EmployeeDetailsDto;
 import org.example.maridone.core.dto.EmployeeRequestDto;
 import org.example.maridone.core.dto.EmployeeResponseDto;
-import org.example.maridone.core.spec.EmployeeFilter;
+import org.example.maridone.core.filter.EmployeeFilter;
 import org.example.maridone.core.user.UserAccountService;
 import org.example.maridone.marker.HrUpdate;
 import org.springframework.data.domain.Page;
@@ -18,7 +18,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 import java.net.URI;
-import java.util.List;
 
 @RestController
 @RequestMapping("/api/employees")

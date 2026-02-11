@@ -5,11 +5,10 @@ import org.example.maridone.schedule.calendar.CompanyCalendar;
 import org.springframework.data.jpa.domain.Specification;
 
 import java.time.Instant;
-import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
 
-public class CalendarSpec {
+public class CalendarSpecs {
 
     public static Specification<CompanyCalendar> isWithinMonth(int month, int year) {
         return (root, query, cb) -> {
@@ -23,9 +22,5 @@ public class CalendarSpec {
                     cb.lessThan(root.get("startDate"), end)
             );
         };
-    }
-
-    public static Specification<CompanyCalendar> isActive() {
-        return (root, query, cb) -> cb.equal(root.get("isActive"), true);
     }
 }

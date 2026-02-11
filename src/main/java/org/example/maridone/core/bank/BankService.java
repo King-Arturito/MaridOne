@@ -1,10 +1,10 @@
 package org.example.maridone.core.bank;
 
 import jakarta.validation.Valid;
+import org.example.maridone.common.CommonSpecs;
 import org.example.maridone.core.dto.BankAccountDto;
 import org.example.maridone.core.employee.Employee;
 import org.example.maridone.core.employee.EmployeeRepository;
-import org.example.maridone.core.spec.BankSpecs;
 import org.example.maridone.exception.BankInactiveException;
 import org.example.maridone.exception.BankNotFoundException;
 import org.example.maridone.exception.EmployeeNotFoundException;
@@ -56,8 +56,8 @@ public class BankService {
         employeeRepository.findById(empId).orElseThrow(() -> new EmployeeNotFoundException(empId));
 
         Specification<BankAccount> specs = Specification.allOf(
-                BankSpecs.isActive(Boolean.TRUE),
-                BankSpecs.hasEmployeeId(empId)
+                CommonSpecs.fieldEquals("isActive", Boolean.TRUE),
+                CommonSpecs.fieldEquals("employeeId", empId)
         );
         return bankAccountRepository.findAll(specs);
     }

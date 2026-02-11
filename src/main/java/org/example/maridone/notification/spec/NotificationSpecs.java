@@ -23,13 +23,4 @@ public class NotificationSpecs {
                             .get("username"), username);
         };
     }
-
-    public static Specification<Notification> hasStatus(Boolean status) {
-        return (root, query, cb) -> {
-            if (status == null) {
-                return cb.conjunction();
-            }
-            return cb.equal(root.get("readStatus"), status);
-        };
-    }
 }

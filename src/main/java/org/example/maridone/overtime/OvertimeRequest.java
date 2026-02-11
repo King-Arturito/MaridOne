@@ -31,7 +31,7 @@ public class OvertimeRequest {
     @OneToOne(mappedBy = "overtimeRequest", cascade = CascadeType.ALL)
     private EarningsLine earningsLine;
 
-    @Column(name = "request_status")
+    @Column(name = "request_status", nullable = false)
     @Enumerated(EnumType.STRING)
     private Status requestStatus;
 
