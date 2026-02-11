@@ -51,6 +51,6 @@ public class BankController {
     @GetMapping("{empId}")
     @PreAuthorize("@userCheck.isSelf(#empId, authentication.getName())")
     public List<BankAccountDto> getBankAccounts(@PathVariable Long empId) {
-        return coreMapper.bankAccountsToBankAccountDtos(bankService.getBankAccounts(empId));
+        return coreMapper.toBankAccountDtos(bankService.getBankAccounts(empId));
     }
 }

@@ -19,9 +19,6 @@ public class LogController {
     }
 
 
-    //get Activitylogs
-    //get attendance
-
     //create ActivityLog
     @PostMapping("/activity")
     @ResponseStatus(HttpStatus.NO_CONTENT)

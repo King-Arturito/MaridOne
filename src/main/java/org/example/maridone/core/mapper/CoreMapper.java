@@ -17,24 +17,24 @@ import java.util.List;
 public interface CoreMapper {
 
     @Mapping(source = "employeeId", target = "id")
-    EmployeeResponseDto employeeToEmployeeResponse(Employee employee);
+    EmployeeResponseDto toEmployeeResponse(Employee employee);
 
     @Mapping(source = "employeeId", target = "id")
-    EmployeeDetailsDto employeeToEmployeeDetailsDto(Employee employee);
+    EmployeeDetailsDto toEmployeeDetailsDto(Employee employee);
 
     @Mapping(source = "employeeId", target = "id")
-    List<EmployeeResponseDto> employeesToEmployeeResponses(List<Employee> employees);
+    List<EmployeeResponseDto> toEmployeeResponses(List<Employee> employees);
 
-    Employee employeeRequestToEmployee(EmployeeRequestDto employeeRequestDto);
+    Employee toEmployee(EmployeeRequestDto employeeRequestDto);
 
-    BankAccountDto bankAccounttoBankAccountDto(BankAccount bankAccount);
+    BankAccountDto toBankAccountDto(BankAccount bankAccount);
 
-    BankAccount bankAccountDtotoBankAccount(BankAccountDto bankAccountDto);
+    BankAccount toBankAccount(BankAccountDto bankAccountDto);
 
-    UserAccountDto userAccounttoUserAccountDto(UserAccount userAccount);
+    UserAccountDto toUserAccountDto(UserAccount userAccount);
 
-    UserAccount userAccountDtoToUserAccount(UserAccountDto userAccountDto);
+    UserAccount toUserAccount(UserAccountDto userAccountDto);
 
-    List<BankAccountDto> bankAccountsToBankAccountDtos(List<BankAccount> bankAccounts);
+    List<BankAccountDto> toBankAccountDtos(List<BankAccount> bankAccounts);
 
 }

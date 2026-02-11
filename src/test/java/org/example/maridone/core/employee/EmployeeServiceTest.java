@@ -42,9 +42,9 @@ class EmployeeServiceTest {
         responseDto.setId(1L);
         responseDto.setFirstName("Frieren");
 
-        when(coreMapper.employeeRequestToEmployee(any(EmployeeRequestDto.class))).thenReturn(employee);
+        when(coreMapper.toEmployee(any(EmployeeRequestDto.class))).thenReturn(employee);
         when(employeeRepository.save(any(Employee.class))).thenReturn(employee);
-        when(coreMapper.employeeToEmployeeResponse(any(Employee.class))).thenReturn(responseDto);
+        when(coreMapper.toEmployeeResponse(any(Employee.class))).thenReturn(responseDto);
 
         EmployeeResponseDto result = employeeService.createEmployee(requestDto);
 
@@ -64,7 +64,7 @@ class EmployeeServiceTest {
         responseDto.setId(empId); 
 
         when(employeeRepository.findById(empId)).thenReturn(Optional.of(employee));
-        when(coreMapper.employeeToEmployeeResponse(employee)).thenReturn(responseDto);
+        when(coreMapper.toEmployeeResponse(employee)).thenReturn(responseDto);
 
         EmployeeResponseDto result = employeeService.getEmployee(empId);
 
