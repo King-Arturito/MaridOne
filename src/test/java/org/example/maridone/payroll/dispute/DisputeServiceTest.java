@@ -15,6 +15,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import static org.mockito.Mockito.when;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Pageable;
 import org.springframework.test.util.ReflectionTestUtils;
 
 @ExtendWith(MockitoExtension.class)
@@ -34,10 +35,11 @@ class DisputeServiceTest {
         dto.setReason("Too high");
 
         PayrollItem item = new PayrollItem();
+        Pageable pageable = Pageable.unpaged();
         ReflectionTestUtils.setField(item, "itemId", itemId);
 
         when(payrollItemRepository.findById(itemId)).thenReturn(Optional.of(item));
-        when(disputeRepository.findByPayrollItem_ItemId(itemId)).thenReturn(null);
+        when(disputeRepository.findByPayrollItem_ItemId(itemId, pageable)).thenReturn(null);
         when(disputeRepository.save(any(DisputeRequest.class))).thenAnswer(i -> i.getArgument(0));
 
         DisputeRequest result = disputeService.createDisputeRequest(itemId, dto);

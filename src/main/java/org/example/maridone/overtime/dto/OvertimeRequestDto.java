@@ -10,6 +10,7 @@ import org.example.maridone.enums.Status;
 
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.LocalTime;
 
 public class OvertimeRequestDto {
@@ -18,19 +19,14 @@ public class OvertimeRequestDto {
     @FutureOrPresent
     private LocalDate workDate;
     @NotNull
-    private LocalTime startTime;
+    private LocalDateTime startTime;
     @NotNull
-    private LocalTime endTime;
+    private LocalDateTime endTime;
     @NotNull
     private EarningsType overtimeType;
     @NotNull
     @Size(min = 5, max = 255)
     private String reason;
-
-    @AssertTrue(message = "end time must be greater than start time")
-    public boolean isEndAfterStart() {
-        return endTime.isAfter(startTime);
-    }
 
     public Status getRequestStatus() {
         return requestStatus;
@@ -48,19 +44,19 @@ public class OvertimeRequestDto {
         this.workDate = workDate;
     }
 
-    public LocalTime getStartTime() {
+    public LocalDateTime getStartTime() {
         return startTime;
     }
 
-    public void setStartTime(LocalTime startTime) {
+    public void setStartTime(LocalDateTime startTime) {
         this.startTime = startTime;
     }
 
-    public LocalTime getEndTime() {
+    public LocalDateTime getEndTime() {
         return endTime;
     }
 
-    public void setEndTime(LocalTime endTime) {
+    public void setEndTime(LocalDateTime endTime) {
         this.endTime = endTime;
     }
 

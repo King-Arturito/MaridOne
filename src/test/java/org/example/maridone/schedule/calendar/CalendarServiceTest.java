@@ -31,7 +31,7 @@ class CalendarServiceTest {
         CompanyCalendar entity = new CompanyCalendar();
         entity.setTitle("Holiday");
 
-        when(calendarMapper.toCalendarDto(dto)).thenReturn(entity);
+        when(calendarMapper.toCompanyCalendar(dto)).thenReturn(entity);
         when(calendarRepository.save(any(CompanyCalendar.class))).thenReturn(entity);
 
         CompanyCalendar result = calendarService.createEvent(dto);
@@ -45,7 +45,7 @@ class CalendarServiceTest {
         CalendarDto dto = new CalendarDto();
         dto.setCalendarId(id);
         dto.setTitle("New Title");
-        dto.setActive(true);
+        dto.setIsActive(true);
 
         CompanyCalendar existing = new CompanyCalendar();
         ReflectionTestUtils.setField(existing, "calendarId", id);

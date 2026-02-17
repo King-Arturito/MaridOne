@@ -3,6 +3,7 @@ package org.example.maridone.core.dto;
 import jakarta.persistence.Embedded;
 import org.example.maridone.embeddable.Address;
 import org.example.maridone.enums.EmploymentStatus;
+import org.example.maridone.enums.ExemptionStatus;
 import org.example.maridone.enums.Position;
 
 import java.time.LocalDate;
@@ -15,6 +16,7 @@ public class EmployeeDetailsDto {
     private String lastName;
     private LocalDate birthDate;
     private EmploymentStatus employmentStatus;
+    private ExemptionStatus exemptionStatus;
     private String email;
     private String phoneNumber;
     private Position position;
@@ -66,6 +68,14 @@ public class EmployeeDetailsDto {
 
     public void setEmploymentStatus(EmploymentStatus employmentStatus) {
         this.employmentStatus = employmentStatus;
+    }
+
+    public ExemptionStatus getExemptionStatus() {
+        return exemptionStatus;
+    }
+
+    public void setExemptionStatus(ExemptionStatus exemptionStatus) {
+        this.exemptionStatus = exemptionStatus;
     }
 
     public String getEmail() {

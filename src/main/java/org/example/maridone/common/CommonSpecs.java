@@ -1,5 +1,6 @@
 package org.example.maridone.common;
 
+import org.example.maridone.exception.InvalidRangeException;
 import org.springframework.data.jpa.domain.Specification;
 
 public class CommonSpecs {
@@ -61,6 +62,33 @@ public class CommonSpecs {
             }
 
             return cb.greaterThanOrEqualTo(root.get(fieldName), value);
+        };
+    }
+
+    public static <T, V extends Comparable<? super V>> Specification<T> fieldIsBetween(String fieldName, V start, V end) {
+        return (root, query, cb) -> {
+            if (start == null || end == null) {
+                return cb.conjunction();
+            }
+            if (start.compareTo(end) > 0) {
+                throw new InvalidRangeException("start must be less than end.");
+            }
+
+            return cb.between(root.get(fieldName), start, end);
+        };
+    }
+
+    public static <T, V extends Comparable<? super V>> Specification<T> checkOverlaps
+            (String startFieldName, String endFieldName, V start, V end) {
+        return (root, query, cb) -> {
+
+            if (startFieldName == null || endFieldName == null) {
+                return cb.conjunction();
+            }
+            return cb.and(
+                    cb.lessThan(root.get(startFieldName), end),
+                    cb.greaterThan(root.get(endFieldName), start)
+            );
         };
     }
 }

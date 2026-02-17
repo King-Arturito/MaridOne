@@ -1,5 +1,6 @@
 package org.example.maridone.core.dto;
 import org.example.maridone.enums.EmploymentStatus;
+import org.example.maridone.enums.ExemptionStatus;
 import org.example.maridone.enums.Position;
 
 public class EmployeeResponseDto {
@@ -9,6 +10,7 @@ public class EmployeeResponseDto {
     private String middleName;
     private String lastName;
     private EmploymentStatus employmentStatus;
+    private ExemptionStatus exemptionStatus;
     private Position position;
 
 
@@ -52,6 +54,13 @@ public class EmployeeResponseDto {
         this.employmentStatus = employmentStatus;
     }
 
+    public ExemptionStatus getExemptionStatus() {
+        return exemptionStatus;
+    }
+
+    public void setExemptionStatus(ExemptionStatus exemptionStatus) {
+        this.exemptionStatus = exemptionStatus;
+    }
 
     public Position getPosition() {
         return position;

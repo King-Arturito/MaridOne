@@ -1,16 +1,19 @@
 package org.example.maridone.overtime;
 
+import org.example.maridone.common.CommonSpecs;
 import org.example.maridone.core.employee.Employee;
 import org.example.maridone.core.employee.EmployeeRepository;
 import org.example.maridone.core.spec.EmployeeSpecs;
 import org.example.maridone.enums.Status;
 import org.example.maridone.exception.AccountNotFoundException;
+import org.example.maridone.exception.InvalidRangeException;
 import org.example.maridone.exception.OvertimeException;
 import org.example.maridone.overtime.dto.OvertimeRequestDto;
 import org.example.maridone.overtime.dto.OvertimeResponseDto;
 import org.example.maridone.overtime.dto.OvertimeUpdateDto;
 import org.example.maridone.overtime.mapper.OvertimeMapper;
 import org.example.maridone.overtime.spec.OvertimeSpecs;
+import org.hibernate.sql.ast.tree.expression.Over;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
@@ -18,6 +21,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 
 @Service
@@ -37,14 +41,22 @@ public class OvertimeService {
 
     @Transactional
     public OvertimeRequest createOvertimeRequest(OvertimeRequestDto requestDto, String username) {
-        OvertimeRequest request = overtimeMapper.toOvertimeRequest(requestDto);
         Specification<Employee> spec = Specification.allOf(
                 EmployeeSpecs.hasUserAccount(username)
         );
         Employee emp = employeeRepository.findOne(spec).orElseThrow(() -> new AccountNotFoundException(username));
+
+        Specification<OvertimeRequest> checkConflicts = Specification.allOf(
+                CommonSpecs.fieldEquals("employee", emp),
+                OvertimeSpecs.checkOverlaps(requestDto.getStartTime(), requestDto.getEndTime())
+        );
+        if (overtimeRequestRepository.count(checkConflicts) > 0) {
+            throw new InvalidRangeException("Conflicting Schedules found.");
+        }
+        OvertimeRequest request = overtimeMapper.toOvertimeRequest(requestDto);
         request.setEmployee(emp);
-        overtimeRequestRepository.save(request);
-        return request;
+
+        return overtimeRequestRepository.save(request);
     }
 
     @Transactional

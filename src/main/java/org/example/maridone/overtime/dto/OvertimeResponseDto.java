@@ -3,6 +3,7 @@ import org.example.maridone.enums.EarningsType;
 import org.example.maridone.enums.Status;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.LocalTime;
 
 public class OvertimeResponseDto {
@@ -11,8 +12,8 @@ public class OvertimeResponseDto {
     private Status requestStatus;
     private Instant requestAt;
     private LocalDate workDate;
-    private LocalTime startTime;
-    private LocalTime endTime;
+    private LocalDateTime startTime;
+    private LocalDateTime endTime;
     private EarningsType overtimeType;
     private String reason;
     private String approver;
@@ -59,19 +60,19 @@ public class OvertimeResponseDto {
         this.workDate = workDate;
     }
 
-    public LocalTime getStartTime() {
+    public LocalDateTime getStartTime() {
         return startTime;
     }
 
-    public void setStartTime(LocalTime startTime) {
+    public void setStartTime(LocalDateTime startTime) {
         this.startTime = startTime;
     }
 
-    public LocalTime getEndTime() {
+    public LocalDateTime getEndTime() {
         return endTime;
     }
 
-    public void setEndTime(LocalTime endTime) {
+    public void setEndTime(LocalDateTime endTime) {
         this.endTime = endTime;
     }
 

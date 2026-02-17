@@ -17,5 +17,7 @@ public interface DisputeRequestRepository extends JpaRepository<DisputeRequest, 
 
     Page<DisputeRequest> findAllByPayrollItem_Employee_EmployeeId(Long employeeId, Pageable pageable);
 
-    DisputeRequest findByPayrollItem_ItemId(Long itemId);
+    Page<DisputeRequest> findByPayrollItem_ItemId(Long itemId, Pageable pageable);
+
+    DisputeRequest findTopByPayrollItem_ItemIdOrderByDisputeIdDesc(Long itemId);
 }

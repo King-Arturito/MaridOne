@@ -2,8 +2,13 @@ package org.example.maridone.overtime.spec;
 
 import jakarta.persistence.criteria.JoinType;
 import org.example.maridone.enums.Status;
+import org.example.maridone.exception.InvalidRangeException;
 import org.example.maridone.overtime.OvertimeRequest;
 import org.springframework.data.jpa.domain.Specification;
+
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
 
 public class OvertimeSpecs {
     public static Specification<OvertimeRequest> hasEmployeeId(Long empId) {
@@ -24,5 +29,18 @@ public class OvertimeSpecs {
 
     public static Specification<OvertimeRequest> hasOvertimeId(Long overtimeId) {
         return (root, query, cb) -> cb.equal(root.get("overtimeId"), overtimeId);
+    }
+
+    public static Specification<OvertimeRequest> checkOverlaps(LocalDateTime start, LocalDateTime end) {
+        return (root, query, cb) -> {
+
+            if (start.isAfter(end)) {
+                throw new InvalidRangeException("Start time must be less than End time.");
+            }
+            return cb.and(
+                    cb.lessThan(root.get("startTime"), end),
+                    cb.greaterThan(root.get("endTime"), start)
+            );
+        };
     }
 }

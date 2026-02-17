@@ -1,6 +1,7 @@
 package org.example.maridone.core.filter;
 
 import org.example.maridone.enums.EmploymentStatus;
+import org.example.maridone.enums.ExemptionStatus;
 import org.example.maridone.enums.Position;
 
 import java.time.LocalDate;
@@ -12,6 +13,7 @@ public record EmployeeFilter(
         String middleName,
         String lastName,
         List<EmploymentStatus> employmentStatusList,
+        ExemptionStatus exemptionStatus,
         LocalDate hiredDateStart,
         LocalDate hiredDateEnd,
         String email,

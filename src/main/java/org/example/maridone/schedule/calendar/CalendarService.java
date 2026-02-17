@@ -25,24 +25,20 @@ public class CalendarService {
         this.calendarMapper = calendarMapper;
     }
 
-    @Transactional
-    public CompanyCalendar createEvent(CalendarDto calendar) {
-        if (calendar.getActive() == null) {
-            calendar.setActive(true);
+        @Transactional
+        public CompanyCalendar createEvent(CalendarDto calendar) {
+            if (calendar.getIsActive() == null) {
+                calendar.setIsActive(Boolean.TRUE);
+            }
+            return calendarRepository.save(calendarMapper.toCompanyCalendar(calendar));
         }
-        return calendarRepository.save(calendarMapper.toCalendarDto(calendar));
-    }
 
 
     @Transactional
     public CompanyCalendar updateEvent(CalendarDto calendar) {
         CompanyCalendar cal = calendarRepository.findById(calendar.getCalendarId()).orElseThrow(
                 () -> new CalendarEventNotFound("Event of ID:" + calendar.getCalendarId() + " not found."));
-        cal.setActive(calendar.getActive());
-        cal.setTitle(calendar.getTitle());
-        cal.setStartDate(calendar.getStartDate());
-        cal.setEndDate(calendar.getEndDate());
-        return calendarRepository.save(cal);
+        return calendarRepository.save(calendarMapper.toCompanyCalendar(calendar));
     }
 
     @Transactional
@@ -50,7 +46,7 @@ public class CalendarService {
         CompanyCalendar cal = calendarRepository.findById(calendarId).orElseThrow(
                 () -> new CalendarEventNotFound("Event of ID:" + calendarId + " not found.")
         );
-        cal.setActive(false);
+        cal.setIsActive(false);
         return calendarRepository.save(cal);
     }
 

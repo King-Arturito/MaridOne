@@ -5,6 +5,7 @@ import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Past;
 import jakarta.validation.constraints.Size;
+import org.example.maridone.enums.ExemptionStatus;
 import org.example.maridone.log.attendance.AttendanceLog;
 import org.example.maridone.schedule.shift.ShiftSchedule;
 import org.example.maridone.core.bank.BankAccount;
@@ -18,6 +19,7 @@ import org.example.maridone.notification.Notification;
 import org.example.maridone.overtime.OvertimeRequest;
 import org.example.maridone.payroll.PayrollItem;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 
@@ -47,15 +49,22 @@ public class Employee {
     @Column(name ="birth_date", nullable = false)
     private LocalDate birthDate;
 
-    @Column(name = "status", nullable = false)
+    @Column(name = "employment_status", nullable = false)
     @Enumerated(EnumType.STRING)
     private EmploymentStatus employmentStatus;
+
+    @Column(name = "exemption_status", nullable = false)
+    @Enumerated(EnumType.STRING)
+    private ExemptionStatus exemptionStatus;
 
     @Column(name = "employment_date_start", nullable = false)
     private LocalDate employmentDateStart;
 
     @Column(name ="employment_date_end", nullable = true)
     private LocalDate employmentDateEnd;
+
+    @Column(name = "yearly_salary", nullable = false)
+    private BigDecimal yearlySalary;
 
     @NotBlank
     @Column(name = "email", nullable = false, length = 254)
@@ -71,27 +80,6 @@ public class Employee {
 
     @Embedded
     private Address address;
-
-    @OneToMany(mappedBy = "employee", cascade = CascadeType.ALL, fetch = FetchType.LAZY, orphanRemoval = true)
-    private List<BankAccount> bankAccounts;
-
-    @OneToMany(mappedBy = "employee", cascade = CascadeType.ALL, fetch = FetchType.LAZY, orphanRemoval = true)
-    private List<Notification> notifications;
-
-    @OneToMany(mappedBy = "employee", cascade = {CascadeType.MERGE, CascadeType.PERSIST}, fetch = FetchType.LAZY)
-    private List<LeaveRequest> requests;
-
-    @OneToMany(mappedBy = "employee", cascade = {CascadeType.MERGE, CascadeType.PERSIST}, fetch = FetchType.LAZY)
-    private List<PayrollItem> payrollItems;
-
-    @OneToMany(mappedBy = "employee", cascade = CascadeType.ALL, fetch = FetchType.LAZY, orphanRemoval = true)
-    private List<OvertimeRequest> overtimeRequests;
-
-    @OneToMany(mappedBy = "employee", cascade = CascadeType.ALL, fetch = FetchType.LAZY, orphanRemoval = true)
-    private List<ShiftSchedule> shifts;
-
-    @OneToMany(mappedBy = "employee", cascade = CascadeType.ALL, fetch = FetchType.LAZY, orphanRemoval = true)
-    private List<LeaveBalance> leaveBalance;
 
     @OneToOne(mappedBy = "employee", cascade = CascadeType.ALL)
     private UserAccount userAccount;
@@ -141,6 +129,14 @@ public class Employee {
         this.employmentStatus = employmentStatus;
     }
 
+    public ExemptionStatus getExemptionStatus() {
+        return exemptionStatus;
+    }
+
+    public void setExemptionStatus(ExemptionStatus exemptionStatus) {
+        this.exemptionStatus = exemptionStatus;
+    }
+
     public LocalDate getEmploymentDateStart() {
         return employmentDateStart;
     }
@@ -155,6 +151,14 @@ public class Employee {
 
     public void setEmploymentDateEnd(LocalDate employmentDateEnd) {
         this.employmentDateEnd = employmentDateEnd;
+    }
+
+    public BigDecimal getYearlySalary() {
+        return yearlySalary;
+    }
+
+    public void setYearlySalary(BigDecimal yearlySalary) {
+        this.yearlySalary = yearlySalary;
     }
 
     public String getEmail() {
@@ -189,46 +193,6 @@ public class Employee {
         this.address = address;
     }
 
-    public List<BankAccount> getBankAccounts() {
-        return bankAccounts;
-    }
-
-    public void setBankAccounts(List<BankAccount> bankAccounts) {
-        this.bankAccounts = bankAccounts;
-    }
-
-    public List<Notification> getNotifications() {
-        return notifications;
-    }
-
-    public void setNotifications(List<Notification> notifications) {
-        this.notifications = notifications;
-    }
-
-    public List<LeaveRequest> getRequests() {
-        return requests;
-    }
-
-    public void setRequests(List<LeaveRequest> requests) {
-        this.requests = requests;
-    }
-
-    public List<PayrollItem> getPayrollItems() {
-        return payrollItems;
-    }
-
-    public void setPayrollItems(List<PayrollItem> payrollItems) {
-        this.payrollItems = payrollItems;
-    }
-
-    public List<LeaveBalance> getLeaveBalance() {
-        return leaveBalance;
-    }
-
-    public void setLeaveBalance(List<LeaveBalance> leaveBalance) {
-        this.leaveBalance = leaveBalance;
-    }
-
     public UserAccount getUserAccount() {
         return userAccount;
     }
@@ -237,20 +201,4 @@ public class Employee {
         this.userAccount = userAccount;
     }
 
-    public List<OvertimeRequest> getOvertimeRequests() {
-        return overtimeRequests;
-    }
-
-    public void setOvertimeRequests(List<OvertimeRequest> overtimeRequests) {
-        this.overtimeRequests = overtimeRequests;
-    }
-
-
-    public List<ShiftSchedule> getShifts() {
-        return shifts;
-    }
-
-    public void setShifts(List<ShiftSchedule> shifts) {
-        this.shifts = shifts;
-    }
 }

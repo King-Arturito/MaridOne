@@ -48,6 +48,9 @@ public class EmployeeSpecs {
             if (filter.employmentStatusList() != null && !filter.employmentStatusList().isEmpty()) {
                 predicates.add(root.get("employmentStatus").in(filter.employmentStatusList()));
             }
+            if (filter.exemptionStatus() != null) {
+                predicates.add(cb.equal(root.get("exemptionStatus"), filter.exemptionStatus()));
+            }
             return cb.and(predicates.toArray(new Predicate[0]));
         };
     }

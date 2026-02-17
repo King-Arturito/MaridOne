@@ -7,6 +7,7 @@ import org.example.maridone.core.mapper.CoreMapper;
 import org.example.maridone.enums.Position;
 import org.example.maridone.exception.AccountNotFoundException;
 import org.example.maridone.exception.BadCredentialsException;
+import org.example.maridone.exception.DuplicateAccountException;
 import org.example.maridone.exception.EmployeeNotFoundException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -41,8 +42,15 @@ public class UserAccountService {
 
     @Transactional
     public UserAccount createUserAccount(CreateUserAccountDto payload) {
-        UserAccount user = new UserAccount();
+        if (userAccountRepository.existsByUsername(payload.getUsername())) {
+            throw new DuplicateAccountException("Username already exists");
+        }
+        if (userAccountRepository.existsByEmployee_EmployeeId(payload.getEmployeeId())) {
+            throw new DuplicateAccountException("Duplicate Account for Employee Id: " + payload.getEmployeeId() + " found. Update account instead.");
+        }
         Employee emp = employeeRepository.findById(payload.getEmployeeId()).orElseThrow(() -> new EmployeeNotFoundException(payload.getEmployeeId()));
+
+        UserAccount user = new UserAccount();
         user.setUsername(payload.getUsername());
         user.setPasswordHash(passwordEncoder.encode(payload.getPassword()));
         user.setEmployee(emp);

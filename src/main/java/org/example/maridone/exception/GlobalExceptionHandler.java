@@ -45,7 +45,9 @@ public class GlobalExceptionHandler {
             InvalidActionException.class,
             InsufficientBalanceException.class,
             OvertimeException.class,
-            BankInactiveException.class
+            BankInactiveException.class,
+            InvalidRangeException.class,
+            DuplicateAccountException.class,
     })
     public ResponseEntity<Map<String, String>> handleBadRequestExceptions(RuntimeException ex) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
