@@ -8,6 +8,7 @@ import java.time.Instant;
 @Entity
 public class ActivityLog {
     @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "activity_id")
     private Long activityId;
 

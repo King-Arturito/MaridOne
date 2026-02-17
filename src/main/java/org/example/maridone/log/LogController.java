@@ -11,7 +11,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
-@RestController("/api/logs")
+@RestController
+@RequestMapping("/api/logs")
 public class LogController {
     private final LogService logService;
     public LogController(LogService logService) {
@@ -21,6 +22,7 @@ public class LogController {
 
     //create ActivityLog
     @PostMapping("/activity")
+    @PreAuthorize("@userCheck.isSelf(#payload.employeeId, authentication.getName())")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void activity(@RequestBody ActivityRequestDto payload) {
         logService.activity(payload);
@@ -28,25 +30,25 @@ public class LogController {
 
     //create AttendanceLog
     @PostMapping("/attendance/{empId}")
-    @PreAuthorize("@userCheck.isSelf(empId, authentication.getName())")
+    @PreAuthorize("@userCheck.isSelf(#empId, authentication.getName())")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void attendance(@PathVariable Long empId, @RequestBody String direction) {
-        logService.attendance(empId, direction);
+    public void attendance(@PathVariable Long empId) {
+        logService.attendance(empId);
     }
 
-    @GetMapping("/attendance/{empId}")
+    @GetMapping("/attendance")
     @PreAuthorize("hasRole('HR')")
     public Page<AttendanceLog> getAttendance(
-            @PathVariable Long empId,
+            @RequestParam(required = false) Long empId,
             @PageableDefault(size = 25, sort = "timestamp", direction = Sort.Direction.DESC) Pageable pageable) {
         return logService.getAttendance(empId, pageable);
     }
 
 
-    @GetMapping("/activity/{empId}")
+    @GetMapping("/activity")
     @PreAuthorize("hasRole('HR')")
     public Page<ActivityLog> getActivity(
-            @PathVariable Long empId,
+            @RequestParam(required = false) Long empId,
             @PageableDefault(size = 25, sort = "timestamp", direction = Sort.Direction.DESC) Pageable pageable) {
         return logService.getActivity(empId, pageable);
     }

@@ -10,4 +10,6 @@ import java.util.List;
 @Repository
 public interface AttendanceLogRepository extends JpaRepository<AttendanceLog, Long>, JpaSpecificationExecutor<AttendanceLog> {
     List<AttendanceLog> findByEmployeeIdIn(List<Long> employeeIds);
+
+    AttendanceLog findTopByEmployeeIdOrderByAttendanceIdDesc(Long empId);
 }

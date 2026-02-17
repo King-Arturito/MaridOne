@@ -13,7 +13,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
-import java.util.List;
 
 @Service
 public class LogService {
@@ -33,18 +32,27 @@ public class LogService {
 
 
     @Transactional
-    public void attendance(Long empId, String direction) {
-        employeeRepository.findById(empId).orElseThrow(
-                () -> new EmployeeNotFoundException(empId));
+    public void attendance(Long empId) {
+        if (!employeeRepository.existsById(empId)) {
+            throw new EmployeeNotFoundException(empId);
+        }
         AttendanceLog attendanceLog = new AttendanceLog();
+        AttendanceLog recent = attendanceLogRepository.findTopByEmployeeIdOrderByAttendanceIdDesc(empId);
+        if (recent == null || recent.getDirection().equals("OUT")) {
+            attendanceLog.setDirection("IN");
+        } else {
+            attendanceLog.setDirection("OUT");
+        }
         attendanceLog.setEmployeeId(empId);
-        attendanceLog.setDirection(direction);
         attendanceLog.setTimestamp(Instant.now());
         attendanceLogRepository.save(attendanceLog);
     }
 
     @Transactional
     public void activity(ActivityRequestDto payload) {
+        if (!employeeRepository.existsById(payload.getEmployeeId())) {
+            throw new EmployeeNotFoundException(payload.getEmployeeId());
+        }
         ActivityLog activityLog = new ActivityLog();
         activityLog.setEmployeeId(payload.getEmployeeId());
         activityLog.setMessage(payload.getMessage());
