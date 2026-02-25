@@ -6,22 +6,13 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Past;
 import jakarta.validation.constraints.Size;
 import org.example.maridone.enums.ExemptionStatus;
-import org.example.maridone.log.attendance.AttendanceLog;
-import org.example.maridone.schedule.shift.ShiftSchedule;
-import org.example.maridone.core.bank.BankAccount;
 import org.example.maridone.core.user.UserAccount;
 import org.example.maridone.enums.EmploymentStatus;
 import org.example.maridone.enums.Position;
 import org.example.maridone.embeddable.Address;
-import org.example.maridone.leave.balance.LeaveBalance;
-import org.example.maridone.leave.request.LeaveRequest;
-import org.example.maridone.notification.Notification;
-import org.example.maridone.overtime.OvertimeRequest;
-import org.example.maridone.payroll.PayrollItem;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
-import java.util.List;
 
 @Table(name = "employee")
 @Entity

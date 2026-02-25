@@ -5,12 +5,11 @@ import jakarta.persistence.*;
 import org.example.maridone.core.employee.Employee;
 import org.example.maridone.enums.EarningsType;
 import org.example.maridone.enums.Status;
-import org.example.maridone.payroll.itemcomponent.EarningsLine;
+import org.example.maridone.payroll.item.component.EarningsLine;
 
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.LocalTime;
 
 @Entity
 @Table(name = "overtime_request")

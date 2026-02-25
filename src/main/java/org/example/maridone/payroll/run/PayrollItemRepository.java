@@ -1,6 +1,6 @@
 package org.example.maridone.payroll.run;
 
-import org.example.maridone.payroll.PayrollItem;
+import org.example.maridone.payroll.item.PayrollItem;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;

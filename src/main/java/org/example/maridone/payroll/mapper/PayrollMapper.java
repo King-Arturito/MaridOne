@@ -2,9 +2,9 @@ package org.example.maridone.payroll.mapper;
 
 import org.example.maridone.payroll.dispute.DisputeRequest;
 import org.example.maridone.payroll.dto.*;
-import org.example.maridone.payroll.itemcomponent.DeductionsLine;
-import org.example.maridone.payroll.itemcomponent.EarningsLine;
-import org.example.maridone.payroll.PayrollItem;
+import org.example.maridone.payroll.item.component.DeductionsLine;
+import org.example.maridone.payroll.item.component.EarningsLine;
+import org.example.maridone.payroll.item.PayrollItem;
 import org.example.maridone.payroll.dto.RunResponseDto;
 import org.example.maridone.payroll.run.PayrollRun;
 import org.mapstruct.Mapper;

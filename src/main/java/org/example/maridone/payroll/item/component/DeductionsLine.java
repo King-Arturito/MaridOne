@@ -1,7 +1,7 @@
-package org.example.maridone.payroll.itemcomponent;
+package org.example.maridone.payroll.item.component;
 import jakarta.persistence.*;
 import org.example.maridone.enums.DeductionType;
-import org.example.maridone.payroll.PayrollItem;
+import org.example.maridone.payroll.item.PayrollItem;
 
 import java.math.BigDecimal;
 

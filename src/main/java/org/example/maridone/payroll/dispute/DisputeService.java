@@ -6,7 +6,7 @@ import org.example.maridone.exception.DuplicateDisputeException;
 import org.example.maridone.exception.InvalidActionException;
 import org.example.maridone.exception.ItemNotFoundException;
 import org.example.maridone.exception.RequestNotFoundException;
-import org.example.maridone.payroll.PayrollItem;
+import org.example.maridone.payroll.item.PayrollItem;
 import org.example.maridone.payroll.dto.DisputeActionDto;
 import org.example.maridone.payroll.dto.DisputeRequestDto;
 import org.example.maridone.payroll.dto.DisputeResponseDto;

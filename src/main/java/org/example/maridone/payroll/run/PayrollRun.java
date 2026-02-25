@@ -3,7 +3,7 @@ package org.example.maridone.payroll.run;
 import jakarta.persistence.*;
 import org.example.maridone.enums.PayrollStatus;
 import org.example.maridone.enums.RunType;
-import org.example.maridone.payroll.PayrollItem;
+import org.example.maridone.payroll.item.PayrollItem;
 
 import java.util.List;
 

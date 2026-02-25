@@ -5,6 +5,7 @@ import jakarta.persistence.*;
 import org.example.maridone.core.employee.Employee;
 
 import java.time.Instant;
+import java.time.LocalDateTime;
 
 @Entity
 public class AttendanceLog {

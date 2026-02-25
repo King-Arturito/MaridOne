@@ -6,5 +6,5 @@ public enum Position {
     ACCOUNTING,
     EMPLOYEE,
     MANAGER,
-    UNKNOWN
+    UNKNOWN     //default fallback
 }

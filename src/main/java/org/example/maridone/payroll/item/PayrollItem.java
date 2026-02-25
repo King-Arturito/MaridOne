@@ -1,12 +1,12 @@
-package org.example.maridone.payroll;
+package org.example.maridone.payroll.item;
 
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import org.example.maridone.core.employee.Employee;
 import org.example.maridone.payroll.dispute.DisputeRequest;
-import org.example.maridone.payroll.itemcomponent.DeductionsLine;
-import org.example.maridone.payroll.itemcomponent.EarningsLine;
+import org.example.maridone.payroll.item.component.DeductionsLine;
+import org.example.maridone.payroll.item.component.EarningsLine;
 import org.example.maridone.payroll.run.PayrollRun;
 
 import java.math.BigDecimal;

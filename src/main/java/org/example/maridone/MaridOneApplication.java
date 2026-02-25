@@ -1,9 +1,12 @@
 package org.example.maridone;
 
+import jakarta.annotation.PostConstruct;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.data.web.config.EnableSpringDataWebSupport;
 import org.springframework.scheduling.annotation.EnableAsync;
+
+import java.util.TimeZone;
 
 import static org.springframework.data.web.config.EnableSpringDataWebSupport.PageSerializationMode.VIA_DTO;
 
@@ -16,4 +19,9 @@ public class MaridOneApplication {
         SpringApplication.run(MaridOneApplication.class, args);
     }
 
+    @PostConstruct
+    public void init() {
+        TimeZone.setDefault(TimeZone.getTimeZone("Asia/Manila"));
+        System.out.println("Application running in timezone: " + TimeZone.getDefault().getID());
+    }
 }

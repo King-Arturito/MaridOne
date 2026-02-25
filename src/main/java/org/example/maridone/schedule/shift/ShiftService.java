@@ -7,6 +7,8 @@ import org.example.maridone.enums.EarningsType;
 import org.example.maridone.exception.EmployeeNotFoundException;
 import org.example.maridone.exception.ShiftsNotFoundException;
 import org.example.maridone.schedule.dto.ShiftRequestDto;
+import org.example.maridone.schedule.dto.ShiftResponseDto;
+import org.example.maridone.schedule.mapper.ScheduleMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import java.time.DayOfWeek;
@@ -20,12 +22,15 @@ public class ShiftService {
 
     private final ShiftRepository shiftRepository;
     private final EmployeeRepository employeeRepository;
+    private final ScheduleMapper scheduleMapper;
 
     public ShiftService(
             ShiftRepository shiftRepository,
-            EmployeeRepository employeeRepository) {
+            EmployeeRepository employeeRepository,
+            ScheduleMapper scheduleMapper) {
         this.shiftRepository = shiftRepository;
         this.employeeRepository = employeeRepository;
+        this.scheduleMapper = scheduleMapper;
     }
 
     //create all for 7 days [monday, ...., sunday]
@@ -36,8 +41,8 @@ public class ShiftService {
         List<ShiftSchedule> schedules = Arrays.stream(DayOfWeek.values()).map(day -> {
             ShiftSchedule shiftSchedule = new ShiftSchedule();
             shiftSchedule.setEmployee(emp);
-            shiftSchedule.setStartTime(LocalTime.of(9,0));
-            shiftSchedule.setEndTime(LocalTime.of(17,0));
+            shiftSchedule.setStartTime(LocalTime.of(1,0));
+            shiftSchedule.setEndTime(LocalTime.of(2,0));
             shiftSchedule.setDayOfWeek(day);
             shiftSchedule.setEarningsType(EarningsType.BASIC);
             return shiftSchedule;
@@ -45,14 +50,15 @@ public class ShiftService {
         shiftRepository.saveAll(schedules);
     }
 
-
-    public List<ShiftSchedule> getShiftSchedule(Long empId) {
-        Employee emp = employeeRepository.findById(empId).orElseThrow(() -> new EmployeeNotFoundException(empId));
+    public List<ShiftResponseDto> getShiftSchedule(Long empId) {
+        if (!employeeRepository.existsById(empId)) {
+            throw new EmployeeNotFoundException(empId);
+        }
         List<ShiftSchedule> schedules = shiftRepository.findAllByEmployeeId(empId);
         if (schedules.isEmpty()) {
             throw new ShiftsNotFoundException("Employee ID: " + empId + "has no schedule.");
-        };
-        return shiftRepository.findAllByEmployeeId(empId);
+        }
+        return scheduleMapper.toResponseDtos(schedules);
     }
 
     @Transactional
@@ -78,4 +84,6 @@ public class ShiftService {
         shiftRepository.save(schedule);
         return schedule;
     }
+
+    //todo: addTempShiftSchedule
 }

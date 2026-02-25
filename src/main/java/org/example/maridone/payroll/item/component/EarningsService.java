@@ -1,4 +1,4 @@
-package org.example.maridone.payroll.itemcomponent;
+package org.example.maridone.payroll.item.component;
 
 import org.example.maridone.payroll.dto.EarningsDto;
 import org.example.maridone.payroll.mapper.PayrollMapper;
@@ -16,7 +16,6 @@ public class EarningsService {
         this.earningsRepository = earningsRepository;
         this.payrollMapper = payrollMapper;
     }
-
 
 
     @Transactional(readOnly = true)

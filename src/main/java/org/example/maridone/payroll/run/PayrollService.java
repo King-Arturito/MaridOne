@@ -2,36 +2,47 @@ package org.example.maridone.payroll.run;
 
 import jakarta.validation.Valid;
 import org.example.maridone.common.CommonSpecs;
+import org.example.maridone.config.DefaultProperties;
 import org.example.maridone.core.employee.Employee;
 import org.example.maridone.core.employee.EmployeeRepository;
-import org.example.maridone.core.spec.EmployeeSpecs;
 import org.example.maridone.enums.EmploymentStatus;
+import org.example.maridone.enums.ExemptionStatus;
+import org.example.maridone.enums.Status;
 import org.example.maridone.exception.EmployeeNotFoundException;
 import org.example.maridone.exception.ItemNotFoundException;
 import org.example.maridone.exception.RunNotFoundException;
-import org.example.maridone.exception.ShiftsNotFoundException;
 import org.example.maridone.log.AttendanceLogRepository;
 import org.example.maridone.log.attendance.AttendanceLog;
-import org.example.maridone.payroll.PayrollItem;
+import org.example.maridone.overtime.OvertimeRequest;
+import org.example.maridone.overtime.OvertimeRequestRepository;
+import org.example.maridone.overtime.spec.OvertimeSpecs;
+import org.example.maridone.payroll.PayrollCalculator;
+import org.example.maridone.payroll.item.PayrollItem;
 import org.example.maridone.payroll.dto.ItemSummaryDto;
 import org.example.maridone.payroll.dto.PayrollItemDto;
 import org.example.maridone.payroll.dto.RunCreateDto;
-import org.example.maridone.payroll.itemcomponent.DeductionsService;
+import org.example.maridone.payroll.item.component.DeductionsLine;
+import org.example.maridone.payroll.item.component.DeductionsService;
 import org.example.maridone.payroll.dto.ItemDetailsDto;
-import org.example.maridone.payroll.itemcomponent.EarningsService;
+import org.example.maridone.payroll.item.component.EarningsLine;
+import org.example.maridone.payroll.item.component.EarningsService;
 import org.example.maridone.payroll.mapper.PayrollMapper;
 import org.example.maridone.payroll.spec.ItemSpecs;
 import org.example.maridone.schedule.shift.ShiftRepository;
 import org.example.maridone.schedule.shift.ShiftSchedule;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.time.LocalDate;
+import java.time.LocalTime;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -44,9 +55,10 @@ public class PayrollService {
     private final EmployeeRepository employeeRepository;
     private final AttendanceLogRepository attendanceLogRepository;
     private final ShiftRepository shiftRepository;
-    private final EarningsService earningsService;
-    private final DeductionsService deductionsService;
+    private final OvertimeRequestRepository overtimeRequestRepository;
+    private final PayrollCalculator payrollCalculator;
     private final PayrollMapper payrollMapper;
+    private final DefaultProperties defaultProperties;
 
     PayrollService(
             PayrollRunRepository payrollRunRepository,
@@ -54,9 +66,10 @@ public class PayrollService {
             EmployeeRepository employeeRepository,
             AttendanceLogRepository attendanceLogRepository,
             ShiftRepository shiftRepository,
-            EarningsService earningsService,
-            DeductionsService deductionsService,
-            PayrollMapper payrollMapper
+            OvertimeRequestRepository overtimeRequestRepository,
+            PayrollCalculator payrollCalculator,
+            PayrollMapper payrollMapper,
+            DefaultProperties defaultProperties
     )
     {
         this.payrollRunRepository = payrollRunRepository;
@@ -64,9 +77,10 @@ public class PayrollService {
         this.employeeRepository = employeeRepository;
         this.attendanceLogRepository = attendanceLogRepository;
         this.shiftRepository = shiftRepository;
-        this.earningsService = earningsService;
-        this.deductionsService = deductionsService;
+        this.overtimeRequestRepository = overtimeRequestRepository;
+        this.payrollCalculator = payrollCalculator;
         this.payrollMapper = payrollMapper;
+        this.defaultProperties = defaultProperties;
     }
 
     @Transactional
@@ -132,24 +146,88 @@ public class PayrollService {
         return items.map(payrollMapper::toItemSummaryDto);
     }
 
+
+
+
+
+    /*
+        PAYROLL PROCESS
+    */
     @Transactional
     public void processPayroll(RunCreateDto payload) {
+        //create run for this period
         PayrollRun run = createRun(payload);
-        List<PayrollItem> items = new ArrayList<>();
 
-        Specification<Employee> spec = Specification.allOf(
-                CommonSpecs.fieldEquals("employmentStatus", EmploymentStatus.TERMINATED)
-        );
+        Specification<Employee> spec = CommonSpecs.fieldNotEquals("employmentStatus", EmploymentStatus.TERMINATED);
         List<Employee> employees = employeeRepository.findAll(spec);
+        Map<Boolean, List<Employee>> partitioned = employees.stream()
+                .collect(Collectors.partitioningBy(
+                        emp -> emp.getExemptionStatus().equals(ExemptionStatus.EXEMPT)
+                ));
+        List<Employee> exemptEmployees = partitioned.getOrDefault(true, List.of());
+        List<Employee> nonExemptEmployees = partitioned.getOrDefault(false, List.of());
 
+        //do process payroll exempt for managerial roles
+        List<PayrollItem> items = new ArrayList<>(processPayrollExempt(run, exemptEmployees));
 
-        //get all emp ids
+        //do process payroll nonexempt for regular employees (non exempt)
+        processPayrollNonExempt(run, items, nonExemptEmployees);
+        //save all
+        payrollItemRepository.saveAll(items);
+    }
+
+    @Transactional
+    public List<PayrollItem> processPayrollExempt(PayrollRun run, List<Employee> employees) {
+
+        //map each exempt employee with a PayrollItem Object
+        //collect the result to a list
+        //return the list
+        return employees.stream()
+                .map(emp -> {
+                    PayrollItem item = new PayrollItem();
+                    BigDecimal biweeklySalary = emp.getYearlySalary().divide(BigDecimal.valueOf(26), 2, RoundingMode.HALF_UP);
+                    item.setEmployee(emp);
+                    item.setPayrollRun(run);
+                    //todo
+                    item.setGrossPay(biweeklySalary);
+                    item.setNetPay(biweeklySalary);
+                    item.setDisputes(new ArrayList<>());
+                    //todo
+                    item.setEarnings(payrollCalculator.setEarnings(emp, item));
+                    //todo
+                    item.setDeductions(payrollCalculator.setDeductions(emp));
+                    return item;
+                })
+                .toList();
+    }
+
+    @Transactional
+    public void processPayrollNonExempt(PayrollRun run, List<PayrollItem> items, List<Employee> employees) {
+
         List<Long> employeeIds = employees.stream()
                 .map(Employee::getEmployeeId)
                 .toList();
 
-        //get all attendance logs in all those employeeIds
-        List<AttendanceLog> allLogs = attendanceLogRepository.findByEmployeeIdIn(employeeIds);
+        //get all attendance logs in all those employeeIds within the specified period + 6 hours
+        Sort sorting = Sort.by(Sort.Direction.ASC, "timestamp");
+        List<AttendanceLog> allLogs = attendanceLogRepository
+                .findByEmployeeIdInAndTimestampBetween(
+                        employeeIds,
+                        run.getPeriodStart().atStartOfDay(defaultProperties.getTimeZone()).toInstant(),
+                        run.getPeriodEnd().atTime(LocalTime.MAX).plusHours(6).atZone(defaultProperties.getTimeZone()).toInstant(),
+                        sorting);
+
+        Specification<OvertimeRequest> overtimeSpecs = Specification.allOf(
+                OvertimeSpecs.hasStatus(Status.APPROVED),
+                OvertimeSpecs.hasEmployeeIds(employeeIds),
+                CommonSpecs.fieldIsBetween(
+                        "workDate",
+                        run.getPeriodStart(),
+                        run.getPeriodEnd())
+        );
+
+        //get all overtime requests for the period
+        List<OvertimeRequest> overtimeRequests = overtimeRequestRepository.findAll(overtimeSpecs);
 
         //get all shift schedules of employees
         List<ShiftSchedule> allSchedules = shiftRepository.findByEmployee_EmployeeIdIn(employeeIds);
@@ -162,31 +240,35 @@ public class PayrollService {
         Map<Long, List<ShiftSchedule>> scheduleMap = allSchedules.stream()
                 .collect(Collectors.groupingBy(schedule -> schedule.getEmployee().getEmployeeId()));
 
-        //loop through all employees
+        Map<Long, List<OvertimeRequest>> overtimeMap = overtimeRequests.stream()
+                .collect(Collectors.groupingBy(OvertimeRequest::getEmployeeId));
+
         for (Employee emp :  employees) {
-            PayrollItem item = new PayrollItem();
-            item.setPayrollRun(run);
-            List<AttendanceLog> empLogs = attendanceMap.getOrDefault(emp.getEmployeeId(), Collections.emptyList());
-            List<ShiftSchedule> schedules = scheduleMap.getOrDefault(emp.getEmployeeId(), Collections.emptyList());
-            if (schedules.isEmpty()) {
-                throw new ShiftsNotFoundException("Shifts for Employee ID:"  + emp.getEmployeeId() + " not found.");
-            }
-            if (empLogs.isEmpty()) {
-                //logging
-                //whats da logic chat
-            }
+            List<OvertimeRequest> requests = overtimeMap.getOrDefault(emp.getEmployeeId(), List.of());
+            List<ShiftSchedule> schedules = scheduleMap.getOrDefault(emp.getEmployeeId(), List.of());
+            List<AttendanceLog> attendanceLogs = attendanceMap.getOrDefault(emp.getEmployeeId(), List.of());
 
-            //calculate hours
-            //minus some hours if passed schedule
-            //dont minus if has overtime request for that hour and day
-            //check grace periods sa handbook?
-            //calculate pay using their hourly rate?
-            //put gross pay
-            //put net pay
+            //get total hours from shift schedule
+            BigDecimal shiftScheduleHours = payrollCalculator.calculateHours(schedules);
+            //get logged hours from attendance
+            BigDecimal loggedHours = BigDecimal.ZERO;
+            //check how much of it was overtime
 
-            items.add(item);
+            //todo nonexempt logic
+            for (int i = 0; i < attendanceLogs.size(); i++) {
+                AttendanceLog attendanceLog = attendanceLogs.get(i);
+            }
         }
 
-        payrollItemRepository.saveAll(items);
+
+        //calculate hours
+        //minus some hours if passed schedule
+        //dont minus if has overtime request for that hour and day
+        //check grace periods sa handbook?
+        //calculate pay using their hourly rate?
+        //put gross pay
+        //put net pay
     }
+
+
 }

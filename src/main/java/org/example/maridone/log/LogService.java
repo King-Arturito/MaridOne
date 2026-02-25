@@ -1,6 +1,7 @@
 package org.example.maridone.log;
 
 import org.example.maridone.common.CommonSpecs;
+import org.example.maridone.config.DefaultProperties;
 import org.example.maridone.core.employee.EmployeeRepository;
 import org.example.maridone.exception.EmployeeNotFoundException;
 import org.example.maridone.log.activity.ActivityLog;

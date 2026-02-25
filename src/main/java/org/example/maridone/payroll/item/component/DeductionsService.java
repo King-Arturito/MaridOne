@@ -1,4 +1,4 @@
-package org.example.maridone.payroll.itemcomponent;
+package org.example.maridone.payroll.item.component;
 
 import org.example.maridone.payroll.dto.DeductionsDto;
 import org.example.maridone.payroll.mapper.PayrollMapper;

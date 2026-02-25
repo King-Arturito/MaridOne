@@ -1,4 +1,4 @@
-package org.example.maridone.payroll.itemcomponent;
+package org.example.maridone.payroll.item.component;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;

@@ -1,6 +1,7 @@
 package org.example.maridone.overtime.spec;
 
 import jakarta.persistence.criteria.JoinType;
+import org.example.maridone.enums.ExemptionStatus;
 import org.example.maridone.enums.Status;
 import org.example.maridone.exception.InvalidRangeException;
 import org.example.maridone.overtime.OvertimeRequest;
@@ -9,6 +10,7 @@ import org.springframework.data.jpa.domain.Specification;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.util.List;
 
 public class OvertimeSpecs {
     public static Specification<OvertimeRequest> hasEmployeeId(Long empId) {
@@ -19,7 +21,28 @@ public class OvertimeSpecs {
             if (query.getResultType() != Long.class && query.getResultType() != long.class) {
                 root.fetch("employee", JoinType.LEFT);
             }
-            return cb.equal(root.get("employee").get("employeeId"), empId);
+            return cb.equal(root.join("employee").get("employeeId"), empId);
+        };
+    }
+
+    public static Specification<OvertimeRequest> hasEmployeeIds(List<Long> empIds) {
+        return (root, query, cb) -> {
+            if (empIds == null || empIds.isEmpty()) {
+                return cb.disjunction();
+            }
+            return root.join("employee", JoinType.INNER).in(empIds);
+        };
+    }
+
+    public static Specification<OvertimeRequest> hasExemptionStatus(ExemptionStatus exemptionStatus) {
+        return (root, query, cb) -> {
+            if (exemptionStatus == null) {
+                return cb.conjunction();
+            }
+            if (query.getResultType() != Long.class && query.getResultType() != long.class) {
+                root.fetch("employee", JoinType.LEFT).fetch("exemptionStatus", JoinType.LEFT);
+            }
+            return cb.equal(root.join("employee").get("exemptionStatus"), exemptionStatus);
         };
     }
 

@@ -1,7 +1,7 @@
 package org.example.maridone.payroll.spec;
 
 import jakarta.persistence.criteria.JoinType;
-import org.example.maridone.payroll.PayrollItem;
+import org.example.maridone.payroll.item.PayrollItem;
 import org.springframework.data.jpa.domain.Specification;
 
 public class ItemSpecs {
@@ -14,7 +14,7 @@ public class ItemSpecs {
             if (query.getResultType() != Long.class && query.getResultType() != long.class) {
                 root.fetch("employee", JoinType.LEFT);
             }
-            return cb.equal(root.get("employee").get("employeeId"), empId);
+            return cb.equal(root.join("employee").get("employeeId"), empId);
         };
     }
 }

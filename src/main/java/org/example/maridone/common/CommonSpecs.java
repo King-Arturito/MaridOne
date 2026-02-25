@@ -20,6 +20,7 @@ public class CommonSpecs {
         return (root, query, cb) -> {
             if (value == null) {
                 return cb.conjunction();
+
             }
             return cb.notEqual(root.get(fieldName), value);
         };
