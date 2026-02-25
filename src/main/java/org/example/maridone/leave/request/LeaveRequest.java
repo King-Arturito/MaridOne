@@ -20,11 +20,8 @@ public class LeaveRequest {
     @JoinColumn(name = "emp_id", nullable = false)
     private Employee employee;
 
-    @Column(name = "start_date", nullable = false)
-    private LocalDate startDate;
-
-    @Column(name = "end_date", nullable = false)
-    private LocalDate endDate;
+    @Column(name = "leave_date", nullable = false)
+    private LocalDate leaveDate;
 
     @Column(name = "approver", nullable = true)
     private String approver;
@@ -51,20 +48,12 @@ public class LeaveRequest {
         this.employee = employee;
     }
 
-    public LocalDate getStartDate() {
-        return startDate;
+    public LocalDate getLeaveDate() {
+        return leaveDate;
     }
 
-    public void setStartDate(LocalDate startDate) {
-        this.startDate = startDate;
-    }
-
-    public LocalDate getEndDate() {
-        return endDate;
-    }
-
-    public void setEndDate(LocalDate endDate) {
-        this.endDate = endDate;
+    public void setLeaveDate(LocalDate leaveDate) {
+        this.leaveDate = leaveDate;
     }
 
     public String getApprover() {

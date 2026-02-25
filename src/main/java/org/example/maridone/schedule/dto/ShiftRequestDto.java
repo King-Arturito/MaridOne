@@ -21,8 +21,6 @@ public class ShiftRequestDto {
     private LocalTime endTime;
     @NotNull(groups = {OnCreate.class,  OnUpdate.class})
     private DayOfWeek dayOfWeek;
-    @NotNull(groups = {OnCreate.class,  OnUpdate.class})
-    private EarningsType earningsType;
 
     public Long getEmpId() {
         return empId;
@@ -55,11 +53,4 @@ public class ShiftRequestDto {
         this.dayOfWeek = dayOfWeek;
     }
 
-    public EarningsType getEarningsType() {
-        return earningsType;
-    }
-
-    public void setEarningsType(EarningsType earningsType) {
-        this.earningsType = earningsType;
-    }
 }

@@ -3,6 +3,9 @@ package org.example.maridone.payroll.itemcomponent;
 import java.util.List;
 
 import org.example.maridone.payroll.dto.DeductionsDto;
+import org.example.maridone.payroll.item.component.DeductionsLine;
+import org.example.maridone.payroll.item.component.DeductionsRepository;
+import org.example.maridone.payroll.item.component.DeductionsService;
 import org.example.maridone.payroll.mapper.PayrollMapper;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;

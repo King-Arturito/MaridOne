@@ -4,7 +4,7 @@ import java.util.Optional;
 
 import org.example.maridone.enums.Status;
 import org.example.maridone.exception.ItemNotFoundException;
-import org.example.maridone.payroll.PayrollItem;
+import org.example.maridone.payroll.item.PayrollItem;
 import org.example.maridone.payroll.dto.DisputeRequestDto;
 import org.example.maridone.payroll.run.PayrollItemRepository;
 import org.junit.jupiter.api.Assertions;

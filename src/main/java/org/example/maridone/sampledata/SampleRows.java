@@ -22,8 +22,8 @@ import org.example.maridone.payroll.run.PayrollRun;
 import org.example.maridone.payroll.run.PayrollRunRepository;
 import org.example.maridone.schedule.calendar.CalendarRepository;
 import org.example.maridone.schedule.calendar.CompanyCalendar;
-import org.example.maridone.schedule.shift.ShiftRepository;
-import org.example.maridone.schedule.shift.ShiftSchedule;
+import org.example.maridone.schedule.shift.TemplateShiftRepository;
+import org.example.maridone.schedule.shift.TemplateShiftSchedule;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Profile;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -50,7 +50,7 @@ public class SampleRows {
     private CalendarRepository calendarRepository;
 
     @Autowired
-    private ShiftRepository shiftRepository;
+    private TemplateShiftRepository templateShiftRepository;
 
     @Autowired
     private BankAccountRepository bankAccountRepository;
@@ -225,8 +225,7 @@ public class SampleRows {
     private void createAndSaveLeaveRequests(Employee emp, int i) {
         LeaveRequest leaveRequest = new LeaveRequest();
         leaveRequest.setEmployee(emp);
-        leaveRequest.setStartDate(LocalDate.now().plusDays(i));
-        leaveRequest.setEndDate(LocalDate.now().plusDays(i + 2));
+        leaveRequest.setLeaveDate(LocalDate.now());
         leaveRequest.setRequestStatus(i % 2 == 0 ? Status.APPROVED : Status.PENDING);
         leaveRequest.setReason("Vacation request #" + i);
 
@@ -244,27 +243,19 @@ public class SampleRows {
     }
 
     private void createAndSaveShiftSchedules(Employee emp, int i) {
-        List<ShiftSchedule> shiftSchedules = new ArrayList<>();
+        List<TemplateShiftSchedule> templateShiftSchedules = new ArrayList<>();
 
         for (int k = 1; k <= 7; k++) {
-            ShiftSchedule shiftSchedule = new ShiftSchedule();
-            shiftSchedule.setEmployee(emp);
-            shiftSchedule.setDayOfWeek(DayOfWeek.of(k));
+            TemplateShiftSchedule templateShiftSchedule = new TemplateShiftSchedule();
+            templateShiftSchedule.setEmployee(emp);
+            templateShiftSchedule.setDayOfWeek(DayOfWeek.of(k));
 
-            if (k == 1) {
-                shiftSchedule.setEarningsType(EarningsType.BASIC);
-            } else if (k == 2) {
-                shiftSchedule.setEarningsType(EarningsType.DOUBLE_OVERTIME);
-            } else {
-                shiftSchedule.setEarningsType(EarningsType.OVERTIME);
-            }
-
-            shiftSchedule.setStartTime(LocalTime.now());
-            shiftSchedule.setEndTime(LocalTime.now().plusHours(8));
-            shiftSchedules.add(shiftSchedule);
+            templateShiftSchedule.setStartTime(LocalTime.now());
+            templateShiftSchedule.setEndTime(LocalTime.now().plusHours(8));
+            templateShiftSchedules.add(templateShiftSchedule);
         }
 
-        shiftRepository.saveAll(shiftSchedules);
+        templateShiftRepository.saveAll(templateShiftSchedules);
     }
 
     private PayrollItem createPayrollItem(Employee emp, int i, PayrollRun payrollRun) {

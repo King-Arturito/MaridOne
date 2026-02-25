@@ -1,36 +1,53 @@
 package org.example.maridone.schedule.shift;
 
 
+import org.example.maridone.common.CommonSpecs;
+import org.example.maridone.config.DefaultProperties;
 import org.example.maridone.core.employee.Employee;
 import org.example.maridone.core.employee.EmployeeRepository;
-import org.example.maridone.enums.EarningsType;
+import org.example.maridone.enums.EmploymentStatus;
 import org.example.maridone.exception.EmployeeNotFoundException;
 import org.example.maridone.exception.ShiftsNotFoundException;
+import org.example.maridone.leave.request.LeaveRequest;
+import org.example.maridone.leave.request.LeaveRequestRepository;
 import org.example.maridone.schedule.dto.ShiftRequestDto;
 import org.example.maridone.schedule.dto.ShiftResponseDto;
 import org.example.maridone.schedule.mapper.ScheduleMapper;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import java.time.DayOfWeek;
+import java.time.LocalDate;
 import java.time.LocalTime;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @Service
 public class ShiftService {
 
-    private final ShiftRepository shiftRepository;
+    private final TemplateShiftRepository templateShiftRepository;
+    private final DailyShiftRepository dailyShiftRepository;
     private final EmployeeRepository employeeRepository;
+    private final LeaveRequestRepository leaveRequestRepository;
     private final ScheduleMapper scheduleMapper;
+    private final DefaultProperties defaultProperties;
 
     public ShiftService(
-            ShiftRepository shiftRepository,
+            TemplateShiftRepository templateShiftRepository,
             EmployeeRepository employeeRepository,
-            ScheduleMapper scheduleMapper) {
-        this.shiftRepository = shiftRepository;
+            DailyShiftRepository dailyShiftRepository,
+            LeaveRequestRepository leaveRequestRepository,
+            ScheduleMapper scheduleMapper,
+            DefaultProperties defaultProperties) {
+        this.templateShiftRepository = templateShiftRepository;
         this.employeeRepository = employeeRepository;
+        this.dailyShiftRepository = dailyShiftRepository;
+        this.leaveRequestRepository = leaveRequestRepository;
         this.scheduleMapper = scheduleMapper;
+        this.defaultProperties = defaultProperties;
     }
 
     //create all for 7 days [monday, ...., sunday]
@@ -38,23 +55,23 @@ public class ShiftService {
     @Transactional
     public void createShifts(Long empId) {
         Employee emp = employeeRepository.findById(empId).orElseThrow(() -> new EmployeeNotFoundException(empId));
-        List<ShiftSchedule> schedules = Arrays.stream(DayOfWeek.values()).map(day -> {
-            ShiftSchedule shiftSchedule = new ShiftSchedule();
-            shiftSchedule.setEmployee(emp);
-            shiftSchedule.setStartTime(LocalTime.of(1,0));
-            shiftSchedule.setEndTime(LocalTime.of(2,0));
-            shiftSchedule.setDayOfWeek(day);
-            shiftSchedule.setEarningsType(EarningsType.BASIC);
-            return shiftSchedule;
+        List<TemplateShiftSchedule> schedules = Arrays.stream(DayOfWeek.values()).map(day -> {
+            TemplateShiftSchedule templateShiftSchedule = new TemplateShiftSchedule();
+            templateShiftSchedule.setEmployee(emp);
+            templateShiftSchedule.setStartTime(LocalTime.of(1,0));
+            templateShiftSchedule.setEndTime(LocalTime.of(2,0));
+            templateShiftSchedule.setDayOfWeek(day);
+            return templateShiftSchedule;
         }).collect(Collectors.toList());
-        shiftRepository.saveAll(schedules);
+        templateShiftRepository.saveAll(schedules);
     }
 
+    //get shift schedules of a single employee
     public List<ShiftResponseDto> getShiftSchedule(Long empId) {
         if (!employeeRepository.existsById(empId)) {
             throw new EmployeeNotFoundException(empId);
         }
-        List<ShiftSchedule> schedules = shiftRepository.findAllByEmployeeId(empId);
+        List<TemplateShiftSchedule> schedules = templateShiftRepository.findAllByEmployeeId(empId);
         if (schedules.isEmpty()) {
             throw new ShiftsNotFoundException("Employee ID: " + empId + "has no schedule.");
         }
@@ -62,28 +79,79 @@ public class ShiftService {
     }
 
     @Transactional
-    public ShiftSchedule addShiftSchedule(ShiftRequestDto payload) {
+    public TemplateShiftSchedule addShiftSchedule(ShiftRequestDto payload) {
         Employee emp = employeeRepository.findById(payload.getEmpId()).orElseThrow(() -> new EmployeeNotFoundException(payload.getEmpId()));
-        ShiftSchedule shiftSchedule = new ShiftSchedule();
-        shiftSchedule.setEmployee(emp);
-        shiftSchedule.setStartTime(payload.getStartTime());
-        shiftSchedule.setEndTime(payload.getEndTime());
-        shiftSchedule.setDayOfWeek(payload.getDayOfWeek());
-        shiftSchedule.setEarningsType(payload.getEarningsType());
-        shiftRepository.save(shiftSchedule);
-        return shiftSchedule;
+        TemplateShiftSchedule templateShiftSchedule = new TemplateShiftSchedule();
+        templateShiftSchedule.setEmployee(emp);
+        templateShiftSchedule.setStartTime(payload.getStartTime());
+        templateShiftSchedule.setEndTime(payload.getEndTime());
+        templateShiftSchedule.setDayOfWeek(payload.getDayOfWeek());
+        templateShiftRepository.save(templateShiftSchedule);
+        return templateShiftSchedule;
     }
 
     @Transactional
-    public ShiftSchedule updateShiftSchedule(ShiftRequestDto payload) {
-        ShiftSchedule schedule = shiftRepository.findById(payload.getShiftId()).orElseThrow(() -> new ShiftsNotFoundException("Shift of ID: " + payload.getShiftId() +" not found."));
+    public TemplateShiftSchedule updateShiftSchedule(ShiftRequestDto payload) {
+        TemplateShiftSchedule schedule = templateShiftRepository.findById(payload.getShiftId()).orElseThrow(() -> new ShiftsNotFoundException("Shift of ID: " + payload.getShiftId() +" not found."));
         schedule.setStartTime(payload.getStartTime());
         schedule.setEndTime(payload.getEndTime());
         schedule.setDayOfWeek(payload.getDayOfWeek());
-        schedule.setEarningsType(payload.getEarningsType());
-        shiftRepository.save(schedule);
+        templateShiftRepository.save(schedule);
         return schedule;
     }
 
-    //todo: addTempShiftSchedule
+    /*
+        for task scheduling:
+    */
+
+    @Transactional
+    public void setDailyShifts() {
+        DayOfWeek targetDay = LocalDate.now(defaultProperties.getTimeZone()).getDayOfWeek();
+        //what we need to save
+        List<DailyShiftSchedule> schedulesToSave = new ArrayList<>();
+
+        Specification<Employee> specs = Specification.allOf(
+                CommonSpecs.fieldNotEquals("employmentStatus", EmploymentStatus.TERMINATED)
+        );
+
+        //get all employee ids with status != terminated
+        List<Long> empIds = employeeRepository.findAll(specs).stream()
+                .map(Employee::getEmployeeId)
+                .toList();
+
+        /*
+            get all shift templates for employee ids in empIds,
+            group shift templates into empId
+         */
+        Map<Long, List<TemplateShiftSchedule>> empToTemplates = templateShiftRepository
+                .findAllByEmployeeIdInAndDayOfWeek(empIds, targetDay)
+                .stream()
+                .collect(Collectors.groupingBy(
+                        TemplateShiftSchedule::getEmployeeId
+                ));
+
+        Map<Long, List<LeaveRequest>>  empToRequests = leaveRequestRepository
+                .findApprovedLeavesForDay(LocalDate.now(defaultProperties.getTimeZone()))
+                .stream()
+                .collect(Collectors.groupingBy(
+                        leaveRequest -> leaveRequest.getEmployee().getEmployeeId()));
+
+        //remove all employees inside empToTemplates since they have a leave for this day
+        empToTemplates.keySet().removeAll(empToRequests.keySet());
+
+        //loop through empToTemplates based on empIds, and adds to shift schedules for today
+        empToTemplates.forEach((empId, schedules) ->
+                schedules.forEach(schedule -> {
+                    DailyShiftSchedule dailyShiftSchedule = new DailyShiftSchedule();
+                    dailyShiftSchedule.setScheduledDate(LocalDate.now(defaultProperties.getTimeZone()));
+                    dailyShiftSchedule.setStartTime(schedule.getStartTime());
+                    dailyShiftSchedule.setEndTime(schedule.getEndTime());
+                    dailyShiftSchedule.setTemplateShiftSchedule(schedule);
+                    schedulesToSave.add(dailyShiftSchedule);
+                })
+        );
+        dailyShiftRepository.saveAll(schedulesToSave);
+    }
+
+
 }

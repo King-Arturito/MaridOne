@@ -7,9 +7,7 @@ import java.time.LocalDate;
 public class LeaveRequestDto {
 
     @NotNull
-    private LocalDate startDate;
-    @NotNull
-    private LocalDate endDate;
+    private LocalDate leaveDate;
     @NotNull
     private String approver;
     @NotNull
@@ -17,20 +15,12 @@ public class LeaveRequestDto {
     @NotNull(groups = OnUpdate.class)
     private String approverReason;
 
-    public LocalDate getStartDate() {
-        return startDate;
+    public LocalDate getLeaveDate() {
+        return leaveDate;
     }
 
-    public void setStartDate(LocalDate startDate) {
-        this.startDate = startDate;
-    }
-
-    public LocalDate getEndDate() {
-        return endDate;
-    }
-
-    public void setEndDate(LocalDate endDate) {
-        this.endDate = endDate;
+    public void setLeaveDate(LocalDate leaveDate) {
+        this.leaveDate = leaveDate;
     }
 
     public String getApprover() {

@@ -21,15 +21,11 @@ import org.example.maridone.payroll.item.PayrollItem;
 import org.example.maridone.payroll.dto.ItemSummaryDto;
 import org.example.maridone.payroll.dto.PayrollItemDto;
 import org.example.maridone.payroll.dto.RunCreateDto;
-import org.example.maridone.payroll.item.component.DeductionsLine;
-import org.example.maridone.payroll.item.component.DeductionsService;
 import org.example.maridone.payroll.dto.ItemDetailsDto;
-import org.example.maridone.payroll.item.component.EarningsLine;
-import org.example.maridone.payroll.item.component.EarningsService;
 import org.example.maridone.payroll.mapper.PayrollMapper;
 import org.example.maridone.payroll.spec.ItemSpecs;
-import org.example.maridone.schedule.shift.ShiftRepository;
-import org.example.maridone.schedule.shift.ShiftSchedule;
+import org.example.maridone.schedule.shift.TemplateShiftRepository;
+import org.example.maridone.schedule.shift.TemplateShiftSchedule;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
@@ -39,9 +35,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.time.LocalDate;
 import java.time.LocalTime;
-import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -54,7 +48,7 @@ public class PayrollService {
     private final PayrollItemRepository payrollItemRepository;
     private final EmployeeRepository employeeRepository;
     private final AttendanceLogRepository attendanceLogRepository;
-    private final ShiftRepository shiftRepository;
+    private final TemplateShiftRepository templateShiftRepository;
     private final OvertimeRequestRepository overtimeRequestRepository;
     private final PayrollCalculator payrollCalculator;
     private final PayrollMapper payrollMapper;
@@ -65,7 +59,7 @@ public class PayrollService {
             PayrollItemRepository payrollItemRepository,
             EmployeeRepository employeeRepository,
             AttendanceLogRepository attendanceLogRepository,
-            ShiftRepository shiftRepository,
+            TemplateShiftRepository templateShiftRepository,
             OvertimeRequestRepository overtimeRequestRepository,
             PayrollCalculator payrollCalculator,
             PayrollMapper payrollMapper,
@@ -76,7 +70,7 @@ public class PayrollService {
         this.payrollItemRepository = payrollItemRepository;
         this.employeeRepository = employeeRepository;
         this.attendanceLogRepository = attendanceLogRepository;
-        this.shiftRepository = shiftRepository;
+        this.templateShiftRepository = templateShiftRepository;
         this.overtimeRequestRepository = overtimeRequestRepository;
         this.payrollCalculator = payrollCalculator;
         this.payrollMapper = payrollMapper;
@@ -230,14 +224,14 @@ public class PayrollService {
         List<OvertimeRequest> overtimeRequests = overtimeRequestRepository.findAll(overtimeSpecs);
 
         //get all shift schedules of employees
-        List<ShiftSchedule> allSchedules = shiftRepository.findByEmployee_EmployeeIdIn(employeeIds);
+        List<TemplateShiftSchedule> allSchedules = templateShiftRepository.findByEmployee_EmployeeIdIn(employeeIds);
 
         //create a key-value pair by emp id -> List<AttendanceLogs>
         Map<Long, List<AttendanceLog>> attendanceMap = allLogs.stream()
                 .collect(Collectors.groupingBy(AttendanceLog::getEmployeeId));
 
         //create a key-value pair by emp id -> List<ShiftSchedule>
-        Map<Long, List<ShiftSchedule>> scheduleMap = allSchedules.stream()
+        Map<Long, List<TemplateShiftSchedule>> scheduleMap = allSchedules.stream()
                 .collect(Collectors.groupingBy(schedule -> schedule.getEmployee().getEmployeeId()));
 
         Map<Long, List<OvertimeRequest>> overtimeMap = overtimeRequests.stream()
@@ -245,7 +239,7 @@ public class PayrollService {
 
         for (Employee emp :  employees) {
             List<OvertimeRequest> requests = overtimeMap.getOrDefault(emp.getEmployeeId(), List.of());
-            List<ShiftSchedule> schedules = scheduleMap.getOrDefault(emp.getEmployeeId(), List.of());
+            List<TemplateShiftSchedule> schedules = scheduleMap.getOrDefault(emp.getEmployeeId(), List.of());
             List<AttendanceLog> attendanceLogs = attendanceMap.getOrDefault(emp.getEmployeeId(), List.of());
 
             //get total hours from shift schedule

@@ -65,8 +65,7 @@ class LeaveServiceTest {
     void createLeaveRequest_ShouldSetStatusPending() {
         Long empId = 1L;
         LeaveRequestDto dto = new LeaveRequestDto();
-        dto.setStartDate(LocalDate.now());
-        dto.setEndDate(LocalDate.now().plusDays(1));
+        dto.setLeaveDate(LocalDate.now());
         dto.setReason("Vacation");
 
         Employee emp = new Employee();

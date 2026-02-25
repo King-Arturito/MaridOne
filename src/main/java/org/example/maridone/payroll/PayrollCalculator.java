@@ -4,7 +4,7 @@ import org.example.maridone.core.employee.Employee;
 import org.example.maridone.enums.ExemptionStatus;
 import org.example.maridone.payroll.item.PayrollItem;
 import org.example.maridone.payroll.item.component.*;
-import org.example.maridone.schedule.shift.ShiftSchedule;
+import org.example.maridone.schedule.shift.TemplateShiftSchedule;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
@@ -47,7 +47,7 @@ public class PayrollCalculator {
     }
 
     //earnings for non exempt
-    public List<EarningsLine> setEarnings(Employee emp, PayrollItem item, List<ShiftSchedule> shifts) {
+    public List<EarningsLine> setEarnings(Employee emp, PayrollItem item, List<TemplateShiftSchedule> shifts) {
         List<EarningsLine> earnings =  new ArrayList<>();
 
         return earnings;
@@ -68,12 +68,12 @@ public class PayrollCalculator {
         return BigDecimal.valueOf(time.toMinutes()).divide(BigDecimal.valueOf(60), 2, RoundingMode.HALF_UP);
     }
 
-    public BigDecimal calculateHours(List<ShiftSchedule> schedules) {
+    public BigDecimal calculateHours(List<TemplateShiftSchedule> schedules) {
         if (schedules.isEmpty() || schedules == null) {
             return BigDecimal.ZERO;
         }
         BigDecimal hours = BigDecimal.ZERO;
-        for (ShiftSchedule schedule : schedules) {
+        for (TemplateShiftSchedule schedule : schedules) {
             hours = hours.add(calculateHours(schedule.getStartTime(), schedule.getEndTime()));
         }
         return hours.setScale(2, RoundingMode.HALF_UP);

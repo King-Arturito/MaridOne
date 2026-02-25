@@ -2,7 +2,7 @@ package org.example.maridone.payroll.run;
 
 import java.util.List;
 
-import org.example.maridone.payroll.PayrollItem;
+import org.example.maridone.payroll.item.PayrollItem;
 import org.example.maridone.payroll.dto.ItemDetailsDto;
 import org.example.maridone.payroll.mapper.PayrollMapper;
 import org.junit.jupiter.api.Assertions;

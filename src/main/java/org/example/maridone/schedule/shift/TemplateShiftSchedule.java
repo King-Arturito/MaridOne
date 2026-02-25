@@ -6,12 +6,11 @@ import org.example.maridone.core.employee.Employee;
 import org.example.maridone.enums.EarningsType;
 
 import java.time.DayOfWeek;
-import java.time.Instant;
 import java.time.LocalTime;
-import java.util.List;
 
 @Entity
-public class ShiftSchedule {
+@Table(name = "template_shift_schedule")
+public class TemplateShiftSchedule {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -36,9 +35,6 @@ public class ShiftSchedule {
     @Enumerated(EnumType.STRING)
     private DayOfWeek dayOfWeek;
 
-    @Column(name = "shift_type", nullable = false)
-    @Enumerated(EnumType.STRING)
-    private EarningsType earningsType;
 
     public Long getShiftId() {
         return shiftId;
@@ -79,13 +75,5 @@ public class ShiftSchedule {
 
     public void setDayOfWeek(DayOfWeek dayOfWeek) {
         this.dayOfWeek = dayOfWeek;
-    }
-
-    public EarningsType getEarningsType() {
-        return earningsType;
-    }
-
-    public void setEarningsType(EarningsType earningsType) {
-        this.earningsType = earningsType;
     }
 }

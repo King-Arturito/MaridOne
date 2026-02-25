@@ -100,8 +100,7 @@ public class LeaveService {
         LeaveRequest request = new LeaveRequest();
         request.setRequestStatus(Status.PENDING);
         request.setEmployee(emp);
-        request.setStartDate(payload.getStartDate());
-        request.setEndDate(payload.getEndDate());
+        request.setLeaveDate(payload.getLeaveDate());
         request.setReason(payload.getReason());
         leaveRequestRepository.save(request);
         return request;

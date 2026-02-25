@@ -1,4 +1,8 @@
 package org.example.maridone.schedule.shift;
 
-public class DailyShiftRepository {
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.stereotype.Repository;
+
+@Repository
+public interface DailyShiftRepository extends JpaRepository<DailyShiftSchedule, Long> {
 }
