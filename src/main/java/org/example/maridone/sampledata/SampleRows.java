@@ -226,6 +226,8 @@ public class SampleRows {
         LeaveRequest leaveRequest = new LeaveRequest();
         leaveRequest.setEmployee(emp);
         leaveRequest.setLeaveDate(LocalDate.now());
+        leaveRequest.setStartTime(LocalTime.of(23, 30));
+        leaveRequest.setEndTime(LocalTime.of(0,30));
         leaveRequest.setRequestStatus(i % 2 == 0 ? Status.APPROVED : Status.PENDING);
         leaveRequest.setReason("Vacation request #" + i);
 

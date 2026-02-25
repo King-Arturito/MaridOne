@@ -1,9 +1,7 @@
 package org.example.maridone.schedule.shift;
 
 import jakarta.persistence.*;
-import org.example.maridone.enums.EarningsType;
-import java.time.LocalDate;
-import java.time.LocalTime;
+import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "daily_shift_schedule")
@@ -16,14 +14,11 @@ public class DailyShiftSchedule {
     @JoinColumn(name = "shiftId")
     private TemplateShiftSchedule templateShiftSchedule;
 
-    @Column(name = "start_time", nullable = false)
-    private LocalTime startTime;
+    @Column(name = "start_date_time", nullable = false)
+    private LocalDateTime startDateTime;
 
-    @Column(name = "end_time", nullable = false)
-    private LocalTime endTime;
-
-    @Column(name = "scheduled_date", nullable = false)
-    private LocalDate scheduledDate;
+    @Column(name = "end_date_time", nullable = false)
+    private LocalDateTime endDateTime;
 
     public Long getDailyShiftId() {
         return dailyShiftId;
@@ -37,27 +32,19 @@ public class DailyShiftSchedule {
         this.templateShiftSchedule = templateShiftSchedule;
     }
 
-    public LocalTime getStartTime() {
-        return startTime;
+    public LocalDateTime getStartDateTime() {
+        return startDateTime;
     }
 
-    public void setStartTime(LocalTime startTime) {
-        this.startTime = startTime;
+    public void setStartDateTime(LocalDateTime startDateTime) {
+        this.startDateTime = startDateTime;
     }
 
-    public LocalTime getEndTime() {
-        return endTime;
+    public LocalDateTime getEndDateTime() {
+        return endDateTime;
     }
 
-    public void setEndTime(LocalTime endTime) {
-        this.endTime = endTime;
-    }
-
-    public LocalDate getScheduledDate() {
-        return scheduledDate;
-    }
-
-    public void setScheduledDate(LocalDate scheduledDate) {
-        this.scheduledDate = scheduledDate;
+    public void setEndDateTime(LocalDateTime endDateTime) {
+        this.endDateTime = endDateTime;
     }
 }

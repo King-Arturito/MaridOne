@@ -18,6 +18,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -106,23 +107,20 @@ public class ShiftService {
 
     @Transactional
     public void setDailyShifts() {
-        DayOfWeek targetDay = LocalDate.now(defaultProperties.getTimeZone()).getDayOfWeek();
-        //what we need to save
+        LocalDate today = LocalDate.now(defaultProperties.getTimeZone());
+        DayOfWeek targetDay = today.getDayOfWeek();
         List<DailyShiftSchedule> schedulesToSave = new ArrayList<>();
 
         Specification<Employee> specs = Specification.allOf(
                 CommonSpecs.fieldNotEquals("employmentStatus", EmploymentStatus.TERMINATED)
         );
 
-        //get all employee ids with status != terminated
+        //store employee ids based on the specs
         List<Long> empIds = employeeRepository.findAll(specs).stream()
                 .map(Employee::getEmployeeId)
                 .toList();
 
-        /*
-            get all shift templates for employee ids in empIds,
-            group shift templates into empId
-         */
+        //create a mapping for empId -> many TemplateShiftSchedule
         Map<Long, List<TemplateShiftSchedule>> empToTemplates = templateShiftRepository
                 .findAllByEmployeeIdInAndDayOfWeek(empIds, targetDay)
                 .stream()
@@ -130,28 +128,83 @@ public class ShiftService {
                         TemplateShiftSchedule::getEmployeeId
                 ));
 
-        Map<Long, List<LeaveRequest>>  empToRequests = leaveRequestRepository
-                .findApprovedLeavesForDay(LocalDate.now(defaultProperties.getTimeZone()))
+        //create a mapping for empId -> many leaves
+        /*
+            DOESNT SUPPORT MANY LEAVES YET
+        */
+        Map<Long, List<LeaveRequest>> empToRequests = leaveRequestRepository
+                .findApprovedLeavesForDay(today)
                 .stream()
                 .collect(Collectors.groupingBy(
                         leaveRequest -> leaveRequest.getEmployee().getEmployeeId()));
 
-        //remove all employees inside empToTemplates since they have a leave for this day
-        empToTemplates.keySet().removeAll(empToRequests.keySet());
+        //iterate through empIds in empToTemplates
+        empToTemplates.forEach((empId, schedules) -> {
+            List<LeaveRequest> leaves = empToRequests.getOrDefault(empId, List.of());
+            schedules.forEach(schedule -> {
+                if (leaves.isEmpty()) {
+                    schedulesToSave.add(buildShift(schedule,
+                            LocalDateTime.of(today, schedule.getStartTime()),
+                            LocalDateTime.of(today, schedule.getEndTime()).plusDays(
+                                    schedule.getEndTime().isBefore(schedule.getStartTime()) ? 1 : 0
+                            )));
+                } else {
+                    LeaveRequest leave = leaves.get(0);
+                    schedulesToSave.addAll(splitShift(schedule, leave, today));
+                }
+            });
+        });
 
-        //loop through empToTemplates based on empIds, and adds to shift schedules for today
-        empToTemplates.forEach((empId, schedules) ->
-                schedules.forEach(schedule -> {
-                    DailyShiftSchedule dailyShiftSchedule = new DailyShiftSchedule();
-                    dailyShiftSchedule.setScheduledDate(LocalDate.now(defaultProperties.getTimeZone()));
-                    dailyShiftSchedule.setStartTime(schedule.getStartTime());
-                    dailyShiftSchedule.setEndTime(schedule.getEndTime());
-                    dailyShiftSchedule.setTemplateShiftSchedule(schedule);
-                    schedulesToSave.add(dailyShiftSchedule);
-                })
-        );
         dailyShiftRepository.saveAll(schedulesToSave);
     }
 
+    //for partial shifts
+    private List<DailyShiftSchedule> splitShift(TemplateShiftSchedule schedule, LeaveRequest leave, LocalDate date) {
+        LocalDateTime shiftStart = LocalDateTime.of(date, schedule.getStartTime());
+        //if endTime of shift schedule < startTime, it means midnight.
+        //so add 1 day to the shiftEnd, else just set normally
+        LocalDateTime shiftEnd = schedule.getEndTime().isBefore(schedule.getStartTime())
+                ? LocalDateTime.of(date.plusDays(1), schedule.getEndTime())
+                : LocalDateTime.of(date, schedule.getEndTime());
 
+
+        LocalDateTime leaveFrom = LocalDateTime.of(leave.getLeaveDate(), leave.getStartTime());
+
+        //same applies here
+        LocalDateTime leaveTo = leave.getEndTime().isBefore(leave.getStartTime())
+                ? LocalDateTime.of(leave.getLeaveDate().plusDays(1), leave.getEndTime())
+                : LocalDateTime.of(leave.getLeaveDate(), leave.getEndTime());
+
+        // no overlap, generate normally
+        if (leaveTo.isBefore(shiftStart) || leaveFrom.isAfter(shiftEnd)) {
+            return List.of(buildShift(schedule,shiftStart,shiftEnd));
+        }
+
+        // full overlap, skip entirely
+        if (!leaveFrom.isAfter(shiftStart) && !leaveTo.isBefore(shiftEnd)) {
+            return List.of();
+        }
+
+        List<DailyShiftSchedule> result = new ArrayList<>();
+
+        // segment before leave
+        if (shiftStart.isBefore(leaveFrom)) {
+            result.add(buildShift(schedule, shiftStart, leaveFrom));
+        }
+
+        // segment after leave
+        if (shiftEnd.isAfter(leaveTo)) {
+            result.add(buildShift(schedule, leaveTo, shiftEnd));
+        }
+
+        return result;
+    }
+
+    private DailyShiftSchedule buildShift(TemplateShiftSchedule schedule, LocalDateTime start, LocalDateTime end) {
+        DailyShiftSchedule daily = new DailyShiftSchedule();
+        daily.setStartDateTime(start);
+        daily.setEndDateTime(end);
+        daily.setTemplateShiftSchedule(schedule);
+        return daily;
+    }
 }
