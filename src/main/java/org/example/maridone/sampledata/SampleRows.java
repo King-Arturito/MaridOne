@@ -251,7 +251,6 @@ public class SampleRows {
             TemplateShiftSchedule templateShiftSchedule = new TemplateShiftSchedule();
             templateShiftSchedule.setEmployee(emp);
             templateShiftSchedule.setDayOfWeek(DayOfWeek.of(k));
-
             templateShiftSchedule.setStartTime(LocalTime.now());
             templateShiftSchedule.setEndTime(LocalTime.now().plusHours(8));
             templateShiftSchedules.add(templateShiftSchedule);

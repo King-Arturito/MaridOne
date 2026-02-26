@@ -11,6 +11,7 @@ import org.example.maridone.core.employee.EmployeeRepository;
 import org.example.maridone.enums.EarningsType;
 import org.example.maridone.schedule.dto.ShiftRequestDto;
 import org.example.maridone.schedule.dto.ShiftResponseDto;
+import org.example.maridone.schedule.mapper.ScheduleMapper;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -28,6 +29,7 @@ class ShiftServiceTest {
 
     @Mock private TemplateShiftRepository templateShiftRepository;
     @Mock private EmployeeRepository employeeRepository;
+    @Mock private ScheduleMapper scheduleMapper;
 
     @InjectMocks
     private ShiftService shiftService;
@@ -51,10 +53,10 @@ class ShiftServiceTest {
         Long empId = 1L;
         Employee emp = new Employee();
         ReflectionTestUtils.setField(emp, "employeeId", empId);
-        
-        when(employeeRepository.findById(empId)).thenReturn(Optional.of(emp));
-        when(templateShiftRepository.findAllByEmployeeId(empId)).thenReturn(List.of(new TemplateShiftSchedule()));
 
+        when(templateShiftRepository.findAllByEmployeeId(empId)).thenReturn(List.of(new TemplateShiftSchedule()));
+        when(employeeRepository.existsById(empId)).thenReturn(true);
+        when(shiftService.getShiftSchedule(empId)).thenReturn(List.of(new ShiftResponseDto()));
         List<ShiftResponseDto> result = shiftService.getShiftSchedule(empId);
         Assertions.assertFalse(result.isEmpty());
     }

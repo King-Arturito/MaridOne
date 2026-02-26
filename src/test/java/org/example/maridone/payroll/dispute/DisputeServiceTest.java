@@ -39,7 +39,6 @@ class DisputeServiceTest {
         ReflectionTestUtils.setField(item, "itemId", itemId);
 
         when(payrollItemRepository.findById(itemId)).thenReturn(Optional.of(item));
-        when(disputeRepository.findByPayrollItem_ItemId(itemId, pageable)).thenReturn(null);
         when(disputeRepository.save(any(DisputeRequest.class))).thenAnswer(i -> i.getArgument(0));
 
         DisputeRequest result = disputeService.createDisputeRequest(itemId, dto);

@@ -1,5 +1,7 @@
 package org.example.maridone.schedule.calendar;
 
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.Optional;
 
 import org.example.maridone.schedule.dto.CalendarDto;
@@ -46,14 +48,20 @@ class CalendarServiceTest {
         dto.setCalendarId(id);
         dto.setTitle("New Title");
         dto.setIsActive(true);
+        dto.setStartDate(Instant.now());
+        dto.setEndDate(Instant.now().plus(5, ChronoUnit.DAYS));
 
         CompanyCalendar existing = new CompanyCalendar();
         ReflectionTestUtils.setField(existing, "calendarId", id);
-        existing.setTitle("Old Title");
+        existing.setTitle(dto.getTitle());
+        existing.setIsActive(true);
+        existing.setStartDate(dto.getStartDate());
+        existing.setEndDate(dto.getStartDate());
+
 
         when(calendarRepository.findById(id)).thenReturn(Optional.of(existing));
-        when(calendarRepository.save(any(CompanyCalendar.class))).thenAnswer(i -> i.getArgument(0));
-
+        when(calendarRepository.save(any(CompanyCalendar.class))).thenReturn(existing);
+        when(calendarMapper.toCompanyCalendar(dto)).thenReturn(existing);
         CompanyCalendar result = calendarService.updateEvent(dto);
 
         Assertions.assertEquals("New Title", result.getTitle());
