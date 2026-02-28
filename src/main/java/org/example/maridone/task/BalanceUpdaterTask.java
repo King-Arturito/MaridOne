@@ -4,7 +4,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 @Component
-public class LeaveUpdaterTask {
+public class BalanceUpdaterTask {
 
     /*
         to do:
@@ -15,9 +15,14 @@ public class LeaveUpdaterTask {
                 employee must be a regular employee (6 months)
                 verify with handbook if balance hours stack with one another or resets every year
                     leaveHours += x; vs leaveHours = x
-           keep return value as void for now
+            keep return value as void for now
+
+            call api on testing/VerifyTasks
+            endpoint:
+                /test/leave_updater
     */
     @Scheduled()
     public void addLeaveBalance() {
+
     }
 }

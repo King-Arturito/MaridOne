@@ -14,6 +14,8 @@ import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 
 @Service
@@ -30,7 +32,6 @@ public class EmployeeService {
 
     @Transactional
     public EmployeeResponseDto createEmployee(EmployeeRequestDto employeeRequestDto) {
-        //security
         Employee employee = coreMapper.toEmployee(employeeRequestDto);
         employeeRepository.save(employee);
         return coreMapper.toEmployeeResponse(employee);
@@ -81,6 +82,16 @@ public class EmployeeService {
         employeeRepository.save(emp);
 
         return coreMapper.toEmployeeResponse(emp);
+    }
+
+
+    @Transactional
+    public void batchUpdateEmploymentStatus(List<Long> employeeIds) {
+        List<Employee> employees = new ArrayList<>();
+
+        //update only employmentStatus
+
+        employeeRepository.saveAll(employees);
     }
 
     @Transactional

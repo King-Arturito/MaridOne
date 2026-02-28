@@ -1,4 +1,4 @@
-package org.example.maridone.sampledata;
+package org.example.maridone.testing;
 
 import org.example.maridone.core.bank.BankAccount;
 import org.example.maridone.core.bank.BankAccountRepository;

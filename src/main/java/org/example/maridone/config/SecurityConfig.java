@@ -1,27 +1,46 @@
 package org.example.maridone.config;
 
+import org.example.maridone.auth.JwtFilter;
+import org.example.maridone.auth.JwtService;
+import org.example.maridone.core.user.UserLoginService;
 import org.example.maridone.exception.NoRoleAssignedException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.env.Environment;
+import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.Customizer;
+import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.crypto.argon2.Argon2PasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.AuthenticationSuccessHandler;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.CorsConfigurationSource;
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 import java.util.Arrays;
+import java.util.List;
 
 @Configuration
 @EnableWebSecurity
 @EnableMethodSecurity
 public class SecurityConfig {
-    @Autowired
-    private Environment env;
+    private final DefaultProperties defaultProperties;
+    private final JwtService jwtService;
+    private final UserLoginService userLoginService;
+
+    public SecurityConfig(DefaultProperties defaultProperties,  JwtService jwtService, UserLoginService userLoginService) {
+        this.defaultProperties = defaultProperties;
+        this.jwtService = jwtService;
+        this.userLoginService = userLoginService;
+    }
 
     @Bean
     public PasswordEncoder passwordEncoder() {
@@ -30,68 +49,42 @@ public class SecurityConfig {
 
     @Bean
     public SecurityFilterChain customFilterChain(HttpSecurity http) throws Exception {
-        if (Arrays.asList(env.getActiveProfiles()).contains("dev")) {
-            http
-                    .httpBasic(Customizer.withDefaults())
-                    .csrf(customizer -> customizer.disable());
-        }
-        //Todo: OWASP top 10
         return http
-                .authorizeHttpRequests(auth-> auth
-                        .requestMatchers("/html/*", "/css/**", "/js/**", "/assets/**")
-                        .permitAll()
-                        .requestMatchers("/html/accounting/**")
-                        .hasRole("ACCOUNTING")
-                        .requestMatchers("/html/employee/**")
-                        .hasRole("EMPLOYEE")
-                        .requestMatchers("/html/hr/**")
-                        .hasRole("HR")
-                        .requestMatchers("/html/management/**")
-                        .hasRole("MANAGEMENT")
-                        .requestMatchers("/html/manager/**")
-                        .hasRole("MANAGER")
-                        .anyRequest()
-                        .authenticated()
+                .csrf(csrf -> csrf.disable())
+                .sessionManagement((session) -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .cors(cors -> cors.configurationSource(corsConfigurationSource()))
+                .authorizeHttpRequests(authorizeRequests ->
+                        authorizeRequests
+                                .requestMatchers("/api/auth/**").permitAll()
+                                .requestMatchers("/api/**").authenticated()
                 )
-                .formLogin(form -> form
-                        .loginPage("/html/login.html")
-                        .loginProcessingUrl("/process_login")
-                        .failureUrl("/html/login.html?error")
-                        .successHandler(authenticationSuccessHandler())
-                        .permitAll()
-                )
-
+                .formLogin(form -> form.disable())
+                .logout(logout -> {
+                    logout.logoutSuccessUrl(defaultProperties.getUrl());
+                })
+                .addFilterBefore(jwtFilter(), UsernamePasswordAuthenticationFilter.class)
                 .build();
     }
 
+    @Bean JwtFilter jwtFilter() {
+        return new JwtFilter(jwtService, userLoginService);
+    }
     @Bean
-    AuthenticationSuccessHandler authenticationSuccessHandler() {
-        return (request, response, authentication) -> {
-            String authority =  authentication.getAuthorities().iterator().next().getAuthority();
-            String url;
+    AuthenticationManager authenticationManager(AuthenticationConfiguration authenticationConfiguration) throws Exception {
+        return authenticationConfiguration.getAuthenticationManager();
+    }
 
-            switch(authority) {
-                case "ROLE_EMPLOYEE":
-                case "ROLE_MANAGEMENT":
-                case "ROLE_HR":
-                case "ROLE_MANAGER": {
-                    url = "/html/ss_dashboard.html";
-                    break;
-                }
-                case "ROLE_ACCOUNTING": {
-                    url  = "/html/accounting/payroll_dashboard.html";
-                    break;
-                }
-                case "ROLE_UNKNOWN": {
-                    throw new NoRoleAssignedException("No Roles for this user. Please assign a Role.");
-                }
-                default: {
-                    url = "/html/index.html?error=unknown+error";
-                }
-            }
+    @Bean
+    CorsConfigurationSource corsConfigurationSource() {
+        CorsConfiguration configuration = new CorsConfiguration();
+        configuration.setAllowedHeaders(List.of("*"));
+        configuration.setAllowCredentials(true);
+        configuration.setAllowedOrigins(List.of(defaultProperties.getUrl()));
+        configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "PATCH"));
 
-            response.sendRedirect(url);
-        };
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration("/**", configuration);
+        return source;
     }
 
 }
