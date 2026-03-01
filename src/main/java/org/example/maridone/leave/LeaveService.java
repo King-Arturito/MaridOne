@@ -1,10 +1,13 @@
 package org.example.maridone.leave;
 
 import org.example.maridone.common.CommonSpecs;
+import org.example.maridone.config.PayrollProperties;
 import org.example.maridone.core.employee.Employee;
 import org.example.maridone.core.employee.EmployeeRepository;
 import org.example.maridone.core.user.UserAccount;
 import org.example.maridone.core.user.UserAccountRepository;
+import org.example.maridone.enums.EmploymentStatus;
+import org.example.maridone.enums.LeaveType;
 import org.example.maridone.enums.Status;
 import org.example.maridone.exception.*;
 import org.example.maridone.leave.balance.*;
@@ -33,18 +36,20 @@ public class LeaveService {
     private final EmployeeRepository employeeRepository;
     private final UserAccountRepository userAccountRepository;
     private final LeaveMapper leaveMapper;
+    private final PayrollProperties payrollProperties;
 
     public LeaveService(
             LeaveBalanceRepository leaveBalanceRepository,
             LeaveRequestRepository leaveRequestRepository,
             EmployeeRepository employeeRepository,
             UserAccountRepository userAccountRepository,
-            LeaveMapper leaveMapper) {
+            LeaveMapper leaveMapper, PayrollProperties payrollProperties) {
         this.leaveBalanceRepository = leaveBalanceRepository;
         this.leaveRequestRepository = leaveRequestRepository;
         this.employeeRepository = employeeRepository;
         this.userAccountRepository = userAccountRepository;
         this.leaveMapper = leaveMapper;
+        this.payrollProperties = payrollProperties;
     }
 
     @Transactional
@@ -69,7 +74,7 @@ public class LeaveService {
 
 
     @Transactional
-    public void updateBalance(Long empId, UpdateBalanceDto payload) {
+    public void updateYearlyBalance(Long empId, UpdateBalanceDto payload) {
         Specification<LeaveBalance> spec = Specification.allOf(
                 LeaveSpecs.hasEmployeeId(empId),
                 CommonSpecs.fieldEquals("leaveType",  payload.getLeaveType())
@@ -96,12 +101,26 @@ public class LeaveService {
     }
 
     @Transactional
-    public void updateBalance(List<Long> empIds) {
-        List<LeaveBalance> balances = new ArrayList<>();
-        //logic
+    public void updateYearlyBalance() {
+        List<EmploymentStatus> blacklistedStatuses = List.of(
+                EmploymentStatus.TERMINATED,
+                EmploymentStatus.SUSPENDED
+        );
 
+        int updateSickLeaves = leaveBalanceRepository.updateActiveEmployeeLeaveBalances(
+                payrollProperties.getSickLeaveHours(),
+                List.of(LeaveType.SICK_LEAVE),
+                blacklistedStatuses
+        );
 
-        leaveBalanceRepository.saveAll(balances);
+        int updateVacationLeaves = leaveBalanceRepository.updateActiveEmployeeLeaveBalances(
+                payrollProperties.getVacationLeaveHours(),
+                List.of(LeaveType.VACATION_LEAVE),
+                blacklistedStatuses
+        );
+
+        System.out.println("Updated Sick Leaves = " + updateSickLeaves);
+        System.out.println("Updated Vacation Leaves = " + updateVacationLeaves);
     }
 
     @Transactional

@@ -64,7 +64,7 @@ public class LeaveController {
     public ResponseEntity<Void> updateBalance(
             @PathVariable Long empId,
             @RequestBody @Valid UpdateBalanceDto payload) {
-        leaveService.updateBalance(empId, payload);
+        leaveService.updateYearlyBalance(empId, payload);
 
         return ResponseEntity.noContent().build();
     }
