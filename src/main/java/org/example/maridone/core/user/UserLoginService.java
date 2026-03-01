@@ -1,5 +1,6 @@
 package org.example.maridone.core.user;
 
+import org.example.maridone.auth.JwtService;
 import org.example.maridone.enums.Position;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
@@ -30,5 +31,4 @@ public class UserLoginService implements UserDetailsService {
                 .roles(role.name())
                 .build();
     }
-
 }

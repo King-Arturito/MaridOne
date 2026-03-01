@@ -21,6 +21,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
@@ -92,6 +93,15 @@ public class LeaveService {
             lb.setBalanceHours(lb.getBalanceHours().subtract(payload.getBalanceHours()));
         }
         leaveBalanceRepository.save(lb);
+    }
+
+    @Transactional
+    public void updateBalance(List<Long> empIds) {
+        List<LeaveBalance> balances = new ArrayList<>();
+        //logic
+
+
+        leaveBalanceRepository.saveAll(balances);
     }
 
     @Transactional
