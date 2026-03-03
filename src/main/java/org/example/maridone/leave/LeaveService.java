@@ -1,5 +1,8 @@
 package org.example.maridone.leave;
 
+import org.example.maridone.annotation.AuditLog;
+import org.example.maridone.annotation.ExecutionTime;
+import org.example.maridone.annotation.SystematicScheduling;
 import org.example.maridone.common.CommonSpecs;
 import org.example.maridone.config.PayrollProperties;
 import org.example.maridone.core.employee.Employee;
@@ -53,6 +56,7 @@ public class LeaveService {
     }
 
     @Transactional
+    @ExecutionTime
     public LeaveBalance createLeaveBalance(Long empId, BalanceRequestDto payload) {
         Specification<LeaveBalance> spec = Specification.allOf(
                 LeaveSpecs.hasEmployeeId(empId),
@@ -74,6 +78,7 @@ public class LeaveService {
 
 
     @Transactional
+    @AuditLog
     public void updateYearlyBalance(Long empId, UpdateBalanceDto payload) {
         Specification<LeaveBalance> spec = Specification.allOf(
                 LeaveSpecs.hasEmployeeId(empId),
@@ -100,7 +105,10 @@ public class LeaveService {
         leaveBalanceRepository.save(lb);
     }
 
+
+    //used by BalanceUpdaterTask
     @Transactional
+    @SystematicScheduling
     public void updateYearlyBalance() {
         List<EmploymentStatus> blacklistedStatuses = List.of(
                 EmploymentStatus.TERMINATED,
@@ -124,6 +132,7 @@ public class LeaveService {
     }
 
     @Transactional
+    @ExecutionTime
     public LeaveRequest createLeaveRequest(LeaveRequestDto payload, Long empId) {
         Employee emp =  employeeRepository.findById(empId).orElseThrow(() -> new EmployeeNotFoundException(empId));
         LeaveRequest request = new LeaveRequest();
@@ -136,6 +145,7 @@ public class LeaveService {
     }
 
     @Transactional
+    @ExecutionTime
     public LeaveRequest updateLeaveRequest(LeaveRequest payload, Long requestId) {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         UserAccount user = userAccountRepository.findByUsername(authentication.getName()).orElseThrow(

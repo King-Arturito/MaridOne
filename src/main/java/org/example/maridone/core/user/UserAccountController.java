@@ -1,5 +1,6 @@
 package org.example.maridone.core.user;
 
+import org.example.maridone.annotation.AuditLog;
 import org.example.maridone.core.dto.CreateUserAccountDto;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -21,6 +22,7 @@ public class UserAccountController {
     //create new UserAccount
     @PostMapping("/create")
     @PreAuthorize("hasRole('HR')")
+    @AuditLog
     public ResponseEntity<UserAccount> createUserAccount(@RequestBody CreateUserAccountDto payload) {
         UserAccount user = userAccountService.createUserAccount(payload);
         URI location = ServletUriComponentsBuilder
@@ -31,6 +33,7 @@ public class UserAccountController {
     //view your own UserAccount
     @GetMapping("/details/{username}")
     @PreAuthorize("#username == authentication.getName()")
+    @AuditLog
     public UserAccount getUserAccount(@PathVariable String username) {
         return userAccountService.getUserAccount(username);
     }

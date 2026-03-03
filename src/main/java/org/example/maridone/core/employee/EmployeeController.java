@@ -1,5 +1,6 @@
 package org.example.maridone.core.employee;
 
+import org.example.maridone.annotation.AuditLog;
 import org.example.maridone.core.dto.EmployeeDetailsDto;
 import org.example.maridone.core.dto.EmployeeRequestDto;
 import org.example.maridone.core.dto.EmployeeResponseDto;
@@ -36,6 +37,7 @@ public class EmployeeController {
     // ENDPOINT: /api/employees/create
     @PostMapping("/create")
     @PreAuthorize("hasRole('MANAGEMENT')")
+    @AuditLog
     public ResponseEntity<EmployeeResponseDto> createEmployee(@RequestBody EmployeeRequestDto employeeRequestDto) {
         EmployeeResponseDto response = employeeService.createEmployee(employeeRequestDto);
         URI location = ServletUriComponentsBuilder
@@ -49,6 +51,7 @@ public class EmployeeController {
     // ENDPOINT: /api/employees
     @PreAuthorize("hasRole('MANAGEMENT')")
     @GetMapping()
+    @AuditLog
     public Page<EmployeeResponseDto> getAllEmployees(
             EmployeeFilter employeeFilter,
             @PageableDefault(sort = "employeeId", direction = Sort.Direction.ASC) Pageable pageable) {
@@ -67,6 +70,7 @@ public class EmployeeController {
     // id is dynamic
     //returns a status code instead of automatically showing it in the HRIS
     @PatchMapping("/{id}")
+    @AuditLog
     public ResponseEntity<EmployeeResponseDto> updateEmployee(@PathVariable Long id, @RequestBody EmployeeRequestDto employeeRequestDto) {
         EmployeeResponseDto response =  employeeService.updateEmployee(id, employeeRequestDto);
         return ResponseEntity.ok(response);
@@ -76,6 +80,7 @@ public class EmployeeController {
     // id is dynamic
     @PatchMapping("/status/{id}")
     @PreAuthorize("hasRole('HR')")
+    @AuditLog
     public EmployeeResponseDto updateStatus(@PathVariable Long id,
                                             @Validated(HrUpdate.class) @RequestBody EmployeeRequestDto employeeRequestDto) {
         return employeeService.updateStatus(id, employeeRequestDto);

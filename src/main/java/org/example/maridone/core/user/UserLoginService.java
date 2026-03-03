@@ -1,5 +1,6 @@
 package org.example.maridone.core.user;
 
+import org.example.maridone.annotation.ExecutionTime;
 import org.example.maridone.auth.JwtService;
 import org.example.maridone.enums.Position;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -20,6 +21,7 @@ public class UserLoginService implements UserDetailsService {
 
     @Override
     @Transactional
+    @ExecutionTime
     public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
         UserAccount user = userAccountRepository.findByUsername(username)
                 .orElseThrow(() -> new UsernameNotFoundException("User account of username: " + username + " not found."));

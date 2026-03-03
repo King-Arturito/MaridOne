@@ -1,5 +1,6 @@
 package org.example.maridone.core.bank;
 
+import org.example.maridone.annotation.AuditLog;
 import org.example.maridone.core.dto.BankAccountDto;
 import org.example.maridone.core.mapper.CoreMapper;
 import org.example.maridone.marker.OnCreate;
@@ -27,6 +28,7 @@ public class BankController {
     //add new bank
     @PostMapping("/add/{empId}")
     @PreAuthorize("@userCheck.isSelf(#empId, authentication.getName())")
+    @AuditLog
     public ResponseEntity<BankAccount> addBankAccount(
             @PathVariable Long empId,
             @RequestBody @Validated(OnCreate.class) BankAccountDto payload) {
@@ -41,6 +43,7 @@ public class BankController {
     //update?
     @PatchMapping("/update/{empId}")
     @PreAuthorize("@userCheck.isSelf(#empId, authentication.getName())")
+    @AuditLog
     public ResponseEntity<BankAccount> updateBankAccount(
             @PathVariable Long empId,
             @RequestBody @Validated(OnUpdate.class) BankAccountDto payload
@@ -50,6 +53,7 @@ public class BankController {
     }
     @GetMapping("{empId}")
     @PreAuthorize("@userCheck.isSelf(#empId, authentication.getName())")
+    @AuditLog
     public List<BankAccountDto> getBankAccounts(@PathVariable Long empId) {
         return coreMapper.toBankAccountDtos(bankService.getBankAccounts(empId));
     }

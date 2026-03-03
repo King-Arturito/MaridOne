@@ -1,5 +1,6 @@
 package org.example.maridone.schedule.calendar;
 
+import org.example.maridone.annotation.AuditLog;
 import org.example.maridone.marker.OnCreate;
 import org.example.maridone.marker.OnUpdate;
 import org.example.maridone.schedule.dto.CalendarDto;
@@ -24,6 +25,7 @@ public class CalendarController {
 
     @PostMapping("/create")
     @PreAuthorize("hasRole('HR')")
+    @AuditLog
     public ResponseEntity<CompanyCalendar> createEvent(
             @RequestBody @Validated(OnCreate.class) CalendarDto calendar) {
         CompanyCalendar savedCalendar = calendarService.createEvent(calendar);
@@ -38,6 +40,7 @@ public class CalendarController {
 
     @PutMapping("/update")
     @PreAuthorize("hasRole('HR')")
+    @AuditLog
     public ResponseEntity<CompanyCalendar> updateEvent(
             @RequestBody @Validated(OnUpdate.class) CalendarDto calendar) {
         CompanyCalendar cal = calendarService.updateEvent(calendar);
@@ -46,6 +49,7 @@ public class CalendarController {
 
     @PatchMapping("/delete/{calendarId}")
     @PreAuthorize("hasRole('HR')")
+    @AuditLog
     public ResponseEntity<Void> deleteEvent(@PathVariable Long calendarId) {
         calendarService.deleteEvent(calendarId);
         return ResponseEntity.noContent().build();

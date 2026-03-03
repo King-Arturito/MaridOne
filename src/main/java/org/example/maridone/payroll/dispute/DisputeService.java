@@ -1,5 +1,6 @@
 package org.example.maridone.payroll.dispute;
 
+import org.example.maridone.annotation.ExecutionTime;
 import org.example.maridone.common.CommonSpecs;
 import org.example.maridone.enums.Status;
 import org.example.maridone.exception.DuplicateDisputeException;
@@ -36,6 +37,7 @@ public class DisputeService {
 
 
     @Transactional
+    @ExecutionTime
     public DisputeRequest createDisputeRequest(Long itemId, DisputeRequestDto payload) {
         PayrollItem item =  payrollItemRepository.findById(itemId).orElse(null);
         if (item == null) {
@@ -57,6 +59,7 @@ public class DisputeService {
     }
 
     @Transactional
+    @ExecutionTime
     public void updateDisputeStatus(Long disputeId, DisputeActionDto payload) {
         DisputeRequest disputeRequest = disputeRepository.findById(disputeId).orElse(null);
         if (disputeRequest == null) {
@@ -71,6 +74,7 @@ public class DisputeService {
     }
 
 
+    @ExecutionTime
     public Page<DisputeResponseDto> getActiveDisputeRequests(Pageable paging) {
             Page<DisputeRequest> entityPage = disputeRepository.findAllByStatus(Status.PENDING, paging);
             return entityPage.map(payrollMapper::toResponseDto);
@@ -78,6 +82,7 @@ public class DisputeService {
 
 
     @Transactional(readOnly = true)
+    @ExecutionTime
     public Page<DisputeResponseDto> getMyDisputeRequests(Long empId, Status status, Pageable pageable) {
         Specification<DisputeRequest> spec = Specification.allOf(
                 CommonSpecs.fieldEquals("status", status),
