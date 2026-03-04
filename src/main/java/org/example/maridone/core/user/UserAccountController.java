@@ -33,7 +33,6 @@ public class UserAccountController {
     //view your own UserAccount
     @GetMapping("/details/{username}")
     @PreAuthorize("#username == authentication.getName()")
-    @AuditLog
     public UserAccount getUserAccount(@PathVariable String username) {
         return userAccountService.getUserAccount(username);
     }

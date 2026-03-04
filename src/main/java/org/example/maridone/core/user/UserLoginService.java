@@ -1,14 +1,12 @@
 package org.example.maridone.core.user;
 
 import org.example.maridone.annotation.ExecutionTime;
-import org.example.maridone.auth.JwtService;
 import org.example.maridone.enums.Position;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 import org.springframework.security.core.userdetails.User;
-import org.springframework.transaction.annotation.Transactional;
 //Required for Spring Security
 @Service
 public class UserLoginService implements UserDetailsService {
@@ -20,13 +18,12 @@ public class UserLoginService implements UserDetailsService {
     }
 
     @Override
-    @Transactional
     @ExecutionTime
     public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
         UserAccount user = userAccountRepository.findByUsername(username)
                 .orElseThrow(() -> new UsernameNotFoundException("User account of username: " + username + " not found."));
 
-        Position role = user.getEmployee().getPosition();
+        Position role = userAccountRepository.findPositionByUsername(username).orElse(Position.UNKNOWN);
         return User
                 .withUsername(user.getUsername())
                 .password(user.getPasswordHash())
