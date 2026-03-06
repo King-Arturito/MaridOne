@@ -46,7 +46,7 @@ public class EmployeeController {
         return ResponseEntity.created(location).body(response);
     }
 
-    // ENDPOINT: /api/employees
+    //show all employees
     @PreAuthorize("hasRole('MANAGEMENT')")
     @GetMapping()
     public Page<EmployeeResponseDto> getAllEmployees(
@@ -55,7 +55,6 @@ public class EmployeeController {
         return employeeService.getAllEmployees(employeeFilter,pageable);
     }
 
-    // ENDPOINT: /api/employees/id
     // for personal details check only
     @GetMapping("/{id}")
     @PreAuthorize("@userCheck.isSelf(#id, authentication.getName())")
