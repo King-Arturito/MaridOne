@@ -1,6 +1,7 @@
 package org.example.maridone.leave;
 
 import jakarta.validation.Valid;
+import org.example.maridone.annotation.AuditLog;
 import org.example.maridone.leave.dto.BalanceRequestDto;
 import org.example.maridone.leave.dto.BalanceResponseDto;
 import org.example.maridone.leave.balance.LeaveBalance;
@@ -42,6 +43,7 @@ public class LeaveController {
      */
     @PostMapping("/balance/{empId}")
     @PreAuthorize("hasRole('HR')")
+    @AuditLog
     public ResponseEntity<LeaveBalance> createLeave(
             @PathVariable Long empId,
             @RequestBody @Valid BalanceRequestDto payload){
@@ -61,6 +63,7 @@ public class LeaveController {
     */
     @PatchMapping("/balance/update/{empId}")
     @PreAuthorize("hasRole('HR')")
+    @AuditLog
     public ResponseEntity<Void> updateBalance(
             @PathVariable Long empId,
             @RequestBody @Valid UpdateBalanceDto payload) {
@@ -84,6 +87,7 @@ public class LeaveController {
 
     @PatchMapping("update/{requestId}")
     @PreAuthorize("hasRole('HR')")
+    @AuditLog
     public ResponseEntity<LeaveRequest> updateLeaveRequest(@Validated(OnUpdate.class) @RequestBody LeaveRequest payload, Long requestId) {
         LeaveRequest request = leaveService.updateLeaveRequest(payload, requestId);
         return ResponseEntity.ok(request);

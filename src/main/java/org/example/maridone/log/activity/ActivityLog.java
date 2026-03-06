@@ -12,8 +12,8 @@ public class ActivityLog {
     @Column(name = "activity_id")
     private Long activityId;
 
-    @Column(name = "emp_id", nullable = false)
-    private Long employeeId;
+    @Column(name = "username", nullable = false)
+    private String username;
 
     @Column(name = "activity_type", nullable = false)
     @Enumerated(EnumType.STRING)
@@ -29,12 +29,12 @@ public class ActivityLog {
         return activityId;
     }
 
-    public Long getEmployeeId() {
-        return employeeId;
+    public String getUsername() {
+        return username;
     }
 
-    public void setEmployeeId(Long employeeId) {
-        this.employeeId = employeeId;
+    public void setUsername(String username) {
+        this.username = username;
     }
 
     public String getMessage() {

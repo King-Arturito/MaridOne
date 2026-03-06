@@ -1,6 +1,7 @@
 package org.example.maridone.payroll.run;
 
 import jakarta.validation.Valid;
+import org.example.maridone.annotation.ExecutionTime;
 import org.example.maridone.common.CommonSpecs;
 import org.example.maridone.config.DefaultProperties;
 import org.example.maridone.core.employee.Employee;
@@ -78,6 +79,7 @@ public class PayrollService {
     }
 
     @Transactional
+    @ExecutionTime
     public List<ItemDetailsDto> getItems(Long empId) {
 
         Specification<PayrollItem> spec = Specification.allOf(
@@ -89,6 +91,7 @@ public class PayrollService {
     }
 
     @Transactional
+    @ExecutionTime
     public PayrollRun createRun(RunCreateDto payload) {
         PayrollRun run = new PayrollRun();
         run.setPeriodDescription(payload.getPeriodDescription());
@@ -101,6 +104,7 @@ public class PayrollService {
     }
 
     @Transactional
+    @ExecutionTime
     public ItemDetailsDto createItem(@Valid PayrollItemDto payload) {
         PayrollItem item = new PayrollItem();
         PayrollRun run = payrollRunRepository.findById(payload.getPayId()).orElseThrow(
@@ -120,6 +124,7 @@ public class PayrollService {
     }
 
     @Transactional
+    @ExecutionTime
     public PayrollItemDto updateItem(PayrollItemDto payload, Long itemId) {
         PayrollItem item = payrollItemRepository.findById(itemId).orElseThrow(
                 () -> new ItemNotFoundException(itemId)
@@ -148,6 +153,7 @@ public class PayrollService {
         PAYROLL PROCESS
     */
     @Transactional
+    @ExecutionTime
     public void processPayroll(RunCreateDto payload) {
         //create run for this period
         PayrollRun run = createRun(payload);

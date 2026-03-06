@@ -1,6 +1,7 @@
 package org.example.maridone.payroll.run;
 
 import jakarta.validation.Valid;
+import org.example.maridone.annotation.AuditLog;
 import org.example.maridone.marker.OnCreate;
 import org.example.maridone.marker.OnUpdate;
 import org.example.maridone.payroll.dto.*;
@@ -25,18 +26,24 @@ public class PayrollController {
     }
 
     @GetMapping("/item/{empId}")
+    @PreAuthorize("@userCheck.isSelf(#empId, authentication.getName())")
     public List<ItemDetailsDto> getItems(@PathVariable Long empId) {
         return payrollService.getItems(empId);
     }
 
     @GetMapping("/run/{payId}/items")
     @PreAuthorize("hasRole('HR')")
+    @AuditLog
     public Page<ItemSummaryDto> getRunItems(@PathVariable Long payId, Pageable pageable) {
         return payrollService.getRunItems(payId, pageable);
     }
 
+     /*
+        Will probably not be used since creation of run is automatic when launching payroll
+     */
     @PostMapping("/run/create")
     @PreAuthorize("hasRole('HR')")
+    @AuditLog
     public ResponseEntity<PayrollRun> createRun(@RequestBody @Valid RunCreateDto payload) {
         PayrollRun run = payrollService.createRun(payload);
         URI location = ServletUriComponentsBuilder
@@ -47,8 +54,12 @@ public class PayrollController {
         return ResponseEntity.created(location).body(run);
     }
 
+    /*
+       Will probably not be used also since creation of items are automatic when launching payroll
+    */
     @PostMapping("/item/create")
     @PreAuthorize("hasRole('HR')")
+    @AuditLog
     public ResponseEntity<ItemDetailsDto> createItem(@RequestBody @Validated(OnCreate.class) PayrollItemDto payload) {
         ItemDetailsDto item = payrollService.createItem(payload);
         URI location = ServletUriComponentsBuilder
@@ -61,6 +72,7 @@ public class PayrollController {
     
     @PatchMapping("/item/update/{itemId}")
     @PreAuthorize("hasRole('HR')")
+    @AuditLog
     public ResponseEntity<PayrollItemDto> updateItem(@RequestBody @Validated(OnUpdate.class) PayrollItemDto payload, @PathVariable Long itemId) {
         PayrollItemDto item = payrollService.updateItem(payload, itemId);
         return ResponseEntity.ok(item);

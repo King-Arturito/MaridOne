@@ -1,6 +1,7 @@
 package org.example.maridone.payroll.dispute;
 
 import jakarta.validation.Valid;
+import org.example.maridone.annotation.AuditLog;
 import org.example.maridone.enums.Status;
 import org.example.maridone.payroll.dto.DisputeActionDto;
 import org.example.maridone.payroll.dto.DisputeRequestDto;
@@ -51,6 +52,7 @@ public class DisputeController {
 
     @PatchMapping("/update/{disputeId}")
     @PreAuthorize("hasRole('HR')")
+    @AuditLog
     public ResponseEntity<?> updateDisputeRequest(@PathVariable Long disputeId, @RequestBody @Valid DisputeActionDto payload) {
         disputeService.updateDisputeStatus(disputeId, payload);
         return ResponseEntity.ok().build();

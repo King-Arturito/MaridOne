@@ -1,5 +1,6 @@
 package org.example.maridone.overtime;
 
+import org.example.maridone.annotation.ExecutionTime;
 import org.example.maridone.common.CommonSpecs;
 import org.example.maridone.core.employee.Employee;
 import org.example.maridone.core.employee.EmployeeRepository;
@@ -40,6 +41,7 @@ public class OvertimeService {
     }
 
     @Transactional
+    @ExecutionTime
     public OvertimeRequest createOvertimeRequest(OvertimeRequestDto requestDto, String username) {
         Specification<Employee> spec = Specification.allOf(
                 EmployeeSpecs.hasUserAccount(username)
@@ -60,6 +62,7 @@ public class OvertimeService {
     }
 
     @Transactional
+    @ExecutionTime
     public OvertimeResponseDto updateOvertimeRequest(OvertimeUpdateDto updateDto, String approverUsername) {
         OvertimeRequest req = overtimeRequestRepository.findById(updateDto.getOvertimeId()).orElseThrow(() -> new OvertimeException("Overtime Not Found"));
         if (req.getRequestStatus() != Status.PENDING) {
@@ -80,6 +83,7 @@ public class OvertimeService {
         return response;
     }
 
+    @ExecutionTime
     public Page<OvertimeResponseDto> getAllOvertimeRequest(Pageable pageable) {
         Specification<OvertimeRequest> specs =  Specification.allOf(
                 OvertimeSpecs.hasStatus(Status.PENDING)
@@ -89,6 +93,7 @@ public class OvertimeService {
     }
 
 
+    @ExecutionTime
     public Page<OvertimeResponseDto> getMyOvertimeRequests(Long empId, Pageable pageable) {
         Specification<OvertimeRequest> specs =  Specification.allOf(
                 OvertimeSpecs.hasStatus(Status.PENDING),

@@ -1,5 +1,6 @@
 package org.example.maridone.core.user;
 
+import org.example.maridone.annotation.ExecutionTime;
 import org.example.maridone.core.dto.CreateUserAccountDto;
 import org.example.maridone.core.employee.Employee;
 import org.example.maridone.core.employee.EmployeeRepository;
@@ -34,6 +35,7 @@ public class UserAccountService {
         this.employeeRepository = employeeRepository;
     }
 
+    @ExecutionTime
     public UserAccount getUserAccount(String username) {
         return userAccountRepository.findByUsername(username)
                 .orElseThrow(()-> new AccountNotFoundException(username));
@@ -41,6 +43,7 @@ public class UserAccountService {
 
 
     @Transactional
+    @ExecutionTime
     public UserAccount createUserAccount(CreateUserAccountDto payload) {
         if (userAccountRepository.existsByUsername(payload.getUsername())) {
             throw new DuplicateAccountException("Username already exists");

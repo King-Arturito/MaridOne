@@ -1,5 +1,6 @@
 package org.example.maridone.notification;
 
+import org.example.maridone.annotation.ExecutionTime;
 import org.example.maridone.common.CommonSpecs;
 import org.example.maridone.notification.spec.NotificationSpecs;
 import org.springframework.data.domain.Page;
@@ -20,6 +21,7 @@ public class NotificationService {
     }
 
     @Transactional(readOnly = true)
+    @ExecutionTime
     public Page<Notification> getUserNotifications(String username, Boolean status, Pageable pageable) {
         Specification<Notification> spec = Specification.allOf(
                 CommonSpecs.fieldEquals("readStatus", status),

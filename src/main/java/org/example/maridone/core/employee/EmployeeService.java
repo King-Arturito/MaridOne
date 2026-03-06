@@ -1,5 +1,6 @@
 package org.example.maridone.core.employee;
 
+import org.example.maridone.annotation.ExecutionTime;
 import org.example.maridone.core.dto.EmployeeDetailsDto;
 import org.example.maridone.core.dto.EmployeeRequestDto;
 import org.example.maridone.core.dto.EmployeeResponseDto;
@@ -31,30 +32,35 @@ public class EmployeeService {
 
 
     @Transactional
+    @ExecutionTime
     public EmployeeResponseDto createEmployee(EmployeeRequestDto employeeRequestDto) {
         Employee employee = coreMapper.toEmployee(employeeRequestDto);
         employeeRepository.save(employee);
         return coreMapper.toEmployeeResponse(employee);
     }
 
+    @ExecutionTime
     public Page<EmployeeResponseDto> getAllEmployees(EmployeeFilter employeeFilter, Pageable pageable) {
         Specification<Employee> specs = EmployeeSpecs.hasFilters(employeeFilter);
         Page<Employee> employeePage = employeeRepository.findAll(specs, pageable);
         return employeePage.map(coreMapper::toEmployeeResponse);
     }
 
+    @ExecutionTime
     public EmployeeResponseDto getEmployee(Long id) {
 
         Employee emp = employeeRepository.findById(id).orElseThrow(() -> new EmployeeNotFoundException(id));
         return coreMapper.toEmployeeResponse(emp);
     }
 
+    @ExecutionTime
     public EmployeeDetailsDto getSelfEmployee(Long id) {
         Employee emp = employeeRepository.findById(id).orElseThrow(() -> new EmployeeNotFoundException(id));
         return coreMapper.toEmployeeDetailsDto(emp);
     }
 
     @Transactional
+    @ExecutionTime
     public EmployeeResponseDto updateEmployee(Long id, EmployeeRequestDto updated) {
         Employee emp = employeeRepository.findById(id).orElseThrow(() -> new EmployeeNotFoundException(id));
         Optional.ofNullable(updated.getFirstName()).ifPresent(emp::setFirstName);
@@ -86,6 +92,7 @@ public class EmployeeService {
 
 
     @Transactional
+    @ExecutionTime
     public void batchUpdateEmploymentStatus(List<Long> employeeIds) {
         List<Employee> employees = new ArrayList<>();
 
@@ -95,6 +102,7 @@ public class EmployeeService {
     }
 
     @Transactional
+    @ExecutionTime
     public EmployeeResponseDto updateStatus(Long id, EmployeeRequestDto updated) {
         Employee emp = employeeRepository.findById(id).orElseThrow(() -> new EmployeeNotFoundException(id));
 
