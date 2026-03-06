@@ -1,0 +1,5 @@
+cloud:
+  access-key: ${CLOUD_ACCESS_KEY}
+  bucket-name: ${CLOUD_BUCKET_NAME}
+  secret-key: ${CLOUD_SECRET_KEY}
+  endpoint: ${CLOUD_ENDPOINT}

@@ -1,4 +1,4 @@
-package org.example.maridone.core.document;
+package org.example.maridone.document.path;
 
 import jakarta.persistence.*;
 import org.example.maridone.core.user.UserAccount;

@@ -49,10 +49,8 @@ public class SecurityConfig {
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .authorizeHttpRequests(authorizeRequests ->
                         authorizeRequests
-//                                .requestMatchers("/api/auth/**").permitAll()
-//                                .requestMatchers("/api/**").authenticated()
-                                //todo: REMOVE FOR DEPLOYMENT
-                                .anyRequest().permitAll()
+                                .requestMatchers("/api/auth/**").permitAll()
+                                .requestMatchers("/api/**").authenticated()
                 )
                 .formLogin(AbstractHttpConfigurer::disable)
                 .logout(logout -> logout.logoutSuccessUrl(defaultProperties.getUrl()))
