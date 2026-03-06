@@ -4,17 +4,25 @@ spring:
   devtools:
     restart:
       enabled: false
+
   profiles:
     active: dev
+
   datasource:
     url: ${DB_URL}
     username: ${DB_USERNAME}
     password: ${DB_PASSWORD}
     driver-class-name: org.postgresql.Driver
+
   jpa:
+    hibernate:
+      ddl-auto: validate
     properties:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
+
+  liquibase:
+    change-log: classpath:/db/changelog/db.changelog-master.yaml
 
 jwt:
   secret: ${JWT_SECRET}
@@ -22,3 +30,4 @@ jwt:
 
 default:
   url: ${URL_HOST}
+
