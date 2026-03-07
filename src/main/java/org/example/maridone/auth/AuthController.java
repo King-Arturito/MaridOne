@@ -16,9 +16,19 @@ public class AuthController {
         this.authService = authService;
     }
 
-    //for username and password login
     @PostMapping("/auth/login")
-    public ResponseEntity<String> authenticateUser(@RequestBody LoginRequest loginRequest) {
+    public ResponseEntity<AuthResponse> authenticateUser(@RequestBody LoginRequest loginRequest) {
         return ResponseEntity.ok(authService.authenticateUser(loginRequest));
+    }
+
+    @PostMapping("/auth/refresh")
+    public ResponseEntity<AuthResponse> refresh(@RequestBody RefreshRequest request) {
+        return ResponseEntity.ok(authService.refreshToken(request));
+    }
+
+    @PostMapping("/auth/logout")
+    public ResponseEntity<String> logout(@RequestBody LogoutRequest request) {
+        authService.logoutUser(request);
+        return ResponseEntity.ok("Successfully logged out");
     }
 }

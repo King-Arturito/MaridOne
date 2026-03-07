@@ -2,7 +2,7 @@ package org.example.maridone.core.user;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.*;
-import org.example.maridone.core.document.DocumentPath;
+import org.example.maridone.document.path.DocumentPath;
 import org.example.maridone.core.employee.Employee;
 import org.example.maridone.enums.AccountStatus;
 

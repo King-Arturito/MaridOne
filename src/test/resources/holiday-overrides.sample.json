@@ -1,0 +1,18 @@
+{
+  "overrides": [
+    {
+      "date": "2026-06-12",
+      "type": "REGULAR",
+      "action": "ADD"
+    },
+    {
+      "date": "2026-08-24",
+      "type": "SPECIAL_NON_WORKING",
+      "action": "ADD"
+    },
+    {
+      "date": "2026-11-02",
+      "action": "REMOVE"
+    }
+  ]
+}
