@@ -40,6 +40,13 @@ public class JwtService {
         return buildToken(claims, user, jwtProperties.getExpiration());
     }
 
+    public String generateRefreshToken(UserDetails user, boolean rememberMe) {
+        long expiry = rememberMe
+                ? jwtProperties.getRememberMeExpiration()
+                : jwtProperties.getRefreshTokenExpiration();
+        return buildToken(new HashMap<>(), user, expiry);
+    }
+
     private String buildToken(Map<String, Object> claims, UserDetails user, Long expiration) {
         return Jwts.builder()
                 .claims(claims)

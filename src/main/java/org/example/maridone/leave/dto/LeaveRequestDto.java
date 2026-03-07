@@ -1,5 +1,8 @@
 package org.example.maridone.leave.dto;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.validation.constraints.NotNull;
+import org.example.maridone.enums.Status;
 import org.example.maridone.marker.OnUpdate;
 
 import java.time.LocalDate;
@@ -12,6 +15,9 @@ public class LeaveRequestDto {
     private String approver;
     @NotNull
     private String reason;
+    @Enumerated(EnumType.STRING)
+    @NotNull(groups =  OnUpdate.class)
+    private Status requestStatus;
     @NotNull(groups = OnUpdate.class)
     private String approverReason;
 
@@ -29,6 +35,14 @@ public class LeaveRequestDto {
 
     public void setApprover(String approver) {
         this.approver = approver;
+    }
+
+    public Status getRequestStatus() {
+        return requestStatus;
+    }
+
+    public void setRequestStatus(Status requestStatus) {
+        this.requestStatus = requestStatus;
     }
 
     public String getReason() {

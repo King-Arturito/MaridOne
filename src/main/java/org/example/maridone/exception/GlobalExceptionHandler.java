@@ -31,7 +31,8 @@ public class GlobalExceptionHandler {
     @ExceptionHandler({
             BadCredentialsException.class,
             NoRoleAssignedException.class,
-            UnauthorizedAccessException.class
+            UnauthorizedAccessException.class,
+            InvalidRefreshTokenException.class
     })
     public ResponseEntity<Map<String, String>> handleUnauthorizedExceptions(RuntimeException ex) {
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED)

@@ -5,6 +5,7 @@ import org.example.maridone.annotation.ExecutionTime;
 import org.example.maridone.config.CloudProperties;
 import org.example.maridone.exception.CloudReadException;
 import org.example.maridone.exception.CloudWriteException;
+import org.springframework.context.annotation.Profile;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.core.io.InputStreamResource;
 import org.springframework.core.io.Resource;
@@ -21,6 +22,7 @@ import java.io.IOException;
 import java.util.UUID;
 
 @Service
+@Profile("prod")
 public class CloudStorageService implements StorageService {
 
     private final S3Client s3Client;

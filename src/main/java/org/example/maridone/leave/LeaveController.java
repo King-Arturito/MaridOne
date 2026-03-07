@@ -85,10 +85,10 @@ public class LeaveController {
         return ResponseEntity.created(location).body(request);
     }
 
-    @PatchMapping("update/{requestId}")
+    @PatchMapping("/update/{requestId}")
     @PreAuthorize("hasRole('HR')")
     @AuditLog
-    public ResponseEntity<LeaveRequest> updateLeaveRequest(@Validated(OnUpdate.class) @RequestBody LeaveRequest payload, Long requestId) {
+    public ResponseEntity<LeaveRequest> updateLeaveRequest(@Validated(OnUpdate.class) @RequestBody LeaveRequestDto payload, @PathVariable Long requestId) {
         LeaveRequest request = leaveService.updateLeaveRequest(payload, requestId);
         return ResponseEntity.ok(request);
     }

@@ -2,6 +2,7 @@ package org.example.maridone.leave;
 
 import org.example.maridone.annotation.AuditLog;
 import org.example.maridone.annotation.ExecutionTime;
+import org.example.maridone.annotation.Notify;
 import org.example.maridone.annotation.SystematicScheduling;
 import org.example.maridone.common.CommonSpecs;
 import org.example.maridone.config.PayrollProperties;
@@ -145,7 +146,8 @@ public class LeaveService {
 
     @Transactional
     @ExecutionTime
-    public LeaveRequest updateLeaveRequest(LeaveRequest payload, Long requestId) {
+    @Notify(message = "Your Leave Request has been #{#result.requestStatus}", importance = "HIGH", targetEmployee = "#result.employee")
+    public LeaveRequest updateLeaveRequest(LeaveRequestDto payload, Long requestId) {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         UserAccount user = userAccountRepository.findByUsername(authentication.getName()).orElseThrow(
                 () -> new AccountNotFoundException(authentication.getName()));
@@ -153,6 +155,7 @@ public class LeaveService {
         LeaveRequest request = leaveRequestRepository.findById(requestId).orElseThrow(
                 () -> new LeaveNotFoundException("Leave Request of Id: " + requestId + " is not found."));
         request.setApproverReason(payload.getApproverReason());
+        request.setRequestStatus(payload.getRequestStatus());
         request.setApprover(user.getEmployee().getLastName() + ", " + user.getEmployee().getFirstName());
         leaveRequestRepository.save(request);
         return request;

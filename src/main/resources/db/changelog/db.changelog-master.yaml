@@ -37,3 +37,5 @@ databaseChangeLog:
       file: db/changelog/018-create-notification.sql
   - include:
       file: db/changelog/019-create-documentPath.sql
+  - include:
+      file: db/changelog/020-create-refreshToken.sql
