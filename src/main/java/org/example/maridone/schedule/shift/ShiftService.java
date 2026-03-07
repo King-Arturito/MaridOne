@@ -1,6 +1,8 @@
 package org.example.maridone.schedule.shift;
 
 
+import org.example.maridone.annotation.ExecutionTime;
+import org.example.maridone.annotation.SystematicScheduling;
 import org.example.maridone.common.CommonSpecs;
 import org.example.maridone.config.DefaultProperties;
 import org.example.maridone.core.employee.Employee;
@@ -54,6 +56,7 @@ public class ShiftService {
     //create all for 7 days [monday, ...., sunday]
     //used for onboarding ONLY
     @Transactional
+    @ExecutionTime
     public void createShifts(Long empId) {
         Employee emp = employeeRepository.findById(empId).orElseThrow(() -> new EmployeeNotFoundException(empId));
         List<TemplateShiftSchedule> schedules = Arrays.stream(DayOfWeek.values()).map(day -> {
@@ -68,6 +71,7 @@ public class ShiftService {
     }
 
     //get shift schedules of a single employee
+    @ExecutionTime
     public List<ShiftResponseDto> getShiftSchedule(Long empId) {
         if (!employeeRepository.existsById(empId)) {
             throw new EmployeeNotFoundException(empId);
@@ -80,6 +84,7 @@ public class ShiftService {
     }
 
     @Transactional
+    @ExecutionTime
     public TemplateShiftSchedule addShiftSchedule(ShiftRequestDto payload) {
         Employee emp = employeeRepository.findById(payload.getEmpId()).orElseThrow(() -> new EmployeeNotFoundException(payload.getEmpId()));
         TemplateShiftSchedule templateShiftSchedule = new TemplateShiftSchedule();
@@ -92,6 +97,7 @@ public class ShiftService {
     }
 
     @Transactional
+    @ExecutionTime
     public TemplateShiftSchedule updateShiftSchedule(ShiftRequestDto payload) {
         TemplateShiftSchedule schedule = templateShiftRepository.findById(payload.getShiftId()).orElseThrow(() -> new ShiftsNotFoundException("Shift of ID: " + payload.getShiftId() +" not found."));
         schedule.setStartTime(payload.getStartTime());
@@ -106,6 +112,7 @@ public class ShiftService {
     */
 
     @Transactional
+    @SystematicScheduling
     public void setDailyShifts() {
         LocalDate today = LocalDate.now(defaultProperties.getTimeZone());
         DayOfWeek targetDay = today.getDayOfWeek();

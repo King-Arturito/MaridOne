@@ -1,6 +1,7 @@
 package org.example.maridone.core.bank;
 
 import jakarta.validation.Valid;
+import org.example.maridone.annotation.ExecutionTime;
 import org.example.maridone.common.CommonSpecs;
 import org.example.maridone.core.dto.BankAccountDto;
 import org.example.maridone.core.employee.Employee;
@@ -26,6 +27,7 @@ public class BankService {
     }
 
     @Transactional
+    @ExecutionTime
     public BankAccount addBankAccount(Long empId, @Valid BankAccountDto payload) {
         Employee emp = employeeRepository.findById(empId).orElseThrow(() -> new EmployeeNotFoundException(empId));
         BankAccount bankAccount = new BankAccount();
@@ -38,6 +40,7 @@ public class BankService {
     }
 
     @Transactional
+    @ExecutionTime
     public BankAccount updateBankAccount(@Valid BankAccountDto payload) {
         BankAccount bankAccount = bankAccountRepository.findById(payload.getBankId()).orElse(null);
         if (bankAccount == null) {
@@ -52,6 +55,7 @@ public class BankService {
         return bankAccount;
     }
 
+    @ExecutionTime
     public List<BankAccount> getBankAccounts(Long empId) {
         employeeRepository.findById(empId).orElseThrow(() -> new EmployeeNotFoundException(empId));
 

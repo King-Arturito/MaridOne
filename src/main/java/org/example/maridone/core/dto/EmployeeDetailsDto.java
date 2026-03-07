@@ -1,6 +1,5 @@
 package org.example.maridone.core.dto;
 
-import jakarta.persistence.Embedded;
 import org.example.maridone.embeddable.Address;
 import org.example.maridone.enums.EmploymentStatus;
 import org.example.maridone.enums.ExemptionStatus;

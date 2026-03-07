@@ -73,7 +73,8 @@ public class SampleRows {
 
     @PostConstruct
     public void init() {
-        sampleData();
+        if (employeeRepository.count() == 0)
+            sampleData();
     }
 
     public void sampleData() {

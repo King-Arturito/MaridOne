@@ -1,7 +1,7 @@
 package org.example.maridone.log;
 
+import org.example.maridone.annotation.ExecutionTime;
 import org.example.maridone.common.CommonSpecs;
-import org.example.maridone.config.DefaultProperties;
 import org.example.maridone.core.employee.EmployeeRepository;
 import org.example.maridone.exception.EmployeeNotFoundException;
 import org.example.maridone.log.activity.ActivityLog;
@@ -10,6 +10,7 @@ import org.example.maridone.log.dto.ActivityRequestDto;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -50,18 +51,17 @@ public class LogService {
     }
 
     @Transactional
+    @Async
     public void activity(ActivityRequestDto payload) {
-        if (!employeeRepository.existsById(payload.getEmployeeId())) {
-            throw new EmployeeNotFoundException(payload.getEmployeeId());
-        }
         ActivityLog activityLog = new ActivityLog();
-        activityLog.setEmployeeId(payload.getEmployeeId());
+        activityLog.setUsername(payload.getUsername());
         activityLog.setMessage(payload.getMessage());
         activityLog.setActivityType(payload.getActivityType());
         activityLog.setTimestamp(Instant.now());
         activityLogRepository.save(activityLog);
     }
 
+    @ExecutionTime
     public Page<AttendanceLog> getAttendance(Long empId, Pageable pageable) {
         Specification<AttendanceLog> spec = Specification.allOf(
                 CommonSpecs.fieldEquals("employeeId", empId)
@@ -69,6 +69,7 @@ public class LogService {
         return attendanceLogRepository.findAll(spec, pageable);
     }
 
+    @ExecutionTime
     public Page<ActivityLog> getActivity(Long empId, Pageable pageable) {
         Specification<ActivityLog> spec = Specification.allOf(
                 CommonSpecs.fieldEquals("employeeId", empId)

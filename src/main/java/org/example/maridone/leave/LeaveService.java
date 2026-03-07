@@ -1,10 +1,16 @@
 package org.example.maridone.leave;
 
+import org.example.maridone.annotation.AuditLog;
+import org.example.maridone.annotation.ExecutionTime;
+import org.example.maridone.annotation.SystematicScheduling;
 import org.example.maridone.common.CommonSpecs;
+import org.example.maridone.config.PayrollProperties;
 import org.example.maridone.core.employee.Employee;
 import org.example.maridone.core.employee.EmployeeRepository;
 import org.example.maridone.core.user.UserAccount;
 import org.example.maridone.core.user.UserAccountRepository;
+import org.example.maridone.enums.EmploymentStatus;
+import org.example.maridone.enums.LeaveType;
 import org.example.maridone.enums.Status;
 import org.example.maridone.exception.*;
 import org.example.maridone.leave.balance.*;
@@ -21,7 +27,6 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
@@ -33,21 +38,24 @@ public class LeaveService {
     private final EmployeeRepository employeeRepository;
     private final UserAccountRepository userAccountRepository;
     private final LeaveMapper leaveMapper;
+    private final PayrollProperties payrollProperties;
 
     public LeaveService(
             LeaveBalanceRepository leaveBalanceRepository,
             LeaveRequestRepository leaveRequestRepository,
             EmployeeRepository employeeRepository,
             UserAccountRepository userAccountRepository,
-            LeaveMapper leaveMapper) {
+            LeaveMapper leaveMapper, PayrollProperties payrollProperties) {
         this.leaveBalanceRepository = leaveBalanceRepository;
         this.leaveRequestRepository = leaveRequestRepository;
         this.employeeRepository = employeeRepository;
         this.userAccountRepository = userAccountRepository;
         this.leaveMapper = leaveMapper;
+        this.payrollProperties = payrollProperties;
     }
 
     @Transactional
+    @ExecutionTime
     public LeaveBalance createLeaveBalance(Long empId, BalanceRequestDto payload) {
         Specification<LeaveBalance> spec = Specification.allOf(
                 LeaveSpecs.hasEmployeeId(empId),
@@ -69,7 +77,8 @@ public class LeaveService {
 
 
     @Transactional
-    public void updateBalance(Long empId, UpdateBalanceDto payload) {
+    @AuditLog
+    public void updateYearlyBalance(Long empId, UpdateBalanceDto payload) {
         Specification<LeaveBalance> spec = Specification.allOf(
                 LeaveSpecs.hasEmployeeId(empId),
                 CommonSpecs.fieldEquals("leaveType",  payload.getLeaveType())
@@ -95,16 +104,34 @@ public class LeaveService {
         leaveBalanceRepository.save(lb);
     }
 
+
+    //used by BalanceUpdaterTask
     @Transactional
-    public void updateBalance(List<Long> empIds) {
-        List<LeaveBalance> balances = new ArrayList<>();
-        //logic
+    @SystematicScheduling
+    public void updateYearlyBalance() {
+        List<EmploymentStatus> blacklistedStatuses = List.of(
+                EmploymentStatus.TERMINATED,
+                EmploymentStatus.SUSPENDED
+        );
 
+        int updateSickLeaves = leaveBalanceRepository.updateActiveEmployeeLeaveBalances(
+                payrollProperties.getSickLeaveHours(),
+                List.of(LeaveType.SICK_LEAVE),
+                blacklistedStatuses
+        );
 
-        leaveBalanceRepository.saveAll(balances);
+        int updateVacationLeaves = leaveBalanceRepository.updateActiveEmployeeLeaveBalances(
+                payrollProperties.getVacationLeaveHours(),
+                List.of(LeaveType.VACATION_LEAVE),
+                blacklistedStatuses
+        );
+
+        System.out.println("Updated Sick Leaves = " + updateSickLeaves);
+        System.out.println("Updated Vacation Leaves = " + updateVacationLeaves);
     }
 
     @Transactional
+    @ExecutionTime
     public LeaveRequest createLeaveRequest(LeaveRequestDto payload, Long empId) {
         Employee emp =  employeeRepository.findById(empId).orElseThrow(() -> new EmployeeNotFoundException(empId));
         LeaveRequest request = new LeaveRequest();
@@ -117,6 +144,7 @@ public class LeaveService {
     }
 
     @Transactional
+    @ExecutionTime
     public LeaveRequest updateLeaveRequest(LeaveRequest payload, Long requestId) {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         UserAccount user = userAccountRepository.findByUsername(authentication.getName()).orElseThrow(

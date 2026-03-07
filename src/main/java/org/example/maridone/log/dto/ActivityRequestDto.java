@@ -8,9 +8,8 @@ import org.example.maridone.enums.Activity;
 
 public class ActivityRequestDto {
 
-    @NotNull(message = "Employee ID is required.")
-    @Positive(message = "Employee ID must be a valid positive number.")
-    private Long employeeId;
+    @NotNull(message = "Username is required.")
+    private String username;
 
     @NotNull(message = "Activity type is required.")
     private Activity activityType;
@@ -19,12 +18,18 @@ public class ActivityRequestDto {
     @Size(max = 255, message = "Message must not exceed 255 characters.")
     private String message;
 
-    public Long getEmployeeId() {
-        return employeeId;
+    public ActivityRequestDto(String username, Activity activityType, String message) {
+        this.username = username;
+        this.activityType = activityType;
+        this.message = message;
     }
 
-    public void setEmployeeId(Long employeeId) {
-        this.employeeId = employeeId;
+    public String getUsername() {
+        return username;
+    }
+
+    public void setUsername(String username) {
+        this.username = username;
     }
 
     public Activity getActivityType() {

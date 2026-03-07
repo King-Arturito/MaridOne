@@ -1,5 +1,6 @@
 package org.example.maridone.schedule.calendar;
 
+import org.example.maridone.annotation.ExecutionTime;
 import org.example.maridone.common.CommonSpecs;
 import org.example.maridone.exception.CalendarEventNotFound;
 import org.example.maridone.schedule.dto.CalendarDto;
@@ -35,6 +36,7 @@ public class CalendarService {
 
 
     @Transactional
+    @ExecutionTime
     public CompanyCalendar updateEvent(CalendarDto calendar) {
         CompanyCalendar cal = calendarRepository.findById(calendar.getCalendarId()).orElseThrow(
                 () -> new CalendarEventNotFound("Event of ID:" + calendar.getCalendarId() + " not found."));
@@ -42,6 +44,7 @@ public class CalendarService {
     }
 
     @Transactional
+    @ExecutionTime
     public CompanyCalendar deleteEvent(Long calendarId) {
         CompanyCalendar cal = calendarRepository.findById(calendarId).orElseThrow(
                 () -> new CalendarEventNotFound("Event of ID:" + calendarId + " not found.")
@@ -50,6 +53,7 @@ public class CalendarService {
         return calendarRepository.save(cal);
     }
 
+    @ExecutionTime
     public List<CompanyCalendar> getAllEvents(int month, int year) {
         Specification<CompanyCalendar> spec = Specification.allOf(
                 CalendarSpecs.isWithinMonth(month, year),

@@ -1,0 +1,33 @@
+spring:
+  application:
+    name: MaridOne
+  devtools:
+    restart:
+      enabled: false
+
+  profiles:
+    active: dev
+
+  datasource:
+    url: ${DB_URL}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+
+  liquibase:
+    change-log: classpath:/db/changelog/db.changelog-master.yaml
+
+jwt:
+  secret: ${JWT_SECRET}
+  expiration: 86400000
+
+default:
+  url: ${URL_HOST}
+

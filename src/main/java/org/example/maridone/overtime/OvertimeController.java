@@ -1,6 +1,7 @@
 package org.example.maridone.overtime;
 
 import jakarta.validation.Valid;
+import org.example.maridone.annotation.AuditLog;
 import org.example.maridone.enums.Status;
 import org.example.maridone.overtime.dto.OvertimeRequestDto;
 import org.example.maridone.overtime.dto.OvertimeResponseDto;
@@ -48,6 +49,7 @@ public class OvertimeController {
     //update Overtime Request status for HR
     @PatchMapping("/update")
     @PreAuthorize("hasRole('HR')")
+    @AuditLog
     public ResponseEntity<OvertimeResponseDto> updateOvertimeRequest(
             @RequestBody @Valid OvertimeUpdateDto updateDto,
             Authentication authentication) {
@@ -57,6 +59,7 @@ public class OvertimeController {
     //get all overtimes for HR
     @GetMapping("/all")
     @PreAuthorize("hasRole('HR')")
+    @AuditLog
     public Page<OvertimeResponseDto> getAllOvertimeRequest(
             @PageableDefault(sort = "requestAt", direction = Sort.Direction.ASC) Pageable pageable
     ) {

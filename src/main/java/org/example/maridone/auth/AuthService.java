@@ -1,6 +1,6 @@
 package org.example.maridone.auth;
 
-import org.springframework.http.ResponseEntity;
+import org.example.maridone.annotation.ExecutionTime;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -18,6 +18,7 @@ public class AuthService {
         this.authenticationManager = authenticationManager;
     }
 
+    @ExecutionTime
     public String authenticateUser(@RequestBody LoginRequest loginRequest) {
         Authentication authentication = authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(loginRequest.getUsername(), loginRequest.getPassword()));

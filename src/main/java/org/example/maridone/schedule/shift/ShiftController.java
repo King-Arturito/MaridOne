@@ -1,5 +1,6 @@
 package org.example.maridone.schedule.shift;
 
+import org.example.maridone.annotation.AuditLog;
 import org.example.maridone.marker.OnCreate;
 import org.example.maridone.marker.OnUpdate;
 import org.example.maridone.schedule.dto.ShiftRequestDto;
@@ -41,6 +42,7 @@ public class ShiftController {
     //update shift
     @PatchMapping("/update")
     @PreAuthorize("hasRole('HR')")
+    @AuditLog
     public ResponseEntity<TemplateShiftSchedule> updateShiftSchedule(
             @RequestBody @Validated(OnUpdate.class) ShiftRequestDto payload) {
         TemplateShiftSchedule schedule = shiftService.updateShiftSchedule(payload);
