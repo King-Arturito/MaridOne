@@ -11,6 +11,8 @@ import java.util.Set;
 
 import org.example.maridone.config.DefaultProperties;
 import org.example.maridone.core.employee.Employee;
+import org.example.maridone.enums.EarningsType;
+import org.example.maridone.enums.DeductionType;
 import org.example.maridone.core.employee.EmployeeRepository;
 import org.example.maridone.enums.ExemptionStatus;
 import org.example.maridone.holiday.HolidayLookup;
@@ -19,9 +21,11 @@ import org.example.maridone.leave.request.LeaveRequest;
 import org.example.maridone.leave.request.LeaveRequestRepository;
 import org.example.maridone.log.AttendanceLogRepository;
 import org.example.maridone.log.attendance.AttendanceLog;
+import org.example.maridone.overtime.OvertimeRequest;
 import org.example.maridone.overtime.OvertimeRequestRepository;
 import org.example.maridone.payroll.PayrollCalculator;
 import org.example.maridone.payroll.item.PayrollItem;
+import org.example.maridone.payroll.item.component.DeductionsLine;
 import org.example.maridone.payroll.item.component.DeductionsRepository;
 import org.example.maridone.payroll.item.component.EarningsLine;
 import org.example.maridone.payroll.item.component.EarningsRepository;
@@ -113,6 +117,11 @@ class PayrollServiceTest {
         Assertions.assertEquals(1, items.size());
         PayrollItem item = items.get(0);
         Assertions.assertEquals(1, item.getEarnings().size());
+        Assertions.assertEquals(4, item.getDeductions().size());
+        Assertions.assertTrue(item.getDeductions().stream().anyMatch(d -> d.getDeductionType() == DeductionType.SSS));
+        Assertions.assertTrue(item.getDeductions().stream().anyMatch(d -> d.getDeductionType() == DeductionType.PHILHEALTH));
+        Assertions.assertTrue(item.getDeductions().stream().anyMatch(d -> d.getDeductionType() == DeductionType.PAGIBIG));
+        Assertions.assertTrue(item.getDeductions().stream().anyMatch(d -> d.getDeductionType() == DeductionType.BRACKET_LEVEL_THREE));
 
         EarningsLine holidayLine = item.getEarnings().get(0);
         assertBigDecimalEquals("8.00", holidayLine.getHours());
@@ -121,7 +130,7 @@ class PayrollServiceTest {
         Assertions.assertSame(item, holidayLine.getPayrollItem());
 
         assertBigDecimalEquals("30000.00", item.getGrossPay());
-        assertBigDecimalEquals("30000.00", item.getNetPay());
+        assertBigDecimalEquals("25145.83", item.getNetPay());
     }
 
     @Test
@@ -144,6 +153,7 @@ class PayrollServiceTest {
         Assertions.assertEquals(1, items.size());
         PayrollItem item = items.get(0);
         Assertions.assertEquals(1, item.getEarnings().size());
+        Assertions.assertEquals(4, item.getDeductions().size());
 
         EarningsLine holidayLine = item.getEarnings().get(0);
         assertBigDecimalEquals("8.00", holidayLine.getHours());
@@ -151,7 +161,7 @@ class PayrollServiceTest {
         assertBigDecimalEquals("2600.00", holidayLine.getAmount());
 
         assertBigDecimalEquals("28600.00", item.getGrossPay());
-        assertBigDecimalEquals("28600.00", item.getNetPay());
+        assertBigDecimalEquals("23745.83", item.getNetPay());
     }
 
     @Test
@@ -173,8 +183,121 @@ class PayrollServiceTest {
         Assertions.assertEquals(1, items.size());
         PayrollItem item = items.get(0);
         Assertions.assertTrue(item.getEarnings().isEmpty());
+        Assertions.assertEquals(4, item.getDeductions().size());
         assertBigDecimalEquals("26000.00", item.getGrossPay());
-        assertBigDecimalEquals("26000.00", item.getNetPay());
+        assertBigDecimalEquals("21145.83", item.getNetPay());
+    }
+
+    @Test
+    void processPayrollNonExempt_NoLogs_ShouldApplyAbsentDeduction() {
+        LocalDate workDate = LocalDate.of(2026, 3, 2);
+        Employee emp = buildNonExemptEmployee(1L, new BigDecimal("624000.00"));
+        PayrollRun run = buildSingleDayRun(workDate);
+        TemplateShiftSchedule schedule = buildSchedule(emp, workDate, LocalTime.of(8, 0), LocalTime.of(17, 0));
+
+        stubCommonDependencies(List.of(), schedule, HolidayLookup.empty(), List.of(), List.of());
+
+        List<PayrollItem> items = new ArrayList<>();
+        payrollService.processPayrollNonExempt(run, items, List.of(emp));
+
+        Assertions.assertEquals(1, items.size());
+        PayrollItem item = items.get(0);
+
+        DeductionsLine absentLine = item.getDeductions().stream()
+                .filter(d -> d.getDeductionType() == DeductionType.ABSENT_DEDUCTION)
+                .findFirst()
+                .orElseThrow();
+        assertBigDecimalEquals("2000.00", absentLine.getAmount());
+        assertBigDecimalEquals("26000.00", item.getGrossPay());
+        assertBigDecimalEquals("19145.83", item.getNetPay());
+    }
+
+    @Test
+    void processPayrollNonExempt_LateOrEarlyOut_ShouldApplyLatePenalty() {
+        LocalDate workDate = LocalDate.of(2026, 3, 2);
+        Employee emp = buildNonExemptEmployee(1L, new BigDecimal("624000.00"));
+        PayrollRun run = buildSingleDayRun(workDate);
+        TemplateShiftSchedule schedule = buildSchedule(emp, workDate, LocalTime.of(8, 0), LocalTime.of(17, 0));
+        List<AttendanceLog> logs = List.of(
+                buildAttendance(1L, workDate, LocalTime.of(9, 0), "IN"),
+                buildAttendance(1L, workDate, LocalTime.of(17, 0), "OUT")
+        );
+
+        stubCommonDependencies(logs, schedule, HolidayLookup.empty(), List.of(), List.of());
+
+        List<PayrollItem> items = new ArrayList<>();
+        payrollService.processPayrollNonExempt(run, items, List.of(emp));
+
+        Assertions.assertEquals(1, items.size());
+        PayrollItem item = items.get(0);
+
+        DeductionsLine lateLine = item.getDeductions().stream()
+                .filter(d -> d.getDeductionType() == DeductionType.LATE_PENALTY)
+                .findFirst()
+                .orElseThrow();
+        assertBigDecimalEquals("250.00", lateLine.getAmount());
+        assertBigDecimalEquals("26000.00", item.getGrossPay());
+        assertBigDecimalEquals("20895.83", item.getNetPay());
+    }
+
+    @Test
+    void processPayrollExempt_ShouldSetNetPayAsGrossMinusDeductions() {
+        Employee exempt = new Employee();
+        ReflectionTestUtils.setField(exempt, "employeeId", 9L);
+        exempt.setExemptionStatus(ExemptionStatus.EXEMPT);
+        exempt.setYearlySalary(new BigDecimal("624000.00"));
+        PayrollRun run = buildSingleDayRun(LocalDate.of(2026, 3, 2));
+
+        List<PayrollItem> items = payrollService.processPayrollExempt(run, List.of(exempt));
+
+        Assertions.assertEquals(1, items.size());
+        PayrollItem item = items.get(0);
+        Assertions.assertEquals(1, item.getEarnings().size());
+        Assertions.assertEquals(4, item.getDeductions().size());
+        assertBigDecimalEquals("26000.00", item.getEarnings().get(0).getAmount());
+        Assertions.assertFalse(item.getEarnings().get(0).getOvertime());
+        Assertions.assertTrue(item.getDeductions().stream().anyMatch(d -> d.getDeductionType() == DeductionType.SSS));
+        Assertions.assertTrue(item.getDeductions().stream().anyMatch(d -> d.getDeductionType() == DeductionType.PHILHEALTH));
+        Assertions.assertTrue(item.getDeductions().stream().anyMatch(d -> d.getDeductionType() == DeductionType.PAGIBIG));
+        Assertions.assertTrue(item.getDeductions().stream().anyMatch(d -> d.getDeductionType() == DeductionType.BRACKET_LEVEL_THREE));
+        assertBigDecimalEquals("26000.00", item.getGrossPay());
+        assertBigDecimalEquals("21145.83", item.getNetPay());
+        assertBigDecimalEquals("21145.83", item.getGrossPay().subtract(
+                item.getDeductions().stream()
+                        .map(DeductionsLine::getAmount)
+                        .reduce(BigDecimal.ZERO, BigDecimal::add)
+        ));
+    }
+
+    @Test
+    void processPayrollNonExempt_ApprovedOvertime_ShouldCreateOvertimeEarningsLine() {
+        LocalDate workDate = LocalDate.of(2026, 3, 2);
+        Employee emp = buildNonExemptEmployee(1L, new BigDecimal("624000.00"));
+        PayrollRun run = buildSingleDayRun(workDate);
+        TemplateShiftSchedule schedule = buildSchedule(emp, workDate, LocalTime.of(8, 0), LocalTime.of(17, 0));
+        List<AttendanceLog> logs = List.of(
+                buildAttendance(1L, workDate, LocalTime.of(8, 0), "IN"),
+                buildAttendance(1L, workDate, LocalTime.of(17, 0), "OUT")
+        );
+        OvertimeRequest ot = buildOvertime(1L, workDate, LocalTime.of(18, 0), LocalTime.of(20, 0));
+
+        stubCommonDependencies(logs, schedule, HolidayLookup.empty(), List.of(ot), List.of());
+
+        List<PayrollItem> items = new ArrayList<>();
+        payrollService.processPayrollNonExempt(run, items, List.of(emp));
+
+        Assertions.assertEquals(1, items.size());
+        PayrollItem item = items.get(0);
+        EarningsLine overtimeLine = item.getEarnings().stream()
+                .filter(EarningsLine::getOvertime)
+                .findFirst()
+                .orElseThrow();
+
+        assertBigDecimalEquals("2.00", overtimeLine.getHours());
+        assertBigDecimalEquals("312.50", overtimeLine.getRate());
+        assertBigDecimalEquals("625.00", overtimeLine.getAmount());
+        assertBigDecimalEquals("26625.00", item.getGrossPay());
+        assertBigDecimalEquals("21770.83", item.getNetPay());
     }
 
     private void assertBigDecimalEquals(String expected, BigDecimal actual) {
@@ -186,15 +309,25 @@ class PayrollServiceTest {
             TemplateShiftSchedule schedule,
             HolidayLookup holidayLookup
     ) {
+        stubCommonDependencies(logs, schedule, holidayLookup, List.of(), List.of());
+    }
+
+    private void stubCommonDependencies(
+            List<AttendanceLog> logs,
+            TemplateShiftSchedule schedule,
+            HolidayLookup holidayLookup,
+            List<OvertimeRequest> overtimeRequests,
+            List<LeaveRequest> leaves
+    ) {
         when(defaultProperties.getTimeZone()).thenReturn(ZONE);
         when(attendanceLogRepository.findByEmployeeIdInAndTimestampBetween(anyList(), any(Instant.class), any(Instant.class), any()))
                 .thenReturn(logs);
         when(overtimeRequestRepository.findAll(any(Specification.class)))
-                .thenReturn(List.of());
+                .thenReturn(overtimeRequests);
         when(templateShiftRepository.findByEmployee_EmployeeIdIn(anyList()))
                 .thenReturn(List.of(schedule));
         when(leaveRequestRepository.findApprovedLeavesForPeriod(anyList(), any(LocalDate.class), any(LocalDate.class)))
-                .thenReturn(List.<LeaveRequest>of());
+                .thenReturn(leaves);
         when(holidayService.getHolidayLookup(any(LocalDate.class), any(LocalDate.class)))
                 .thenReturn(holidayLookup);
     }
@@ -229,6 +362,21 @@ class PayrollServiceTest {
         log.setDirection(direction);
         log.setTimestamp(date.atTime(time).atZone(ZONE).toInstant());
         return log;
+    }
+
+    private OvertimeRequest buildOvertime(
+            Long empId,
+            LocalDate workDate,
+            LocalTime start,
+            LocalTime end
+    ) {
+        OvertimeRequest request = new OvertimeRequest();
+        ReflectionTestUtils.setField(request, "employeeId", empId);
+        request.setWorkDate(workDate);
+        request.setStartTime(workDate.atTime(start));
+        request.setEndTime(workDate.atTime(end));
+        request.setOvertimeType(EarningsType.OVERTIME);
+        return request;
     }
 
 }
