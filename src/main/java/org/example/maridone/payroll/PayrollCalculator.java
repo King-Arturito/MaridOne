@@ -99,13 +99,13 @@ public class PayrollCalculator {
             return deductions;
         }
 
-        BigDecimal biweeklySalary = yearlySalary.divide(BigDecimal.valueOf(26), 2, RoundingMode.HALF_UP);
-        addDeductionLine(deductions, item, DeductionType.SSS, biweeklySalary.multiply(BigDecimal.valueOf(0.05)));
+        BigDecimal semiMonthlySalary = yearlySalary.divide(BigDecimal.valueOf(24), 2, RoundingMode.HALF_UP);
+        addDeductionLine(deductions, item, DeductionType.SSS, semiMonthlySalary.multiply(BigDecimal.valueOf(0.05)));
         addDeductionLine(
                 deductions,
                 item,
                 DeductionType.PHILHEALTH,
-                biweeklySalary.multiply(BigDecimal.valueOf(0.025))
+                semiMonthlySalary.multiply(BigDecimal.valueOf(0.025))
         );
         addDeductionLine(deductions, item, DeductionType.PAGIBIG, BigDecimal.valueOf(100));
 
@@ -221,7 +221,7 @@ public class PayrollCalculator {
                     yearlySalary.subtract(BigDecimal.valueOf(8_000_000)).multiply(BigDecimal.valueOf(0.35))
             );
         }
-        return annualTax.divide(BigDecimal.valueOf(26), 2, RoundingMode.HALF_UP);
+        return annualTax.divide(BigDecimal.valueOf(24), 2, RoundingMode.HALF_UP);
     }
 
     private DeductionType resolveTaxBracketType(BigDecimal yearlySalary) {

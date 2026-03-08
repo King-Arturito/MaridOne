@@ -1,0 +1,194 @@
+package org.example.maridone.payroll;
+
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.util.List;
+
+import org.example.maridone.core.employee.Employee;
+import org.example.maridone.enums.DeductionType;
+import org.example.maridone.enums.ExemptionStatus;
+import org.example.maridone.payroll.item.PayrollItem;
+import org.example.maridone.payroll.item.component.DeductionsLine;
+import org.example.maridone.payroll.item.component.DeductionsRepository;
+import org.example.maridone.payroll.item.component.EarningsLine;
+import org.example.maridone.payroll.item.component.EarningsRepository;
+import org.example.maridone.payroll.run.PayrollRun;
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import static org.mockito.Mockito.verifyNoInteractions;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+@ExtendWith(MockitoExtension.class)
+class PayrollCalculatorTest {
+
+    @Mock
+    private EarningsRepository earningsRepository;
+
+    @Mock
+    private DeductionsRepository deductionsRepository;
+
+    @InjectMocks
+    private PayrollCalculator payrollCalculator;
+
+    @Test
+    void setEarnings_ShouldCreateSingleLine_ForExemptEmployee() {
+        Employee emp = buildEmployee(ExemptionStatus.EXEMPT, "624000.00");
+        PayrollItem item = buildItem("26000.00", LocalDate.of(2026, 3, 15));
+
+        List<EarningsLine> result = payrollCalculator.setEarnings(emp, item);
+
+        Assertions.assertEquals(1, result.size());
+        EarningsLine line = result.get(0);
+        assertBigDecimalEquals("26000.00", line.getAmount());
+        assertBigDecimalEquals("0.00", line.getHours());
+        assertBigDecimalEquals("0.00", line.getRate());
+        Assertions.assertFalse(line.getOvertime());
+        Assertions.assertEquals(LocalDate.of(2026, 3, 15), line.getEarningsDate());
+        Assertions.assertSame(item, line.getPayrollItem());
+        verifyNoInteractions(earningsRepository, deductionsRepository);
+    }
+
+    @Test
+    void setEarnings_ShouldCreateSingleLine_ForNonExemptEmployee() {
+        Employee emp = buildEmployee(ExemptionStatus.NON_EXEMPT, "624000.00");
+        PayrollItem item = buildItem("26000.00", LocalDate.of(2026, 3, 30));
+
+        List<EarningsLine> result = payrollCalculator.setEarnings(emp, item);
+
+        Assertions.assertEquals(1, result.size());
+        EarningsLine line = result.get(0);
+        assertBigDecimalEquals("26000.00", line.getAmount());
+        assertBigDecimalEquals("0.00", line.getHours());
+        assertBigDecimalEquals("0.00", line.getRate());
+        Assertions.assertFalse(line.getOvertime());
+        Assertions.assertEquals(LocalDate.of(2026, 3, 30), line.getEarningsDate());
+        Assertions.assertSame(item, line.getPayrollItem());
+        verifyNoInteractions(earningsRepository, deductionsRepository);
+    }
+
+    @Test
+    void setEarnings_ShouldPopulateDefaults_ForPrecomputedLines() {
+        Employee emp = buildEmployee(ExemptionStatus.NON_EXEMPT, "624000.00");
+        PayrollItem item = buildItem("26000.00", LocalDate.of(2026, 4, 1));
+
+        EarningsLine precomputed = new EarningsLine();
+        precomputed.setAmount(new BigDecimal("555.50"));
+
+        List<EarningsLine> result = payrollCalculator.setEarnings(emp, item, List.of(precomputed));
+
+        Assertions.assertEquals(1, result.size());
+        EarningsLine line = result.get(0);
+        assertBigDecimalEquals("555.50", line.getAmount());
+        assertBigDecimalEquals("0.00", line.getHours());
+        assertBigDecimalEquals("0.00", line.getRate());
+        Assertions.assertFalse(line.getOvertime());
+        Assertions.assertEquals(LocalDate.of(2026, 4, 1), line.getEarningsDate());
+        Assertions.assertSame(item, line.getPayrollItem());
+        verifyNoInteractions(earningsRepository, deductionsRepository);
+    }
+
+    @Test
+    void setEarnings_ShouldReturnEmpty_WhenPrecomputedLinesAreNullOrEmpty() {
+        Employee emp = buildEmployee(ExemptionStatus.NON_EXEMPT, "624000.00");
+        PayrollItem item = buildItem("26000.00", LocalDate.of(2026, 4, 1));
+
+        List<EarningsLine> nullResult = payrollCalculator.setEarnings(emp, item, null);
+        List<EarningsLine> emptyResult = payrollCalculator.setEarnings(emp, item, List.of());
+
+        Assertions.assertTrue(nullResult.isEmpty());
+        Assertions.assertTrue(emptyResult.isEmpty());
+        verifyNoInteractions(earningsRepository, deductionsRepository);
+    }
+
+    @Test
+    void setDeductions_ShouldReturnExpectedLines_WithAttendanceDeductions() {
+        Employee emp = buildEmployee(ExemptionStatus.NON_EXEMPT, "624000.00");
+        PayrollItem item = buildItem("26000.00", LocalDate.of(2026, 4, 1));
+
+        List<DeductionsLine> deductions = payrollCalculator.setDeductions(
+                emp,
+                item,
+                new BigDecimal("500.25"),
+                new BigDecimal("120.75")
+        );
+
+        Assertions.assertEquals(6, deductions.size());
+        assertDeduction(deductions, DeductionType.SSS, "1300.00");
+        assertDeduction(deductions, DeductionType.PHILHEALTH, "650.00");
+        assertDeduction(deductions, DeductionType.PAGIBIG, "100.00");
+        assertDeduction(deductions, DeductionType.BRACKET_LEVEL_THREE, "2804.17");
+        assertDeduction(deductions, DeductionType.ABSENT_DEDUCTION, "500.25");
+        assertDeduction(deductions, DeductionType.LATE_PENALTY, "120.75");
+        deductions.forEach(line -> Assertions.assertSame(item, line.getPayrollItem()));
+        verifyNoInteractions(earningsRepository, deductionsRepository);
+    }
+
+    @Test
+    void setDeductions_ShouldReturnExpectedLines_ForExemptEmployee() {
+        Employee emp = buildEmployee(ExemptionStatus.EXEMPT, "624000.00");
+        PayrollItem item = buildItem("26000.00", LocalDate.of(2026, 4, 1));
+
+        List<DeductionsLine> deductions = payrollCalculator.setDeductions(
+                emp,
+                item,
+                BigDecimal.ZERO,
+                BigDecimal.ZERO
+        );
+
+        Assertions.assertEquals(4, deductions.size());
+        assertDeduction(deductions, DeductionType.SSS, "1300.00");
+        assertDeduction(deductions, DeductionType.PHILHEALTH, "650.00");
+        assertDeduction(deductions, DeductionType.PAGIBIG, "100.00");
+        assertDeduction(deductions, DeductionType.BRACKET_LEVEL_THREE, "2804.17");
+        deductions.forEach(line -> Assertions.assertSame(item, line.getPayrollItem()));
+        verifyNoInteractions(earningsRepository, deductionsRepository);
+    }
+
+    @Test
+    void setDeductions_ShouldReturnEmpty_WhenYearlySalaryIsZeroOrLess() {
+        Employee emp = buildEmployee(ExemptionStatus.NON_EXEMPT, "0.00");
+        PayrollItem item = buildItem("0.00", LocalDate.of(2026, 4, 1));
+
+        List<DeductionsLine> deductions = payrollCalculator.setDeductions(
+                emp,
+                item,
+                new BigDecimal("500.25"),
+                new BigDecimal("120.75")
+        );
+
+        Assertions.assertTrue(deductions.isEmpty());
+        verifyNoInteractions(earningsRepository, deductionsRepository);
+    }
+
+    private Employee buildEmployee(ExemptionStatus exemptionStatus, String yearlySalary) {
+        Employee emp = new Employee();
+        emp.setExemptionStatus(exemptionStatus);
+        emp.setYearlySalary(new BigDecimal(yearlySalary));
+        return emp;
+    }
+
+    private PayrollItem buildItem(String grossPay, LocalDate periodEnd) {
+        PayrollRun run = new PayrollRun();
+        run.setPeriodEnd(periodEnd);
+
+        PayrollItem item = new PayrollItem();
+        item.setGrossPay(new BigDecimal(grossPay));
+        item.setPayrollRun(run);
+        return item;
+    }
+
+    private void assertDeduction(List<DeductionsLine> deductions, DeductionType type, String expectedAmount) {
+        DeductionsLine line = deductions.stream()
+                .filter(d -> d.getDeductionType() == type)
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("Missing deduction type: " + type));
+        assertBigDecimalEquals(expectedAmount, line.getAmount());
+    }
+
+    private void assertBigDecimalEquals(String expected, BigDecimal actual) {
+        Assertions.assertEquals(0, new BigDecimal(expected).compareTo(actual));
+    }
+}

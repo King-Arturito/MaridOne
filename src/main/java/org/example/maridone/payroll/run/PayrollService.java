@@ -187,10 +187,10 @@ public class PayrollService {
         return employees.stream()
                 .map(emp -> {
                     PayrollItem item = new PayrollItem();
-                    BigDecimal biweeklySalary = emp.getYearlySalary().divide(BigDecimal.valueOf(26), 2, RoundingMode.HALF_UP);
+                    BigDecimal semiMonthlySalary = emp.getYearlySalary().divide(BigDecimal.valueOf(24), 2, RoundingMode.HALF_UP);
                     item.setEmployee(emp);
                     item.setPayrollRun(run);
-                    item.setGrossPay(biweeklySalary);
+                    item.setGrossPay(semiMonthlySalary);
                     item.setDisputes(new ArrayList<>());
                     item.setEarnings(payrollCalculator.setEarnings(emp, item));
                     List<DeductionsLine> deductions = payrollCalculator.setDeductions(
@@ -203,7 +203,7 @@ public class PayrollService {
                     BigDecimal totalDeductions = deductions.stream()
                             .map(DeductionsLine::getAmount)
                             .reduce(BigDecimal.ZERO, BigDecimal::add);
-                    item.setNetPay(biweeklySalary.subtract(totalDeductions).setScale(2, RoundingMode.HALF_UP));
+                    item.setNetPay(semiMonthlySalary.subtract(totalDeductions).setScale(2, RoundingMode.HALF_UP));
                     return item;
                 })
                 .toList();
