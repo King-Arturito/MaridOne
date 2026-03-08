@@ -20,7 +20,6 @@ public interface LeaveRequestRepository extends JpaRepository<LeaveRequest,Long>
         and lr.leaveDate = :leaveDate""")
     List<LeaveRequest> findApprovedLeavesForDay(@Param("leaveDate") LocalDate leaveDate);
 
-    // Add inside LeaveRequestRepository
     @Query("""
         SELECT lr from LeaveRequest lr
         join fetch lr.employee emp

@@ -28,7 +28,7 @@ public class OvertimeSpecs {
             if (empIds == null || empIds.isEmpty()) {
                 return cb.disjunction();
             }
-            return root.join("employee", JoinType.INNER).in(empIds);
+            return root.join("employee", JoinType.INNER).get("employeeId").in(empIds);
         };
     }
 
