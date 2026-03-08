@@ -29,4 +29,15 @@ public class NotificationService {
         );
         return notificationRepository.findAll(spec, pageable);
     }
+
+
+    @Transactional
+    @ExecutionTime
+    public void readNotification(Long notificationId) {
+        Notification notif = notificationRepository.findById(notificationId).orElse(null);
+        if (notif != null) {
+            notif.setReadStatus(true);
+            notificationRepository.save(notif);
+        }
+    }
 }

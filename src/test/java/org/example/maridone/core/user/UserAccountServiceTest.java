@@ -6,7 +6,7 @@ import org.example.maridone.core.dto.CreateUserAccountDto;
 import org.example.maridone.core.employee.Employee;
 import org.example.maridone.core.employee.EmployeeRepository;
 import org.example.maridone.enums.AccountStatus;
-import org.example.maridone.exception.AccountNotFoundException;
+import org.example.maridone.exception.notfound.AccountNotFoundException;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;

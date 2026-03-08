@@ -1,4 +1,4 @@
-package org.example.maridone.exception;
+package org.example.maridone.exception.unauthorized;
 
 import org.example.maridone.enums.LeaveType;
 

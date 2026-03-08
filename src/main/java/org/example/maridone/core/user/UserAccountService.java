@@ -5,15 +5,12 @@ import org.example.maridone.core.dto.CreateUserAccountDto;
 import org.example.maridone.core.employee.Employee;
 import org.example.maridone.core.employee.EmployeeRepository;
 import org.example.maridone.core.mapper.CoreMapper;
-import org.example.maridone.enums.Position;
-import org.example.maridone.exception.AccountNotFoundException;
-import org.example.maridone.exception.BadCredentialsException;
-import org.example.maridone.exception.DuplicateAccountException;
-import org.example.maridone.exception.EmployeeNotFoundException;
+import org.example.maridone.exception.notfound.AccountNotFoundException;
+import org.example.maridone.exception.unauthorized.DuplicateAccountException;
+import org.example.maridone.exception.notfound.EmployeeNotFoundException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.bind.annotation.GetMapping;
 
 
 @Service

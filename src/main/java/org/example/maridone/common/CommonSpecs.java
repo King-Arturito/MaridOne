@@ -1,6 +1,6 @@
 package org.example.maridone.common;
 
-import org.example.maridone.exception.InvalidRangeException;
+import org.example.maridone.exception.unauthorized.InvalidRangeException;
 import org.springframework.data.jpa.domain.Specification;
 
 public class CommonSpecs {

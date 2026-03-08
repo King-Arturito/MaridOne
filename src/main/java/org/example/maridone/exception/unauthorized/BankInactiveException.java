@@ -1,4 +1,4 @@
-package org.example.maridone.exception;
+package org.example.maridone.exception.unauthorized;
 
 public class BankInactiveException extends RuntimeException {
     public BankInactiveException(String message) {

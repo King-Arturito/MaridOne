@@ -1,4 +1,4 @@
-package org.example.maridone.exception;
+package org.example.maridone.exception.notfound;
 
 public class ShiftsNotFoundException extends RuntimeException {
     public ShiftsNotFoundException(String message) {

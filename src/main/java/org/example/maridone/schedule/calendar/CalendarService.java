@@ -2,7 +2,7 @@ package org.example.maridone.schedule.calendar;
 
 import org.example.maridone.annotation.ExecutionTime;
 import org.example.maridone.common.CommonSpecs;
-import org.example.maridone.exception.CalendarEventNotFound;
+import org.example.maridone.exception.notfound.CalendarEventNotFound;
 import org.example.maridone.schedule.dto.CalendarDto;
 import org.example.maridone.schedule.mapper.CalendarMapper;
 import org.example.maridone.schedule.spec.CalendarSpecs;

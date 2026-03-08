@@ -5,7 +5,7 @@ import java.util.Optional;
 import org.example.maridone.core.dto.EmployeeRequestDto;
 import org.example.maridone.core.dto.EmployeeResponseDto;
 import org.example.maridone.core.mapper.CoreMapper;
-import org.example.maridone.exception.EmployeeNotFoundException;
+import org.example.maridone.exception.notfound.EmployeeNotFoundException;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;

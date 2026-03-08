@@ -3,7 +3,7 @@ package org.example.maridone.payroll.dispute;
 import java.util.Optional;
 
 import org.example.maridone.enums.Status;
-import org.example.maridone.exception.ItemNotFoundException;
+import org.example.maridone.exception.notfound.ItemNotFoundException;
 import org.example.maridone.payroll.item.PayrollItem;
 import org.example.maridone.payroll.dto.DisputeRequestDto;
 import org.example.maridone.payroll.run.PayrollItemRepository;

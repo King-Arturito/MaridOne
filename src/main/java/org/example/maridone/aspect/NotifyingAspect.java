@@ -9,6 +9,8 @@ import org.aspectj.lang.annotation.Pointcut;
 import org.aspectj.lang.reflect.MethodSignature;
 import org.example.maridone.annotation.Notify;
 import org.example.maridone.core.employee.Employee;
+import org.example.maridone.core.employee.EmployeeRepository;
+import org.example.maridone.exception.notfound.EmployeeNotFoundException;
 import org.example.maridone.notification.Notification;
 import org.example.maridone.notification.NotificationRepository;
 import org.slf4j.Logger;
@@ -31,10 +33,12 @@ public class NotifyingAspect {
     private static final Logger logger = LoggerFactory.getLogger(NotifyingAspect.class);
 
     private final NotificationRepository notificationRepository;
+    private final EmployeeRepository employeeRepository;
     private final ExpressionParser spelParser = new SpelExpressionParser();
 
-    public NotifyingAspect(NotificationRepository notificationRepository) {
+    public NotifyingAspect(NotificationRepository notificationRepository, EmployeeRepository employeeRepository) {
         this.notificationRepository  = notificationRepository;
+        this.employeeRepository = employeeRepository;
     }
 
     @Pointcut("@annotation(org.example.maridone.annotation.Notify)")
@@ -51,16 +55,18 @@ public class NotifyingAspect {
         EvaluationContext context = buildContext(joinPoint, result);
 
         String message = resolveMessage(notify.message(), context);
-        Object targetEmployee = spelParser
+        Object targetEmployeeRaw = spelParser
                 .parseExpression(notify.targetEmployee())
                 .getValue(context);
+
+        Employee targetEmployee = resolveEmployee(targetEmployeeRaw);
 
         String importance = notify.importance();
 
         Notification notif = new Notification();
         notif.setReadStatus(false);
         notif.setCreatedAt(Instant.now());
-        notif.setEmployee((Employee) targetEmployee);
+        notif.setEmployee(targetEmployee);
         notif.setImportance(importance);
         notif.setMessage(message);
 
@@ -68,6 +74,27 @@ public class NotifyingAspect {
 
         logger.info("Notified: {} | Importance: {} | Target: {}", message, importance, targetEmployee);
         return result;
+    }
+
+    private Employee resolveEmployee(Object target) {
+        if (target instanceof Number id) {
+            return employeeRepository.findById(id.longValue()).orElseThrow(() -> new EmployeeNotFoundException(id.longValue()));
+        }
+
+        if (target instanceof String s) {
+            try {
+                return employeeRepository.findById(Long.parseLong(s)).orElseThrow(() -> new EmployeeNotFoundException(Long.parseLong(s)));
+            } catch (NumberFormatException ignored) {}
+        }
+
+        if (target instanceof Employee employee) {
+            return employee;
+        }
+
+        throw new IllegalArgumentException(
+                "targetEmployee resolved to an unsupported type: " +
+                        (target != null ? target.getClass().getName() : "null")
+        );
     }
 
     private EvaluationContext buildContext(JoinPoint joinPoint, Object result) {

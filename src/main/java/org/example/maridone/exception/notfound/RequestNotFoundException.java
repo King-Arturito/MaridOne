@@ -1,4 +1,4 @@
-package org.example.maridone.exception;
+package org.example.maridone.exception.notfound;
 
 public class RequestNotFoundException extends RuntimeException {
     public RequestNotFoundException(Long id) {

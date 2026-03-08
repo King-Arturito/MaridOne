@@ -1,4 +1,4 @@
-package org.example.maridone.payroll.run;
+package org.example.maridone.payroll;
 
 import jakarta.validation.Valid;
 import org.example.maridone.annotation.ExecutionTime;
@@ -20,9 +20,9 @@ import org.example.maridone.core.employee.EmployeeRepository;
 import org.example.maridone.enums.EmploymentStatus;
 import org.example.maridone.enums.ExemptionStatus;
 import org.example.maridone.enums.Status;
-import org.example.maridone.exception.EmployeeNotFoundException;
-import org.example.maridone.exception.ItemNotFoundException;
-import org.example.maridone.exception.RunNotFoundException;
+import org.example.maridone.exception.notfound.EmployeeNotFoundException;
+import org.example.maridone.exception.notfound.ItemNotFoundException;
+import org.example.maridone.exception.notfound.RunNotFoundException;
 import org.example.maridone.holiday.HolidayLookup;
 import org.example.maridone.holiday.HolidayService;
 import org.example.maridone.leave.request.LeaveRequest;
@@ -32,7 +32,6 @@ import org.example.maridone.log.attendance.AttendanceLog;
 import org.example.maridone.overtime.OvertimeRequest;
 import org.example.maridone.overtime.OvertimeRequestRepository;
 import org.example.maridone.overtime.spec.OvertimeSpecs;
-import org.example.maridone.payroll.PayrollCalculator;
 import org.example.maridone.payroll.dto.ItemDetailsDto;
 import org.example.maridone.payroll.dto.ItemSummaryDto;
 import org.example.maridone.payroll.dto.PayrollItemDto;
@@ -41,6 +40,9 @@ import org.example.maridone.payroll.item.PayrollItem;
 import org.example.maridone.payroll.item.component.DeductionsLine;
 import org.example.maridone.payroll.item.component.EarningsLine;
 import org.example.maridone.payroll.mapper.PayrollMapper;
+import org.example.maridone.payroll.run.PayrollItemRepository;
+import org.example.maridone.payroll.run.PayrollRun;
+import org.example.maridone.payroll.run.PayrollRunRepository;
 import org.example.maridone.payroll.spec.ItemSpecs;
 import org.example.maridone.schedule.shift.TemplateShiftRepository;
 import org.example.maridone.schedule.shift.TemplateShiftSchedule;
@@ -67,7 +69,7 @@ public class PayrollService {
     private final PayrollMapper payrollMapper;
     private final DefaultProperties defaultProperties;
 
-    PayrollService(
+    public PayrollService(
             PayrollRunRepository payrollRunRepository,
             PayrollItemRepository payrollItemRepository,
             EmployeeRepository employeeRepository,

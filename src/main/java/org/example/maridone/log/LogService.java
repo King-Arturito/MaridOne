@@ -3,7 +3,7 @@ package org.example.maridone.log;
 import org.example.maridone.annotation.ExecutionTime;
 import org.example.maridone.common.CommonSpecs;
 import org.example.maridone.core.employee.EmployeeRepository;
-import org.example.maridone.exception.EmployeeNotFoundException;
+import org.example.maridone.exception.notfound.EmployeeNotFoundException;
 import org.example.maridone.log.activity.ActivityLog;
 import org.example.maridone.log.attendance.AttendanceLog;
 import org.example.maridone.log.dto.ActivityRequestDto;

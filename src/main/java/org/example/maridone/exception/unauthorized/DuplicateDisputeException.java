@@ -1,4 +1,4 @@
-package org.example.maridone.exception;
+package org.example.maridone.exception.unauthorized;
 
 public class DuplicateDisputeException extends RuntimeException {
     public DuplicateDisputeException(Long itemId, String message) {

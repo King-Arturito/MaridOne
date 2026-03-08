@@ -1,4 +1,4 @@
-package org.example.maridone.exception;
+package org.example.maridone.exception.badrequest;
 
 
 public class NoRoleAssignedException extends RuntimeException{

@@ -1,4 +1,4 @@
-package org.example.maridone.exception;
+package org.example.maridone.exception.unauthorized;
 
 public class InsufficientBalanceException extends RuntimeException {
     public InsufficientBalanceException(String message) {

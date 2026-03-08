@@ -1,20 +1,20 @@
 package org.example.maridone.overtime;
 
 import org.example.maridone.annotation.ExecutionTime;
+import org.example.maridone.annotation.Notify;
 import org.example.maridone.common.CommonSpecs;
 import org.example.maridone.core.employee.Employee;
 import org.example.maridone.core.employee.EmployeeRepository;
 import org.example.maridone.core.spec.EmployeeSpecs;
 import org.example.maridone.enums.Status;
-import org.example.maridone.exception.AccountNotFoundException;
-import org.example.maridone.exception.InvalidRangeException;
-import org.example.maridone.exception.OvertimeException;
+import org.example.maridone.exception.notfound.AccountNotFoundException;
+import org.example.maridone.exception.unauthorized.InvalidRangeException;
+import org.example.maridone.exception.unauthorized.OvertimeException;
 import org.example.maridone.overtime.dto.OvertimeRequestDto;
 import org.example.maridone.overtime.dto.OvertimeResponseDto;
 import org.example.maridone.overtime.dto.OvertimeUpdateDto;
 import org.example.maridone.overtime.mapper.OvertimeMapper;
 import org.example.maridone.overtime.spec.OvertimeSpecs;
-import org.hibernate.sql.ast.tree.expression.Over;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
@@ -22,8 +22,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
-import java.time.LocalDate;
-import java.util.List;
 
 @Service
 public class OvertimeService {
@@ -63,6 +61,7 @@ public class OvertimeService {
 
     @Transactional
     @ExecutionTime
+    @Notify(message = "Your Overtime Request has been #{#result.requestStatus}", importance = "HIGH", targetEmployee = "#result.employeeId")
     public OvertimeResponseDto updateOvertimeRequest(OvertimeUpdateDto updateDto, String approverUsername) {
         OvertimeRequest req = overtimeRequestRepository.findById(updateDto.getOvertimeId()).orElseThrow(() -> new OvertimeException("Overtime Not Found"));
         if (req.getRequestStatus() != Status.PENDING) {

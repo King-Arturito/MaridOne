@@ -1,4 +1,4 @@
-package org.example.maridone.exception;
+package org.example.maridone.exception.notfound;
 
 public class ItemNotFoundException extends RuntimeException {
     public ItemNotFoundException(Long id) {

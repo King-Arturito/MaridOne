@@ -3,13 +3,11 @@ package org.example.maridone.overtime.spec;
 import jakarta.persistence.criteria.JoinType;
 import org.example.maridone.enums.ExemptionStatus;
 import org.example.maridone.enums.Status;
-import org.example.maridone.exception.InvalidRangeException;
+import org.example.maridone.exception.unauthorized.InvalidRangeException;
 import org.example.maridone.overtime.OvertimeRequest;
 import org.springframework.data.jpa.domain.Specification;
 
-import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.LocalTime;
 import java.util.List;
 
 public class OvertimeSpecs {

@@ -8,7 +8,7 @@ import org.example.maridone.core.mapper.CoreMapper;
 import org.example.maridone.core.filter.EmployeeFilter;
 import org.example.maridone.core.spec.EmployeeSpecs;
 import org.example.maridone.embeddable.Address;
-import org.example.maridone.exception.EmployeeNotFoundException;
+import org.example.maridone.exception.notfound.EmployeeNotFoundException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;

@@ -6,10 +6,7 @@ import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/api/notifications")
@@ -28,5 +25,11 @@ public class NotificationController {
              @RequestParam(required = false) Boolean status,
              @PageableDefault(sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
         return notificationService.getUserNotifications(authentication.getName(), status, pageable);
+    }
+
+    @PreAuthorize("isAuthenticated()")
+    @PatchMapping
+    public void readNotification(Long notificationId) {
+        notificationService.readNotification(notificationId);
     }
 }

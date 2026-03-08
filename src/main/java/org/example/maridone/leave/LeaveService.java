@@ -1,6 +1,5 @@
 package org.example.maridone.leave;
 
-import org.example.maridone.annotation.AuditLog;
 import org.example.maridone.annotation.ExecutionTime;
 import org.example.maridone.annotation.Notify;
 import org.example.maridone.annotation.SystematicScheduling;
@@ -13,7 +12,11 @@ import org.example.maridone.core.user.UserAccountRepository;
 import org.example.maridone.enums.EmploymentStatus;
 import org.example.maridone.enums.LeaveType;
 import org.example.maridone.enums.Status;
-import org.example.maridone.exception.*;
+import org.example.maridone.exception.notfound.AccountNotFoundException;
+import org.example.maridone.exception.notfound.EmployeeNotFoundException;
+import org.example.maridone.exception.notfound.LeaveNotFoundException;
+import org.example.maridone.exception.unauthorized.DuplicateLeaveException;
+import org.example.maridone.exception.unauthorized.InsufficientBalanceException;
 import org.example.maridone.leave.balance.*;
 import org.example.maridone.leave.dto.BalanceRequestDto;
 import org.example.maridone.leave.dto.BalanceResponseDto;
@@ -78,7 +81,6 @@ public class LeaveService {
 
 
     @Transactional
-    @AuditLog
     public void updateYearlyBalance(Long empId, UpdateBalanceDto payload) {
         Specification<LeaveBalance> spec = Specification.allOf(
                 LeaveSpecs.hasEmployeeId(empId),

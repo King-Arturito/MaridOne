@@ -5,7 +5,7 @@ import org.example.maridone.core.user.UserAccount;
 import org.example.maridone.core.user.UserAccountRepository;
 import org.example.maridone.document.path.DocumentPath;
 import org.example.maridone.document.storage.CloudStorageService;
-import org.example.maridone.exception.AccountNotFoundException;
+import org.example.maridone.exception.notfound.AccountNotFoundException;
 import org.springframework.context.annotation.Profile;
 import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Service;
