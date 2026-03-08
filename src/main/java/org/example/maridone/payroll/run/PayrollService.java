@@ -8,7 +8,6 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -24,6 +23,8 @@ import org.example.maridone.enums.Status;
 import org.example.maridone.exception.EmployeeNotFoundException;
 import org.example.maridone.exception.ItemNotFoundException;
 import org.example.maridone.exception.RunNotFoundException;
+import org.example.maridone.holiday.HolidayLookup;
+import org.example.maridone.holiday.HolidayService;
 import org.example.maridone.leave.request.LeaveRequest;
 import org.example.maridone.leave.request.LeaveRequestRepository;
 import org.example.maridone.log.AttendanceLogRepository;
@@ -41,8 +42,6 @@ import org.example.maridone.payroll.item.component.DeductionsLine;
 import org.example.maridone.payroll.item.component.EarningsLine;
 import org.example.maridone.payroll.mapper.PayrollMapper;
 import org.example.maridone.payroll.spec.ItemSpecs;
-import org.example.maridone.schedule.calendar.CalendarRepository;
-import org.example.maridone.schedule.calendar.CompanyCalendar;
 import org.example.maridone.schedule.shift.TemplateShiftRepository;
 import org.example.maridone.schedule.shift.TemplateShiftSchedule;
 import org.springframework.data.domain.Page;
@@ -63,7 +62,7 @@ public class PayrollService {
     private final TemplateShiftRepository templateShiftRepository;
     private final OvertimeRequestRepository overtimeRequestRepository;
     private final LeaveRequestRepository leaveRequestRepository;
-    private final CalendarRepository calendarRepository;
+    private final HolidayService holidayService;
     private final PayrollCalculator payrollCalculator;
     private final PayrollMapper payrollMapper;
     private final DefaultProperties defaultProperties;
@@ -76,7 +75,7 @@ public class PayrollService {
             TemplateShiftRepository templateShiftRepository,
             OvertimeRequestRepository overtimeRequestRepository,
             LeaveRequestRepository leaveRequestRepository,
-            CalendarRepository calendarRepository,
+            HolidayService holidayService,
             PayrollCalculator payrollCalculator,
             PayrollMapper payrollMapper,
             DefaultProperties defaultProperties
@@ -89,7 +88,7 @@ public class PayrollService {
         this.templateShiftRepository = templateShiftRepository;
         this.overtimeRequestRepository = overtimeRequestRepository;
         this.leaveRequestRepository = leaveRequestRepository;
-        this.calendarRepository = calendarRepository;
+        this.holidayService = holidayService;
         this.payrollCalculator = payrollCalculator;
         this.payrollMapper = payrollMapper;
         this.defaultProperties = defaultProperties;
@@ -273,33 +272,10 @@ public class PayrollService {
             employeeIds, run.getPeriodStart(), run.getPeriodEnd()
         );
 
-        //load all active calendar events overlapping the payroll period
-        List<CompanyCalendar> calendarEvents = calendarRepository.findActiveEventsOverlappingPeriod(periodStart, periodEnd);
-        //expand holiday event ranges into date sets for quick holiday checks
-        Set<LocalDate> holidayDates = new HashSet<>();
-        Set<LocalDate> regularHolidayDates = new HashSet<>();
-        for (CompanyCalendar event : calendarEvents) {
-            String eventTitle = event.getTitle() == null ? "" : event.getTitle().trim().toLowerCase();
-            boolean isRegularHolidayEvent = eventTitle.contains("regular holiday");
-            boolean isSpecialNonWorkingHolidayEvent =
-                    eventTitle.contains("special non-working holiday")
-                            || eventTitle.contains("special nonworking holiday")
-                            || eventTitle.contains("special non-working")
-                            || eventTitle.contains("special nonworking");
-            if (!isRegularHolidayEvent && !isSpecialNonWorkingHolidayEvent) {
-                continue;
-            }
-            LocalDate start = event.getStartDate().atZone(defaultProperties.getTimeZone()).toLocalDate();
-            LocalDate end = event.getEndDate().atZone(defaultProperties.getTimeZone()).toLocalDate();
-            LocalDate cursor = start;
-            while (!cursor.isAfter(end)) {
-                holidayDates.add(cursor);
-                if (isRegularHolidayEvent) {
-                    regularHolidayDates.add(cursor);
-                }
-                cursor = cursor.plusDays(1);
-            }
-        }
+        //get all holidays for the period from holiday service
+        HolidayLookup holidayLookup = holidayService.getHolidayLookup(run.getPeriodStart(), run.getPeriodEnd());
+        Set<LocalDate> holidayDates = holidayLookup.holidayDates();
+        Set<LocalDate> regularHolidayDates = holidayLookup.regularHolidayDates();
 
         //create a key-value pair by emp id -> List<AttendanceLogs>
         Map<Long, List<AttendanceLog>> attendanceMap = allLogs.stream()

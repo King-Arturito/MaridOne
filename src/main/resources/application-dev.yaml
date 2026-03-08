@@ -20,3 +20,14 @@ jwt:
 
 default:
   url: http://localhost:5173
+
+holiday:
+  enabled: true
+  api-key: ${CALENDARIFIC_API_KEY:}
+  country: PH
+  base-url: https://calendarific.com/api/v2/holidays
+  cache-dir: .cache/holidays
+  override-file: .cache/holidays/holiday-overrides.json
+  refresh-after: 365d
+  connect-timeout: 5s
+  request-timeout: 10s
