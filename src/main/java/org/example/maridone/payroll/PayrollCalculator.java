@@ -119,7 +119,6 @@ public class PayrollCalculator {
             );
         }
 
-        // attach attendance-related deductions from non-exempt processing
         addDeductionLine(deductions, item, DeductionType.ABSENT_DEDUCTION, absentDeductAmount);
         addDeductionLine(deductions, item, DeductionType.LATE_PENALTY, lateDeductAmount);
 
@@ -162,12 +161,10 @@ public class PayrollCalculator {
                 .divide(BigDecimal.valueOf(60), 2, RoundingMode.HALF_UP);
     }
 
-    //one hour unpaid lunch is excluded only for longer shifts
     public BigDecimal deductUnpaidLunchHour(BigDecimal rawHours) {
         if (rawHours == null) {
             return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
         }
-        //for short shifts (e.g., half-day), do not deduct lunch
         if (rawHours.compareTo(BigDecimal.valueOf(5)) <= 0) {
             return rawHours.setScale(2, RoundingMode.HALF_UP);
         }
