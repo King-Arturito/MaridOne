@@ -7,12 +7,15 @@ import java.time.LocalTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 
 import org.example.maridone.config.DefaultProperties;
 import org.example.maridone.core.employee.Employee;
 import org.example.maridone.enums.DeductionType;
 import org.example.maridone.core.employee.EmployeeRepository;
 import org.example.maridone.enums.ExemptionStatus;
+import org.example.maridone.holiday.HolidayLookup;
+import org.example.maridone.holiday.HolidayService;
 import org.example.maridone.leave.request.LeaveRequest;
 import org.example.maridone.leave.request.LeaveRequestRepository;
 import org.example.maridone.log.AttendanceLogRepository;
@@ -25,8 +28,6 @@ import org.example.maridone.payroll.item.component.EarningsLine;
 import org.example.maridone.payroll.item.component.EarningsRepository;
 import org.example.maridone.payroll.dto.ItemDetailsDto;
 import org.example.maridone.payroll.mapper.PayrollMapper;
-import org.example.maridone.schedule.calendar.CalendarRepository;
-import org.example.maridone.schedule.calendar.CompanyCalendar;
 import org.example.maridone.schedule.shift.TemplateShiftRepository;
 import org.example.maridone.schedule.shift.TemplateShiftSchedule;
 import org.junit.jupiter.api.Assertions;
@@ -53,7 +54,7 @@ class PayrollServiceTest {
     @Mock private TemplateShiftRepository templateShiftRepository;
     @Mock private OvertimeRequestRepository overtimeRequestRepository;
     @Mock private LeaveRequestRepository leaveRequestRepository;
-    @Mock private CalendarRepository calendarRepository;
+    @Mock private HolidayService holidayService;
     @Mock private DefaultProperties defaultProperties;
     @Mock private EarningsRepository earningsRepository;
     @Mock private DeductionsRepository deductionsRepository;
@@ -72,7 +73,7 @@ class PayrollServiceTest {
                 templateShiftRepository,
                 overtimeRequestRepository,
                 leaveRequestRepository,
-                calendarRepository,
+                holidayService,
                 payrollCalculator,
                 payrollMapper,
                 defaultProperties
@@ -103,7 +104,7 @@ class PayrollServiceTest {
                 buildAttendance(1L, workDate, LocalTime.of(8, 0), "IN"),
                 buildAttendance(1L, workDate, LocalTime.of(17, 0), "OUT")
         );
-        CompanyCalendar holiday = buildHoliday(workDate, "Regular Holiday - Test");
+        HolidayLookup holiday = new HolidayLookup(Set.of(workDate), Set.of(workDate));
         stubCommonDependencies(logs, schedule, holiday);
 
         List<PayrollItem> items = new ArrayList<>();
@@ -139,7 +140,7 @@ class PayrollServiceTest {
                 buildAttendance(1L, workDate, LocalTime.of(8, 0), "IN"),
                 buildAttendance(1L, workDate, LocalTime.of(17, 0), "OUT")
         );
-        CompanyCalendar holiday = buildHoliday(workDate, "Special Non-Working Holiday - Test");
+        HolidayLookup holiday = new HolidayLookup(Set.of(workDate), Set.of());
         stubCommonDependencies(logs, schedule, holiday);
 
         List<PayrollItem> items = new ArrayList<>();
@@ -170,8 +171,7 @@ class PayrollServiceTest {
                 buildAttendance(1L, workDate, LocalTime.of(8, 0), "IN"),
                 buildAttendance(1L, workDate, LocalTime.of(17, 0), "OUT")
         );
-        CompanyCalendar nonHolidayEvent = buildHoliday(workDate, "Town Hall Event");
-        stubCommonDependencies(logs, schedule, nonHolidayEvent);
+        stubCommonDependencies(logs, schedule, HolidayLookup.empty());
 
         List<PayrollItem> items = new ArrayList<>();
 
@@ -192,7 +192,7 @@ class PayrollServiceTest {
     private void stubCommonDependencies(
             List<AttendanceLog> logs,
             TemplateShiftSchedule schedule,
-            CompanyCalendar calendarEvent
+            HolidayLookup holidayLookup
     ) {
         when(defaultProperties.getTimeZone()).thenReturn(ZONE);
         when(attendanceLogRepository.findByEmployeeIdInAndTimestampBetween(anyList(), any(Instant.class), any(Instant.class), any()))
@@ -203,8 +203,8 @@ class PayrollServiceTest {
                 .thenReturn(List.of(schedule));
         when(leaveRequestRepository.findApprovedLeavesForPeriod(anyList(), any(LocalDate.class), any(LocalDate.class)))
                 .thenReturn(List.<LeaveRequest>of());
-        when(calendarRepository.findActiveEventsOverlappingPeriod(any(Instant.class), any(Instant.class)))
-                .thenReturn(List.of(calendarEvent));
+        when(holidayService.getHolidayLookup(any(LocalDate.class), any(LocalDate.class)))
+                .thenReturn(holidayLookup);
     }
 
     private PayrollRun buildSingleDayRun(LocalDate date) {
@@ -239,12 +239,4 @@ class PayrollServiceTest {
         return log;
     }
 
-    private CompanyCalendar buildHoliday(LocalDate date, String title) {
-        CompanyCalendar calendar = new CompanyCalendar();
-        calendar.setTitle(title);
-        calendar.setStartDate(date.atStartOfDay(ZONE).toInstant());
-        calendar.setEndDate(date.atTime(LocalTime.MAX).atZone(ZONE).toInstant());
-        calendar.setIsActive(true);
-        return calendar;
-    }
 }

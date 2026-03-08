@@ -2,7 +2,6 @@ package org.example.maridone.core.user;
 
 import java.util.Optional;
 
-import org.example.maridone.core.employee.Employee;
 import org.example.maridone.enums.Position;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
@@ -29,10 +28,6 @@ class UserLoginServiceTest {
         UserAccount account = new UserAccount();
         account.setUsername(username);
         account.setPasswordHash("hashedPass");
-        
-        Employee emp = new Employee();
-        emp.setPosition(Position.MANAGER); 
-        account.setEmployee(emp);
 
         when(userAccountRepository.findByUsername(username)).thenReturn(Optional.of(account));
         when(userAccountRepository.findPositionByUsername(username)).thenReturn(Optional.of(Position.MANAGER));
