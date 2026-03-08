@@ -35,6 +35,7 @@ class UserLoginServiceTest {
         account.setEmployee(emp);
 
         when(userAccountRepository.findByUsername(username)).thenReturn(Optional.of(account));
+        when(userAccountRepository.findPositionByUsername(username)).thenReturn(Optional.of(Position.MANAGER));
 
         UserDetails result = userLoginService.loadUserByUsername(username);
 

@@ -10,6 +10,7 @@ import java.util.List;
 
 import org.example.maridone.config.DefaultProperties;
 import org.example.maridone.core.employee.Employee;
+import org.example.maridone.enums.DeductionType;
 import org.example.maridone.core.employee.EmployeeRepository;
 import org.example.maridone.enums.ExemptionStatus;
 import org.example.maridone.leave.request.LeaveRequest;
@@ -112,6 +113,11 @@ class PayrollServiceTest {
         Assertions.assertEquals(1, items.size());
         PayrollItem item = items.get(0);
         Assertions.assertEquals(1, item.getEarnings().size());
+        Assertions.assertEquals(4, item.getDeductions().size());
+        Assertions.assertTrue(item.getDeductions().stream().anyMatch(d -> d.getDeductionType() == DeductionType.SSS));
+        Assertions.assertTrue(item.getDeductions().stream().anyMatch(d -> d.getDeductionType() == DeductionType.PHILHEALTH));
+        Assertions.assertTrue(item.getDeductions().stream().anyMatch(d -> d.getDeductionType() == DeductionType.PAGIBIG));
+        Assertions.assertTrue(item.getDeductions().stream().anyMatch(d -> d.getDeductionType() == DeductionType.BRACKET_LEVEL_THREE));
 
         EarningsLine holidayLine = item.getEarnings().get(0);
         assertBigDecimalEquals("8.00", holidayLine.getHours());
@@ -120,7 +126,7 @@ class PayrollServiceTest {
         Assertions.assertSame(item, holidayLine.getPayrollItem());
 
         assertBigDecimalEquals("30000.00", item.getGrossPay());
-        assertBigDecimalEquals("30000.00", item.getNetPay());
+        assertBigDecimalEquals("25511.54", item.getNetPay());
     }
 
     @Test
@@ -143,6 +149,7 @@ class PayrollServiceTest {
         Assertions.assertEquals(1, items.size());
         PayrollItem item = items.get(0);
         Assertions.assertEquals(1, item.getEarnings().size());
+        Assertions.assertEquals(4, item.getDeductions().size());
 
         EarningsLine holidayLine = item.getEarnings().get(0);
         assertBigDecimalEquals("8.00", holidayLine.getHours());
@@ -150,7 +157,7 @@ class PayrollServiceTest {
         assertBigDecimalEquals("2600.00", holidayLine.getAmount());
 
         assertBigDecimalEquals("28600.00", item.getGrossPay());
-        assertBigDecimalEquals("28600.00", item.getNetPay());
+        assertBigDecimalEquals("24111.54", item.getNetPay());
     }
 
     @Test
@@ -173,8 +180,9 @@ class PayrollServiceTest {
         Assertions.assertEquals(1, items.size());
         PayrollItem item = items.get(0);
         Assertions.assertTrue(item.getEarnings().isEmpty());
+        Assertions.assertEquals(4, item.getDeductions().size());
         assertBigDecimalEquals("26000.00", item.getGrossPay());
-        assertBigDecimalEquals("26000.00", item.getNetPay());
+        assertBigDecimalEquals("21511.54", item.getNetPay());
     }
 
     private void assertBigDecimalEquals(String expected, BigDecimal actual) {

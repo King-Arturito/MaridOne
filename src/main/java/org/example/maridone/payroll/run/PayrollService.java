@@ -205,21 +205,20 @@ public class PayrollService {
                     BigDecimal biweeklySalary = emp.getYearlySalary().divide(BigDecimal.valueOf(26), 2, RoundingMode.HALF_UP);
                     item.setEmployee(emp);
                     item.setPayrollRun(run);
-                    //todo
                     item.setGrossPay(biweeklySalary);
-                    item.setNetPay(biweeklySalary);
                     item.setDisputes(new ArrayList<>());
-                    //todo
                     item.setEarnings(payrollCalculator.setEarnings(emp, item));
-                    //todo
-                    item.setDeductions(
-                            payrollCalculator.setDeductions(
-                                    emp,
-                                    item,
-                                    BigDecimal.ZERO,
-                                    BigDecimal.ZERO
-                            )
+                    List<DeductionsLine> deductions = payrollCalculator.setDeductions(
+                            emp,
+                            item,
+                            BigDecimal.ZERO,
+                            BigDecimal.ZERO
                     );
+                    item.setDeductions(deductions);
+                    BigDecimal totalDeductions = deductions.stream()
+                            .map(DeductionsLine::getAmount)
+                            .reduce(BigDecimal.ZERO, BigDecimal::add);
+                    item.setNetPay(biweeklySalary.subtract(totalDeductions).setScale(2, RoundingMode.HALF_UP));
                     return item;
                 })
                 .toList();

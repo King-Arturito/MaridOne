@@ -9,6 +9,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import org.example.maridone.core.employee.Employee;
+import org.example.maridone.enums.DeductionType;
 import org.example.maridone.enums.ExemptionStatus;
 import org.example.maridone.payroll.item.PayrollItem;
 import org.example.maridone.payroll.item.component.DeductionsLine;
@@ -36,32 +37,93 @@ public class PayrollCalculator {
 
     public List<EarningsLine> setEarnings(Employee emp, PayrollItem item) {
         List<EarningsLine> earnings =  new ArrayList<>();
+        BigDecimal grossPay = normalizeMoney(item.getGrossPay());
+        LocalDate earningsDate = resolveEarningsDate(item);
         if (emp.getExemptionStatus().equals(ExemptionStatus.EXEMPT)) {
             EarningsLine earningsLine = new EarningsLine();
             earningsLine.setRate(BigDecimal.ZERO);
             earningsLine.setHours(BigDecimal.ZERO);
-            earningsLine.setAmount(item.getGrossPay());
-            earningsLine.setEarningsDate(LocalDate.now());
+            earningsLine.setAmount(grossPay);
+            earningsLine.setEarningsDate(earningsDate);
+            earningsLine.setPayrollItem(item);
+            earningsLine.setOvertime(false);
             earnings.add(earningsLine);
         } else if (emp.getExemptionStatus().equals(ExemptionStatus.NON_EXEMPT)) {
-
+            EarningsLine regularLine = new EarningsLine();
+            regularLine.setRate(BigDecimal.ZERO);
+            regularLine.setHours(BigDecimal.ZERO);
+            regularLine.setAmount(grossPay);
+            regularLine.setEarningsDate(earningsDate);
+            regularLine.setPayrollItem(item);
+            regularLine.setOvertime(false);
+            earnings.add(regularLine);
         }
         return earnings;
     }
 
-    //todo: Non-exempt earnings logic
     public List<EarningsLine> setEarnings(Employee emp, PayrollItem item, List<EarningsLine> precomputedLines) {
-        return precomputedLines == null ? List.of() : precomputedLines;
+        if (precomputedLines == null || precomputedLines.isEmpty()) {
+            return List.of();
+        }
+        LocalDate fallbackDate = resolveEarningsDate(item);
+        for (EarningsLine line : precomputedLines) {
+            line.setPayrollItem(item);
+            if (line.getEarningsDate() == null) {
+                line.setEarningsDate(fallbackDate);
+            }
+            if (line.getOvertime() == null) {
+                line.setOvertime(false);
+            }
+            if (line.getRate() == null) {
+                line.setRate(BigDecimal.ZERO);
+            }
+            if (line.getHours() == null) {
+                line.setHours(BigDecimal.ZERO);
+            }
+            if (line.getAmount() == null) {
+                line.setAmount(BigDecimal.ZERO);
+            }
+        }
+        return precomputedLines;
     }
 
-    //todo: Deductions Logic (Exempt + Non-Exempt) using passed deduction components
     public List<DeductionsLine> setDeductions(
             Employee emp,
             PayrollItem item,
             BigDecimal absentDeductAmount,
             BigDecimal lateDeductAmount
     ) {
-        return List.of();
+        List<DeductionsLine> deductions = new ArrayList<>();
+        BigDecimal yearlySalary = normalizeMoney(emp.getYearlySalary());
+        if (yearlySalary.compareTo(BigDecimal.ZERO) <= 0) {
+            return deductions;
+        }
+
+        BigDecimal biweeklySalary = yearlySalary.divide(BigDecimal.valueOf(26), 2, RoundingMode.HALF_UP);
+        addDeductionLine(deductions, item, DeductionType.SSS, biweeklySalary.multiply(BigDecimal.valueOf(0.05)));
+        addDeductionLine(
+                deductions,
+                item,
+                DeductionType.PHILHEALTH,
+                biweeklySalary.multiply(BigDecimal.valueOf(0.025))
+        );
+        addDeductionLine(deductions, item, DeductionType.PAGIBIG, BigDecimal.valueOf(100));
+
+        BigDecimal withholdingPerCutoff = computeWithholdingTaxPerCutoff(yearlySalary);
+        if (withholdingPerCutoff.compareTo(BigDecimal.ZERO) > 0) {
+            addDeductionLine(
+                    deductions,
+                    item,
+                    resolveTaxBracketType(yearlySalary),
+                    withholdingPerCutoff
+            );
+        }
+
+        // attach attendance-related deductions from non-exempt processing
+        addDeductionLine(deductions, item, DeductionType.ABSENT_DEDUCTION, absentDeductAmount);
+        addDeductionLine(deductions, item, DeductionType.LATE_PENALTY, lateDeductAmount);
+
+        return deductions;
     }
 
 
@@ -121,6 +183,75 @@ public class PayrollCalculator {
         int start = Math.max(startA, startB);
         int end = Math.min(endA, endB);
         return Math.max(0, end - start);
+    }
+
+    private void addDeductionLine(
+            List<DeductionsLine> deductions,
+            PayrollItem item,
+            DeductionType type,
+            BigDecimal amount
+    ) {
+        BigDecimal normalized = normalizeMoney(amount);
+        if (normalized.compareTo(BigDecimal.ZERO) <= 0) return;
+
+        DeductionsLine line = new DeductionsLine();
+        line.setPayrollItem(item);
+        line.setDeductionType(type);
+        line.setAmount(normalized);
+        deductions.add(line);
+    }
+
+    private BigDecimal computeWithholdingTaxPerCutoff(BigDecimal yearlySalary) {
+        BigDecimal annualTax;
+        if (yearlySalary.compareTo(BigDecimal.valueOf(250_000)) <= 0) {
+            annualTax = BigDecimal.ZERO;
+        } else if (yearlySalary.compareTo(BigDecimal.valueOf(400_000)) <= 0) {
+            annualTax = yearlySalary.subtract(BigDecimal.valueOf(250_000)).multiply(BigDecimal.valueOf(0.15));
+        } else if (yearlySalary.compareTo(BigDecimal.valueOf(800_000)) <= 0) {
+            annualTax = BigDecimal.valueOf(22_500).add(
+                    yearlySalary.subtract(BigDecimal.valueOf(400_000)).multiply(BigDecimal.valueOf(0.20))
+            );
+        } else if (yearlySalary.compareTo(BigDecimal.valueOf(2_000_000)) <= 0) {
+            annualTax = BigDecimal.valueOf(102_500).add(
+                    yearlySalary.subtract(BigDecimal.valueOf(800_000)).multiply(BigDecimal.valueOf(0.25))
+            );
+        } else if (yearlySalary.compareTo(BigDecimal.valueOf(8_000_000)) <= 0) {
+            annualTax = BigDecimal.valueOf(402_500).add(
+                    yearlySalary.subtract(BigDecimal.valueOf(2_000_000)).multiply(BigDecimal.valueOf(0.30))
+            );
+        } else {
+            annualTax = BigDecimal.valueOf(2_202_500).add(
+                    yearlySalary.subtract(BigDecimal.valueOf(8_000_000)).multiply(BigDecimal.valueOf(0.35))
+            );
+        }
+        return annualTax.divide(BigDecimal.valueOf(26), 2, RoundingMode.HALF_UP);
+    }
+
+    private DeductionType resolveTaxBracketType(BigDecimal yearlySalary) {
+        if (yearlySalary.compareTo(BigDecimal.valueOf(250_000)) <= 0) {
+            return DeductionType.BRACKET_LEVEL_ONE;
+        } else if (yearlySalary.compareTo(BigDecimal.valueOf(400_000)) <= 0) {
+            return DeductionType.BRACKET_LEVEL_TWO;
+        } else if (yearlySalary.compareTo(BigDecimal.valueOf(800_000)) <= 0) {
+            return DeductionType.BRACKET_LEVEL_THREE;
+        } else if (yearlySalary.compareTo(BigDecimal.valueOf(2_000_000)) <= 0) {
+            return DeductionType.BRACKET_LEVEL_FOUR;
+        } else if (yearlySalary.compareTo(BigDecimal.valueOf(8_000_000)) <= 0) {
+            return DeductionType.BRACKET_LEVEL_FIVE;
+        }
+        return DeductionType.BRACKET_LEVEL_SIX;
+    }
+
+    private BigDecimal normalizeMoney(BigDecimal value) {
+        if (value == null) return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+        return value.setScale(2, RoundingMode.HALF_UP);
+    }
+
+    private LocalDate resolveEarningsDate(PayrollItem item) {
+        if (item.getPayrollRun() != null && item.getPayrollRun().getPeriodEnd() != null) {
+            return item.getPayrollRun().getPeriodEnd();
+        }
+        return LocalDate.now();
     }
 
 }
