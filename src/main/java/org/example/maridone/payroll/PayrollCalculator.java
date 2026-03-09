@@ -98,29 +98,38 @@ public class PayrollCalculator {
         if (yearlySalary.compareTo(BigDecimal.ZERO) <= 0) {
             return deductions;
         }
+        BigDecimal absentAmount = normalizeMoney(absentDeductAmount);
+        BigDecimal lateAmount = normalizeMoney(lateDeductAmount);
+        addDeductionLine(deductions, item, DeductionType.ABSENT_DEDUCTION, absentAmount);
+        addDeductionLine(deductions, item, DeductionType.LATE_PENALTY, lateAmount);
 
-        BigDecimal semiMonthlySalary = yearlySalary.divide(BigDecimal.valueOf(24), 2, RoundingMode.HALF_UP);
-        addDeductionLine(deductions, item, DeductionType.SSS, semiMonthlySalary.multiply(BigDecimal.valueOf(0.05)));
-        addDeductionLine(
-                deductions,
-                item,
-                DeductionType.PHILHEALTH,
-                semiMonthlySalary.multiply(BigDecimal.valueOf(0.025))
-        );
-        addDeductionLine(deductions, item, DeductionType.PAGIBIG, BigDecimal.valueOf(100));
-
-        BigDecimal withholdingPerCutoff = computeWithholdingTaxPerCutoff(yearlySalary);
-        if (withholdingPerCutoff.compareTo(BigDecimal.ZERO) > 0) {
-            addDeductionLine(
-                    deductions,
-                    item,
-                    resolveTaxBracketType(yearlySalary),
-                    withholdingPerCutoff
-            );
+        BigDecimal grossPay = item != null ? normalizeMoney(item.getGrossPay()) : BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+        BigDecimal payAfterAttendance = grossPay.subtract(absentAmount).subtract(lateAmount);
+        if (payAfterAttendance.compareTo(BigDecimal.ZERO) <= 0) {
+            return deductions;
         }
 
-        addDeductionLine(deductions, item, DeductionType.ABSENT_DEDUCTION, absentDeductAmount);
-        addDeductionLine(deductions, item, DeductionType.LATE_PENALTY, lateDeductAmount);
+        BigDecimal monthlyCompensationEquivalent = payAfterAttendance.multiply(BigDecimal.valueOf(2));
+        BigDecimal sss = computeSssEmployeeSharePerCutoff(monthlyCompensationEquivalent);
+        BigDecimal philHealth = computePhilHealthEmployeeSharePerCutoff(monthlyCompensationEquivalent);
+        BigDecimal pagibig = computePagibigEmployeeSharePerCutoff(monthlyCompensationEquivalent);
+
+        addDeductionLine(deductions, item, DeductionType.SSS, sss);
+        addDeductionLine(deductions, item, DeductionType.PHILHEALTH, philHealth);
+        addDeductionLine(deductions, item, DeductionType.PAGIBIG, pagibig);
+
+        BigDecimal taxableCompensationPerCutoff = payAfterAttendance
+                .subtract(normalizeMoney(sss))
+                .subtract(normalizeMoney(philHealth))
+                .subtract(normalizeMoney(pagibig));
+        if (taxableCompensationPerCutoff.compareTo(BigDecimal.ZERO) <= 0) {
+            return deductions;
+        }
+
+        BigDecimal withholdingPerCutoff = computeWithholdingTaxPerCutoff(taxableCompensationPerCutoff);
+        if (withholdingPerCutoff.compareTo(BigDecimal.ZERO) > 0) {
+            addDeductionLine(deductions, item, resolveTaxBracketType(taxableCompensationPerCutoff), withholdingPerCutoff);
+        }
 
         return deductions;
     }
@@ -198,45 +207,100 @@ public class PayrollCalculator {
         deductions.add(line);
     }
 
-    private BigDecimal computeWithholdingTaxPerCutoff(BigDecimal yearlySalary) {
-        BigDecimal annualTax;
-        if (yearlySalary.compareTo(BigDecimal.valueOf(250_000)) <= 0) {
-            annualTax = BigDecimal.ZERO;
-        } else if (yearlySalary.compareTo(BigDecimal.valueOf(400_000)) <= 0) {
-            annualTax = yearlySalary.subtract(BigDecimal.valueOf(250_000)).multiply(BigDecimal.valueOf(0.15));
-        } else if (yearlySalary.compareTo(BigDecimal.valueOf(800_000)) <= 0) {
-            annualTax = BigDecimal.valueOf(22_500).add(
-                    yearlySalary.subtract(BigDecimal.valueOf(400_000)).multiply(BigDecimal.valueOf(0.20))
+    private BigDecimal computeWithholdingTaxPerCutoff(BigDecimal taxableCompensationPerCutoff) {
+        BigDecimal nti = normalizeMoney(taxableCompensationPerCutoff);
+        BigDecimal withholding;
+        if (nti.compareTo(BigDecimal.valueOf(10_417)) <= 0) {
+            withholding = BigDecimal.ZERO;
+        } else if (nti.compareTo(new BigDecimal("16666.99")) <= 0) {
+            withholding = nti.subtract(BigDecimal.valueOf(10_417)).multiply(BigDecimal.valueOf(0.15));
+        } else if (nti.compareTo(new BigDecimal("33332.99")) <= 0) {
+            withholding = BigDecimal.valueOf(937.50).add(
+                    nti.subtract(BigDecimal.valueOf(16_667)).multiply(BigDecimal.valueOf(0.20))
             );
-        } else if (yearlySalary.compareTo(BigDecimal.valueOf(2_000_000)) <= 0) {
-            annualTax = BigDecimal.valueOf(102_500).add(
-                    yearlySalary.subtract(BigDecimal.valueOf(800_000)).multiply(BigDecimal.valueOf(0.25))
+        } else if (nti.compareTo(new BigDecimal("83332.99")) <= 0) {
+            withholding = BigDecimal.valueOf(4_270.83).add(
+                    nti.subtract(BigDecimal.valueOf(33_333)).multiply(BigDecimal.valueOf(0.25))
             );
-        } else if (yearlySalary.compareTo(BigDecimal.valueOf(8_000_000)) <= 0) {
-            annualTax = BigDecimal.valueOf(402_500).add(
-                    yearlySalary.subtract(BigDecimal.valueOf(2_000_000)).multiply(BigDecimal.valueOf(0.30))
+        } else if (nti.compareTo(new BigDecimal("333332.99")) <= 0) {
+            withholding = BigDecimal.valueOf(16_770.83).add(
+                    nti.subtract(BigDecimal.valueOf(83_333)).multiply(BigDecimal.valueOf(0.30))
             );
         } else {
-            annualTax = BigDecimal.valueOf(2_202_500).add(
-                    yearlySalary.subtract(BigDecimal.valueOf(8_000_000)).multiply(BigDecimal.valueOf(0.35))
+            withholding = BigDecimal.valueOf(91_770.83).add(
+                    nti.subtract(BigDecimal.valueOf(333_333)).multiply(BigDecimal.valueOf(0.35))
             );
         }
-        return annualTax.divide(BigDecimal.valueOf(24), 2, RoundingMode.HALF_UP);
+        return normalizeMoney(withholding);
     }
 
-    private DeductionType resolveTaxBracketType(BigDecimal yearlySalary) {
-        if (yearlySalary.compareTo(BigDecimal.valueOf(250_000)) <= 0) {
+    private DeductionType resolveTaxBracketType(BigDecimal taxableCompensationPerCutoff) {
+        BigDecimal nti = normalizeMoney(taxableCompensationPerCutoff);
+        if (nti.compareTo(BigDecimal.valueOf(10_417)) <= 0) {
             return DeductionType.BRACKET_LEVEL_ONE;
-        } else if (yearlySalary.compareTo(BigDecimal.valueOf(400_000)) <= 0) {
+        } else if (nti.compareTo(new BigDecimal("16666.99")) <= 0) {
             return DeductionType.BRACKET_LEVEL_TWO;
-        } else if (yearlySalary.compareTo(BigDecimal.valueOf(800_000)) <= 0) {
+        } else if (nti.compareTo(new BigDecimal("33332.99")) <= 0) {
             return DeductionType.BRACKET_LEVEL_THREE;
-        } else if (yearlySalary.compareTo(BigDecimal.valueOf(2_000_000)) <= 0) {
+        } else if (nti.compareTo(new BigDecimal("83332.99")) <= 0) {
             return DeductionType.BRACKET_LEVEL_FOUR;
-        } else if (yearlySalary.compareTo(BigDecimal.valueOf(8_000_000)) <= 0) {
+        } else if (nti.compareTo(new BigDecimal("333332.99")) <= 0) {
             return DeductionType.BRACKET_LEVEL_FIVE;
         }
         return DeductionType.BRACKET_LEVEL_SIX;
+    }
+
+    private BigDecimal computeSssEmployeeSharePerCutoff(BigDecimal monthlyCompensation) {
+        BigDecimal msc = resolveSssMsc(monthlyCompensation);
+        if (msc.compareTo(BigDecimal.ZERO) <= 0) {
+            return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+        }
+        BigDecimal monthlyEmployeeShare = msc.multiply(BigDecimal.valueOf(0.05));
+        return monthlyEmployeeShare.divide(BigDecimal.valueOf(2), 2, RoundingMode.HALF_UP);
+    }
+
+    private BigDecimal resolveSssMsc(BigDecimal monthlyCompensation) {
+        BigDecimal monthly = normalizeMoney(monthlyCompensation);
+        if (monthly.compareTo(BigDecimal.ZERO) <= 0) {
+            return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+        }
+
+        BigDecimal minMsc = BigDecimal.valueOf(5_000);
+        BigDecimal maxMsc = BigDecimal.valueOf(35_000);
+        BigDecimal clamped = monthly.max(minMsc).min(maxMsc);
+        BigDecimal roundedUpMsc = clamped
+                .divide(BigDecimal.valueOf(500), 0, RoundingMode.CEILING)
+                .multiply(BigDecimal.valueOf(500));
+
+        return roundedUpMsc.min(maxMsc).setScale(2, RoundingMode.HALF_UP);
+    }
+
+    private BigDecimal computePhilHealthEmployeeSharePerCutoff(BigDecimal monthlyCompensation) {
+        BigDecimal monthly = normalizeMoney(monthlyCompensation);
+        if (monthly.compareTo(BigDecimal.ZERO) <= 0) {
+            return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+        }
+
+        BigDecimal adjustedMonthly = monthly
+                .max(BigDecimal.valueOf(10_000))
+                .min(BigDecimal.valueOf(100_000));
+        BigDecimal employeeMonthlyShare = adjustedMonthly.multiply(BigDecimal.valueOf(0.025));
+        return employeeMonthlyShare.divide(BigDecimal.valueOf(2), 2, RoundingMode.HALF_UP);
+    }
+
+    private BigDecimal computePagibigEmployeeSharePerCutoff(BigDecimal monthlyCompensation) {
+        BigDecimal monthly = normalizeMoney(monthlyCompensation);
+        if (monthly.compareTo(BigDecimal.ZERO) <= 0) {
+            return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+        }
+
+        BigDecimal mfs = monthly.min(BigDecimal.valueOf(10_000));
+        BigDecimal rate = monthly.compareTo(BigDecimal.valueOf(1_500)) <= 0
+                ? BigDecimal.valueOf(0.01)
+                : BigDecimal.valueOf(0.02);
+
+        BigDecimal monthlyShare = mfs.multiply(rate);
+        return monthlyShare.divide(BigDecimal.valueOf(2), 2, RoundingMode.HALF_UP);
     }
 
     private BigDecimal normalizeMoney(BigDecimal value) {
