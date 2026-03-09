@@ -95,41 +95,49 @@ public class PayrollCalculator {
     ) {
         List<DeductionsLine> deductions = new ArrayList<>();
         BigDecimal yearlySalary = normalizeMoney(emp.getYearlySalary());
-        if (yearlySalary.compareTo(BigDecimal.ZERO) <= 0) {
+        BigDecimal grossPay = item != null ? normalizeMoney(item.getGrossPay()) : BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+        if (yearlySalary.compareTo(BigDecimal.ZERO) <= 0 || grossPay.compareTo(BigDecimal.ZERO) <= 0) {
             return deductions;
         }
+
         BigDecimal absentAmount = normalizeMoney(absentDeductAmount);
         BigDecimal lateAmount = normalizeMoney(lateDeductAmount);
-        addDeductionLine(deductions, item, DeductionType.ABSENT_DEDUCTION, absentAmount);
-        addDeductionLine(deductions, item, DeductionType.LATE_PENALTY, lateAmount);
 
-        BigDecimal grossPay = item != null ? normalizeMoney(item.getGrossPay()) : BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
-        BigDecimal payAfterAttendance = grossPay.subtract(absentAmount).subtract(lateAmount);
-        if (payAfterAttendance.compareTo(BigDecimal.ZERO) <= 0) {
-            return deductions;
+        BigDecimal collectedAbsent = collectAmount(grossPay, absentAmount);
+        BigDecimal remainingAfterAbsent = grossPay.subtract(collectedAbsent);
+        BigDecimal collectedLate = collectAmount(remainingAfterAbsent, lateAmount);
+
+        addDeductionLine(deductions, item, DeductionType.ABSENT_DEDUCTION, collectedAbsent);
+        addDeductionLine(deductions, item, DeductionType.LATE_PENALTY, collectedLate);
+
+        BigDecimal payAfterAttendance = grossPay.subtract(collectedAbsent).subtract(collectedLate);
+        BigDecimal monthlyBasicPay = yearlySalary.divide(BigDecimal.valueOf(12), 2, RoundingMode.HALF_UP);
+        BigDecimal sssDue = computeSssEmployeeSharePerCutoff(monthlyBasicPay);
+        BigDecimal philHealthDue = computePhilHealthEmployeeSharePerCutoff(monthlyBasicPay);
+        BigDecimal pagibigDue = computePagibigEmployeeSharePerCutoff(monthlyBasicPay);
+
+        BigDecimal nti = payAfterAttendance.subtract(sssDue).subtract(philHealthDue).subtract(pagibigDue);
+        if (nti.compareTo(BigDecimal.ZERO) < 0) {
+            nti = BigDecimal.ZERO;
         }
+        nti = normalizeMoney(nti);
 
-        BigDecimal monthlyCompensationEquivalent = payAfterAttendance.multiply(BigDecimal.valueOf(2));
-        BigDecimal sss = computeSssEmployeeSharePerCutoff(monthlyCompensationEquivalent);
-        BigDecimal philHealth = computePhilHealthEmployeeSharePerCutoff(monthlyCompensationEquivalent);
-        BigDecimal pagibig = computePagibigEmployeeSharePerCutoff(monthlyCompensationEquivalent);
+        BigDecimal withholdingDue = computeWithholdingTaxPerCutoff(nti);
+        DeductionType withholdingType = resolveTaxBracketType(nti);
 
-        addDeductionLine(deductions, item, DeductionType.SSS, sss);
-        addDeductionLine(deductions, item, DeductionType.PHILHEALTH, philHealth);
-        addDeductionLine(deductions, item, DeductionType.PAGIBIG, pagibig);
+        BigDecimal collectiblePool = payAfterAttendance.max(BigDecimal.ZERO);
+        BigDecimal sssCollected = collectAmount(collectiblePool, sssDue);
+        collectiblePool = collectiblePool.subtract(sssCollected);
+        BigDecimal philHealthCollected = collectAmount(collectiblePool, philHealthDue);
+        collectiblePool = collectiblePool.subtract(philHealthCollected);
+        BigDecimal pagibigCollected = collectAmount(collectiblePool, pagibigDue);
+        collectiblePool = collectiblePool.subtract(pagibigCollected);
+        BigDecimal withholdingCollected = collectAmount(collectiblePool, withholdingDue);
 
-        BigDecimal taxableCompensationPerCutoff = payAfterAttendance
-                .subtract(normalizeMoney(sss))
-                .subtract(normalizeMoney(philHealth))
-                .subtract(normalizeMoney(pagibig));
-        if (taxableCompensationPerCutoff.compareTo(BigDecimal.ZERO) <= 0) {
-            return deductions;
-        }
-
-        BigDecimal withholdingPerCutoff = computeWithholdingTaxPerCutoff(taxableCompensationPerCutoff);
-        if (withholdingPerCutoff.compareTo(BigDecimal.ZERO) > 0) {
-            addDeductionLine(deductions, item, resolveTaxBracketType(taxableCompensationPerCutoff), withholdingPerCutoff);
-        }
+        addDeductionLine(deductions, item, DeductionType.SSS, sssCollected);
+        addDeductionLine(deductions, item, DeductionType.PHILHEALTH, philHealthCollected);
+        addDeductionLine(deductions, item, DeductionType.PAGIBIG, pagibigCollected);
+        addDeductionLine(deductions, item, withholdingType, withholdingCollected);
 
         return deductions;
     }
@@ -301,6 +309,12 @@ public class PayrollCalculator {
 
         BigDecimal monthlyShare = mfs.multiply(rate);
         return monthlyShare.divide(BigDecimal.valueOf(2), 2, RoundingMode.HALF_UP);
+    }
+
+    private BigDecimal collectAmount(BigDecimal pool, BigDecimal due) {
+        BigDecimal normalizedPool = normalizeMoney(pool).max(BigDecimal.ZERO);
+        BigDecimal normalizedDue = normalizeMoney(due).max(BigDecimal.ZERO);
+        return normalizedDue.min(normalizedPool).setScale(2, RoundingMode.HALF_UP);
     }
 
     private BigDecimal normalizeMoney(BigDecimal value) {

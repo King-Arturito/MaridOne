@@ -207,7 +207,7 @@ public class PayrollService {
                     BigDecimal totalDeductions = deductions.stream()
                             .map(DeductionsLine::getAmount)
                             .reduce(BigDecimal.ZERO, BigDecimal::add);
-                    item.setNetPay(semiMonthlySalary.subtract(totalDeductions).setScale(2, RoundingMode.HALF_UP));
+                    item.setNetPay(semiMonthlySalary.subtract(totalDeductions).max(BigDecimal.ZERO).setScale(2, RoundingMode.HALF_UP));
                     return item;
                 })
                 .toList();
@@ -274,14 +274,16 @@ public class PayrollService {
             List<AttendanceLog> attendanceLogs = attendanceMap.getOrDefault(emp.getEmployeeId(), List.of());
             List<LeaveRequest> leaves = leaveMap.getOrDefault(emp.getEmployeeId(), List.of());
 
+            BigDecimal monthlyBasicPay = emp.getYearlySalary().divide(BigDecimal.valueOf(12), 2, RoundingMode.HALF_UP);
             BigDecimal basicPayPerPeriod = emp.getYearlySalary().divide(BigDecimal.valueOf(24), 2, RoundingMode.HALF_UP);
+            BigDecimal dailyRate = monthlyBasicPay.divide(BigDecimal.valueOf(26), 2, RoundingMode.HALF_UP);
+            BigDecimal hourlyRate = dailyRate.divide(BigDecimal.valueOf(8), 6, RoundingMode.HALF_UP);
             Map<DayOfWeek, TemplateShiftSchedule> schedulesByDay = schedules.stream()
                     .collect(Collectors.toMap(
                             TemplateShiftSchedule::getDayOfWeek,
                             schedule -> schedule,
                             (first, ignored) -> first
                     ));
-            BigDecimal hourlyRate = resolveHourlyRateForCutoff(run, schedulesByDay, holidayDates, basicPayPerPeriod);
 
             BigDecimal absentDeductAmount = BigDecimal.ZERO;
             BigDecimal lateDeductAmount = BigDecimal.ZERO;
@@ -450,36 +452,6 @@ public class PayrollService {
 
             items.add(item);
         }
-    }
-
-    private BigDecimal resolveHourlyRateForCutoff(
-            PayrollRun run,
-            Map<DayOfWeek, TemplateShiftSchedule> schedulesByDay,
-            Set<LocalDate> holidayDates,
-            BigDecimal basicPayPerPeriod
-    ) {
-        BigDecimal scheduledHoursInCutoff = BigDecimal.ZERO;
-        LocalDate date = run.getPeriodStart();
-        while (!date.isAfter(run.getPeriodEnd())) {
-            if (!holidayDates.contains(date)) {
-                TemplateShiftSchedule schedule = schedulesByDay.get(date.getDayOfWeek());
-                if (schedule != null) {
-                    BigDecimal expectedHours = calculateExpectedShiftHours(schedule);
-                    if (expectedHours.compareTo(BigDecimal.ZERO) > 0) {
-                        scheduledHoursInCutoff = scheduledHoursInCutoff.add(expectedHours);
-                    }
-                }
-            }
-            date = date.plusDays(1);
-        }
-
-        BigDecimal minimumCutoffHours = BigDecimal.valueOf(104);
-        BigDecimal divisorHours = scheduledHoursInCutoff.max(minimumCutoffHours);
-        if (divisorHours.compareTo(BigDecimal.ZERO) <= 0) {
-            divisorHours = minimumCutoffHours;
-        }
-
-        return basicPayPerPeriod.divide(divisorHours, 6, RoundingMode.HALF_UP);
     }
 
     private BigDecimal calculateExpectedShiftHours(TemplateShiftSchedule schedule) {
