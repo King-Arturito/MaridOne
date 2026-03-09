@@ -125,19 +125,10 @@ public class PayrollCalculator {
         BigDecimal withholdingDue = computeWithholdingTaxPerCutoff(nti);
         DeductionType withholdingType = resolveTaxBracketType(nti);
 
-        BigDecimal collectiblePool = payAfterAttendance.max(BigDecimal.ZERO);
-        BigDecimal sssCollected = collectAmount(collectiblePool, sssDue);
-        collectiblePool = collectiblePool.subtract(sssCollected);
-        BigDecimal philHealthCollected = collectAmount(collectiblePool, philHealthDue);
-        collectiblePool = collectiblePool.subtract(philHealthCollected);
-        BigDecimal pagibigCollected = collectAmount(collectiblePool, pagibigDue);
-        collectiblePool = collectiblePool.subtract(pagibigCollected);
-        BigDecimal withholdingCollected = collectAmount(collectiblePool, withholdingDue);
-
-        addDeductionLine(deductions, item, DeductionType.SSS, sssCollected);
-        addDeductionLine(deductions, item, DeductionType.PHILHEALTH, philHealthCollected);
-        addDeductionLine(deductions, item, DeductionType.PAGIBIG, pagibigCollected);
-        addDeductionLine(deductions, item, withholdingType, withholdingCollected);
+        addDeductionLine(deductions, item, DeductionType.SSS, sssDue);
+        addDeductionLine(deductions, item, DeductionType.PHILHEALTH, philHealthDue);
+        addDeductionLine(deductions, item, DeductionType.PAGIBIG, pagibigDue);
+        addDeductionLine(deductions, item, withholdingType, withholdingDue);
 
         return deductions;
     }
@@ -275,12 +266,14 @@ public class PayrollCalculator {
 
         BigDecimal minMsc = BigDecimal.valueOf(5_000);
         BigDecimal maxMsc = BigDecimal.valueOf(35_000);
+
         BigDecimal clamped = monthly.max(minMsc).min(maxMsc);
-        BigDecimal roundedUpMsc = clamped
-                .divide(BigDecimal.valueOf(500), 0, RoundingMode.CEILING)
+
+        BigDecimal roundedMsc = clamped
+                .divide(BigDecimal.valueOf(500), 0, RoundingMode.HALF_UP)
                 .multiply(BigDecimal.valueOf(500));
 
-        return roundedUpMsc.min(maxMsc).setScale(2, RoundingMode.HALF_UP);
+        return roundedMsc.setScale(2, RoundingMode.HALF_UP);
     }
 
     private BigDecimal computePhilHealthEmployeeSharePerCutoff(BigDecimal monthlyCompensation) {

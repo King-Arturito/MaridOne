@@ -266,13 +266,27 @@ class PayrollServiceTest {
                 .filter(d -> d.getDeductionType() == DeductionType.ABSENT_DEDUCTION)
                 .findFirst()
                 .orElseThrow();
+        DeductionsLine sssLine = item.getDeductions().stream()
+                .filter(d -> d.getDeductionType() == DeductionType.SSS)
+                .findFirst()
+                .orElseThrow();
+        DeductionsLine philHealthLine = item.getDeductions().stream()
+                .filter(d -> d.getDeductionType() == DeductionType.PHILHEALTH)
+                .findFirst()
+                .orElseThrow();
+        DeductionsLine pagibigLine = item.getDeductions().stream()
+                .filter(d -> d.getDeductionType() == DeductionType.PAGIBIG)
+                .findFirst()
+                .orElseThrow();
 
         assertBigDecimalEquals("83333.33", absentLine.getAmount());
+        assertBigDecimalEquals("875.00", sssLine.getAmount());
+        assertBigDecimalEquals("1250.00", philHealthLine.getAmount());
+        assertBigDecimalEquals("100.00", pagibigLine.getAmount());
         Assertions.assertTrue(item.getDeductions().stream().noneMatch(d -> d.getDeductionType() == DeductionType.LATE_PENALTY));
         Assertions.assertTrue(item.getDeductions().stream().noneMatch(d -> d.getDeductionType() == DeductionType.BRACKET_LEVEL_FOUR));
-        Assertions.assertTrue(item.getDeductions().stream().noneMatch(d -> d.getDeductionType() == DeductionType.SSS));
         Assertions.assertTrue(absentLine.getAmount().compareTo(item.getGrossPay()) <= 0);
-        assertBigDecimalEquals("0.00", item.getNetPay());
+        assertBigDecimalEquals("-2225.00", item.getNetPay());
     }
 
     @Test
@@ -304,7 +318,7 @@ class PayrollServiceTest {
     }
 
     @Test
-    void processPayrollNonExempt_GhostEmployee_ShouldFloorNetPayToZeroAndSkipStatutoryWhenNoPool() {
+    void processPayrollNonExempt_GhostEmployee_ShouldKeepStatutoryLinesAndAllowNegativeNetPay() {
         Employee emp = buildNonExemptEmployee(1L, new BigDecimal("480000.00"));
         PayrollRun run = new PayrollRun();
         run.setPeriodStart(LocalDate.of(2026, 3, 1));
@@ -323,24 +337,36 @@ class PayrollServiceTest {
                 .filter(d -> d.getDeductionType() == DeductionType.ABSENT_DEDUCTION)
                 .findFirst()
                 .orElseThrow();
+        DeductionsLine sssLine = item.getDeductions().stream()
+                .filter(d -> d.getDeductionType() == DeductionType.SSS)
+                .findFirst()
+                .orElseThrow();
+        DeductionsLine philHealthLine = item.getDeductions().stream()
+                .filter(d -> d.getDeductionType() == DeductionType.PHILHEALTH)
+                .findFirst()
+                .orElseThrow();
+        DeductionsLine pagibigLine = item.getDeductions().stream()
+                .filter(d -> d.getDeductionType() == DeductionType.PAGIBIG)
+                .findFirst()
+                .orElseThrow();
 
         assertBigDecimalEquals("20000.00", item.getGrossPay());
         assertBigDecimalEquals("20000.00", absentLine.getAmount());
+        assertBigDecimalEquals("875.00", sssLine.getAmount());
+        assertBigDecimalEquals("500.00", philHealthLine.getAmount());
+        assertBigDecimalEquals("100.00", pagibigLine.getAmount());
         Assertions.assertTrue(item.getDeductions().stream().noneMatch(d -> d.getDeductionType() == DeductionType.LATE_PENALTY));
-        Assertions.assertTrue(item.getDeductions().stream().noneMatch(d -> d.getDeductionType() == DeductionType.SSS));
-        Assertions.assertTrue(item.getDeductions().stream().noneMatch(d -> d.getDeductionType() == DeductionType.PHILHEALTH));
-        Assertions.assertTrue(item.getDeductions().stream().noneMatch(d -> d.getDeductionType() == DeductionType.PAGIBIG));
         Assertions.assertTrue(item.getDeductions().stream().noneMatch(d -> d.getDeductionType() == DeductionType.BRACKET_LEVEL_ONE));
         Assertions.assertTrue(item.getDeductions().stream().noneMatch(d -> d.getDeductionType() == DeductionType.BRACKET_LEVEL_TWO));
         Assertions.assertTrue(item.getDeductions().stream().noneMatch(d -> d.getDeductionType() == DeductionType.BRACKET_LEVEL_THREE));
         Assertions.assertTrue(item.getDeductions().stream().noneMatch(d -> d.getDeductionType() == DeductionType.BRACKET_LEVEL_FOUR));
         Assertions.assertTrue(item.getDeductions().stream().noneMatch(d -> d.getDeductionType() == DeductionType.BRACKET_LEVEL_FIVE));
         Assertions.assertTrue(item.getDeductions().stream().noneMatch(d -> d.getDeductionType() == DeductionType.BRACKET_LEVEL_SIX));
-        assertBigDecimalEquals("0.00", item.getNetPay());
+        assertBigDecimalEquals("-1475.00", item.getNetPay());
     }
 
     @Test
-    void processPayrollNonExempt_AlmostGhost_ShouldDrainRemainingPoolWithPartialStatutoryCollection() {
+    void processPayrollNonExempt_AlmostGhost_ShouldKeepFullStatutoryLinesAndAllowNegativeNetPay() {
         Employee emp = buildNonExemptEmployee(1L, new BigDecimal("360000.00"));
         PayrollRun run = new PayrollRun();
         run.setPeriodStart(LocalDate.of(2026, 3, 1));
@@ -376,14 +402,14 @@ class PayrollServiceTest {
         assertBigDecimalEquals("13846.20", absentLine.getAmount());
         assertBigDecimalEquals("750.00", sssLine.getAmount());
         assertBigDecimalEquals("375.00", philHealthLine.getAmount());
-        assertBigDecimalEquals("28.80", pagibigLine.getAmount());
+        assertBigDecimalEquals("100.00", pagibigLine.getAmount());
         Assertions.assertTrue(item.getDeductions().stream().noneMatch(d -> d.getDeductionType() == DeductionType.BRACKET_LEVEL_ONE));
         Assertions.assertTrue(item.getDeductions().stream().noneMatch(d -> d.getDeductionType() == DeductionType.BRACKET_LEVEL_TWO));
         Assertions.assertTrue(item.getDeductions().stream().noneMatch(d -> d.getDeductionType() == DeductionType.BRACKET_LEVEL_THREE));
         Assertions.assertTrue(item.getDeductions().stream().noneMatch(d -> d.getDeductionType() == DeductionType.BRACKET_LEVEL_FOUR));
         Assertions.assertTrue(item.getDeductions().stream().noneMatch(d -> d.getDeductionType() == DeductionType.BRACKET_LEVEL_FIVE));
         Assertions.assertTrue(item.getDeductions().stream().noneMatch(d -> d.getDeductionType() == DeductionType.BRACKET_LEVEL_SIX));
-        assertBigDecimalEquals("0.00", item.getNetPay());
+        assertBigDecimalEquals("-71.20", item.getNetPay());
     }
 
     @Test

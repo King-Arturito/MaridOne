@@ -207,7 +207,7 @@ public class PayrollService {
                     BigDecimal totalDeductions = deductions.stream()
                             .map(DeductionsLine::getAmount)
                             .reduce(BigDecimal.ZERO, BigDecimal::add);
-                    item.setNetPay(semiMonthlySalary.subtract(totalDeductions).max(BigDecimal.ZERO).setScale(2, RoundingMode.HALF_UP));
+                    item.setNetPay(semiMonthlySalary.subtract(totalDeductions).setScale(2, RoundingMode.HALF_UP));
                     return item;
                 })
                 .toList();
@@ -447,7 +447,7 @@ public class PayrollService {
                             .filter(amount -> amount != null)
                             .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-            BigDecimal netPay = grossPay.subtract(deductionsTotal).max(BigDecimal.ZERO).setScale(2, RoundingMode.HALF_UP);
+            BigDecimal netPay = grossPay.subtract(deductionsTotal).setScale(2, RoundingMode.HALF_UP);
             item.setNetPay(netPay);
 
             items.add(item);

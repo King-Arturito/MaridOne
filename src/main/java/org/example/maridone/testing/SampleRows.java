@@ -252,8 +252,9 @@ public class SampleRows {
             TemplateShiftSchedule templateShiftSchedule = new TemplateShiftSchedule();
             templateShiftSchedule.setEmployee(emp);
             templateShiftSchedule.setDayOfWeek(DayOfWeek.of(k));
-            templateShiftSchedule.setStartTime(LocalTime.now());
-            templateShiftSchedule.setEndTime(LocalTime.now().plusHours(8));
+            // 9-hour window = 8 paid hours + 1 unpaid lunch
+            templateShiftSchedule.setStartTime(LocalTime.of(8, 0));
+            templateShiftSchedule.setEndTime(LocalTime.of(17, 0));
             templateShiftSchedules.add(templateShiftSchedule);
         }
 
