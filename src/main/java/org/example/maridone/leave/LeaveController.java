@@ -74,8 +74,11 @@ public class LeaveController {
 
 
     //create leave request
-    @PostMapping("/create")
-    public ResponseEntity<LeaveRequest> createLeaveRequest(@RequestBody LeaveRequestDto payload, Long empId) {
+    @PostMapping("/create/{empId}")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<LeaveRequest> createLeaveRequest(
+            @Valid @RequestBody LeaveRequestDto payload,
+            @PathVariable Long empId) {
         LeaveRequest request = leaveService.createLeaveRequest(payload, empId);
         URI location = ServletUriComponentsBuilder
                 .fromCurrentRequest()

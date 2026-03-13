@@ -32,12 +32,12 @@ public class PayrollItem {
     @Column(name = "item_id", nullable = false)
     private Long itemId;
 
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "emp_id", nullable = false)
     @JsonIgnore
     private Employee employee;
 
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "pay_id", nullable = false)
     @JsonIgnore
     private PayrollRun payrollRun;

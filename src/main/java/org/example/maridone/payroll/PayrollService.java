@@ -249,7 +249,7 @@ public class PayrollService {
         List<TemplateShiftSchedule> allSchedules = templateShiftRepository.findByEmployee_EmployeeIdIn(employeeIds);
 
         List<LeaveRequest> allLeaves = leaveRequestRepository.findApprovedLeavesForPeriod(
-            employeeIds, run.getPeriodStart(), run.getPeriodEnd()
+            employeeIds, run.getPeriodStart().atStartOfDay(), run.getPeriodEnd().plusDays(1).atStartOfDay()
         );
 
         HolidayLookup holidayLookup = holidayService.getHolidayLookup(run.getPeriodStart(), run.getPeriodEnd());
@@ -300,7 +300,7 @@ public class PayrollService {
                 boolean hasCompleteAttendancePair = dayInLog != null && dayOutLog != null;
 
                 LeaveRequest todaysLeave = leaves.stream()
-                        .filter(l -> l.getLeaveDate().equals(loopDate))
+                        .filter(l -> l.getStartDateTime().toLocalDate().equals(loopDate))
                         .findFirst().orElse(null);
 
                 List<OvertimeRequest> todaysOT = requests.stream()
@@ -339,7 +339,7 @@ public class PayrollService {
                     BigDecimal leaveHours = BigDecimal.ZERO;
 
                     if (todaysLeave != null) {
-                        leaveHours = payrollCalculator.calculateHours(todaysLeave.getStartTime(), todaysLeave.getEndTime());
+                        leaveHours = payrollCalculator.calculateHours(todaysLeave.getStartDateTime().toLocalTime(), todaysLeave.getEndDateTime().toLocalTime());
                         if (leaveHours.compareTo(expectedHours) > 0) {
                             leaveHours = expectedHours;
                         }

@@ -1,6 +1,6 @@
 package org.example.maridone.leave.request;
 
-import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -17,8 +17,9 @@ public interface LeaveRequestRepository extends JpaRepository<LeaveRequest,Long>
         join fetch lr.employee emp
         where emp.employmentStatus != 'TERMINATED'
         and lr.requestStatus = 'APPROVED'
-        and lr.leaveDate = :leaveDate""")
-    List<LeaveRequest> findApprovedLeavesForDay(@Param("leaveDate") LocalDate leaveDate);
+        and lr.startDateTime < :endOfDay
+        and lr.endDateTime > :startOfDay""")
+    List<LeaveRequest> findApprovedLeavesForDay(@Param("startOfDay") LocalDateTime startOfDay, @Param("endOfDay")  LocalDateTime endOfDay);
 
     @Query("""
         SELECT lr from LeaveRequest lr
@@ -26,10 +27,11 @@ public interface LeaveRequestRepository extends JpaRepository<LeaveRequest,Long>
         where emp.employmentStatus != 'TERMINATED'
         and lr.requestStatus = 'APPROVED'
         and emp.employeeId IN :employeeIds
-        and lr.leaveDate BETWEEN :startDate AND :endDate""")
+        and lr.startDateTime < :endOfDay
+        and lr.endDateTime > :startOfDay""")
     List<LeaveRequest> findApprovedLeavesForPeriod(
             @Param("employeeIds") List<Long> employeeIds, 
-            @Param("startDate") LocalDate startDate, 
-            @Param("endDate") LocalDate endDate
+            @Param("startOfDay") LocalDateTime startOfDay,
+            @Param("endOfDay") LocalDateTime endOfDay
     );
 }
