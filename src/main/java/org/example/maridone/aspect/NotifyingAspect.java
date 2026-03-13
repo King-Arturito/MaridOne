@@ -7,9 +7,11 @@ import org.aspectj.lang.annotation.Around;
 import org.aspectj.lang.annotation.Aspect;
 import org.aspectj.lang.annotation.Pointcut;
 import org.aspectj.lang.reflect.MethodSignature;
+import org.example.maridone.annotation.BulkNotify;
 import org.example.maridone.annotation.Notify;
 import org.example.maridone.core.employee.Employee;
 import org.example.maridone.core.employee.EmployeeRepository;
+import org.example.maridone.enums.EmploymentStatus;
 import org.example.maridone.exception.notfound.EmployeeNotFoundException;
 import org.example.maridone.notification.Notification;
 import org.example.maridone.notification.NotificationRepository;
@@ -24,6 +26,8 @@ import org.springframework.stereotype.Component;
 import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -43,6 +47,30 @@ public class NotifyingAspect {
 
     @Pointcut("@annotation(org.example.maridone.annotation.Notify)")
     public void notifyUser() {}
+
+    @Pointcut("@annotation(org.example.maridone.annotation.BulkNotify)")
+    public void notifyRoleBulk() {}
+
+    @AfterReturning("notifyRoleBulk()")
+    public void addNotifications(JoinPoint joinPoint) {
+        List<Notification> notifications = new ArrayList<>();
+        MethodSignature signature = (MethodSignature) joinPoint.getSignature();
+        Method method = signature.getMethod();
+        BulkNotify notify = method.getAnnotation(BulkNotify.class);
+        List<Long> employeeIds = employeeRepository.findEmployeeIdsByPosition(notify.targetRole(), EmploymentStatus.TERMINATED);
+
+        for (Long employeeId : employeeIds) {
+            Employee emp = employeeRepository.getReferenceById(employeeId);
+            Notification notification = new Notification();
+            notification.setCreatedAt(Instant.now());
+            notification.setReadStatus(false);
+            notification.setImportance(notify.importance());
+            notification.setMessage(notify.message());
+            notification.setEmployee(emp);
+            notifications.add(notification);
+        }
+        notificationRepository.saveAll(notifications);
+    }
 
     @Around("notifyUser()")
     public Object addNotification(ProceedingJoinPoint joinPoint) throws Throwable {
@@ -75,6 +103,12 @@ public class NotifyingAspect {
         logger.info("Notified: {} | Importance: {} | Target: {}", message, importance, targetEmployee);
         return result;
     }
+
+
+
+
+
+
 
     private Employee resolveEmployee(Object target) {
         if (target instanceof Number id) {
@@ -115,7 +149,7 @@ public class NotifyingAspect {
     private String resolveMessage(String template, EvaluationContext context) {
         Pattern pattern = Pattern.compile("#\\{([^}]+)}");
         Matcher matcher = pattern.matcher(template);
-        StringBuffer result = new StringBuffer();
+        StringBuilder result = new StringBuilder();
 
         while (matcher.find()) {
             String expr = matcher.group(1);
