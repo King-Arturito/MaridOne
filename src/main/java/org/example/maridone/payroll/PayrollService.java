@@ -1,9 +1,8 @@
 package org.example.maridone.payroll;
 
-import jakarta.validation.Valid;
-import org.example.maridone.annotation.ExecutionTime;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.DayOfWeek;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -13,6 +12,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import org.example.maridone.annotation.ExecutionTime;
 import org.example.maridone.common.CommonSpecs;
 import org.example.maridone.config.DefaultProperties;
 import org.example.maridone.core.employee.Employee;
@@ -52,6 +52,8 @@ import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import jakarta.validation.Valid;
 
 
 @Service
@@ -224,10 +226,6 @@ public class PayrollService {
         Instant periodStart = run.getPeriodStart()
                 .atStartOfDay(defaultProperties.getTimeZone())
                 .toInstant();
-        Instant periodEnd = run.getPeriodEnd()
-                .atTime(LocalTime.MAX)
-                .atZone(defaultProperties.getTimeZone())
-                .toInstant();
 
         Sort sorting = Sort.by(Sort.Direction.ASC, "timestamp");
         List<AttendanceLog> allLogs = attendanceLogRepository
@@ -277,9 +275,15 @@ public class PayrollService {
             List<LeaveRequest> leaves = leaveMap.getOrDefault(emp.getEmployeeId(), List.of());
 
             BigDecimal monthlyBasicPay = emp.getYearlySalary().divide(BigDecimal.valueOf(12), 2, RoundingMode.HALF_UP);
-            BigDecimal basicPayPerPeriod = monthlyBasicPay.divide(BigDecimal.valueOf(2), 2, RoundingMode.HALF_UP);
+            BigDecimal basicPayPerPeriod = emp.getYearlySalary().divide(BigDecimal.valueOf(24), 2, RoundingMode.HALF_UP);
             BigDecimal dailyRate = monthlyBasicPay.divide(BigDecimal.valueOf(26), 2, RoundingMode.HALF_UP);
-            BigDecimal hourlyRate = dailyRate.divide(BigDecimal.valueOf(8), 2, RoundingMode.HALF_UP);
+            BigDecimal hourlyRate = dailyRate.divide(BigDecimal.valueOf(8), 6, RoundingMode.HALF_UP);
+            Map<DayOfWeek, TemplateShiftSchedule> schedulesByDay = schedules.stream()
+                    .collect(Collectors.toMap(
+                            TemplateShiftSchedule::getDayOfWeek,
+                            schedule -> schedule,
+                            (first, ignored) -> first
+                    ));
 
             BigDecimal absentDeductAmount = BigDecimal.ZERO;
             BigDecimal lateDeductAmount = BigDecimal.ZERO;
@@ -289,9 +293,7 @@ public class PayrollService {
             while (!currentDate.isAfter(run.getPeriodEnd())) {
                 LocalDate loopDate = currentDate;
 
-                TemplateShiftSchedule todaysSchedule = schedules.stream()
-                        .filter(s -> s.getDayOfWeek() == loopDate.getDayOfWeek())
-                        .findFirst().orElse(null);
+                TemplateShiftSchedule todaysSchedule = schedulesByDay.get(loopDate.getDayOfWeek());
 
                 AttendanceLog dayInLog = findInLogForDate(attendanceLogs, loopDate);
                 AttendanceLog dayOutLog = findOutLogAfterIn(attendanceLogs, dayInLog, loopDate);
@@ -333,9 +335,7 @@ public class PayrollService {
                         }
                     }
                 } else {
-                    BigDecimal expectedHours = payrollCalculator.deductUnpaidLunchHour(
-                            payrollCalculator.calculateHours(todaysSchedule.getStartTime(), todaysSchedule.getEndTime())
-                    );
+                    BigDecimal expectedHours = calculateExpectedShiftHours(todaysSchedule);
                     BigDecimal leaveHours = BigDecimal.ZERO;
 
                     if (todaysLeave != null) {
@@ -348,11 +348,7 @@ public class PayrollService {
                     BigDecimal expectedRemainingHours = expectedHours.subtract(leaveHours);
                     if (expectedRemainingHours.compareTo(BigDecimal.ZERO) <= 0) {
                     } else if (!hasCompleteAttendancePair) {
-                        if (todaysLeave == null) {
-                            absentDeductAmount = absentDeductAmount.add(dailyRate);
-                        } else {
-                            lateDeductAmount = lateDeductAmount.add(expectedRemainingHours.multiply(hourlyRate));
-                        }
+                        absentDeductAmount = absentDeductAmount.add(expectedRemainingHours.multiply(hourlyRate));
                     } else {
                         LocalTime logIn = dayInLog.getTimestamp().atZone(defaultProperties.getTimeZone()).toLocalTime();
                         LocalTime logOut = dayOutLog.getTimestamp().atZone(defaultProperties.getTimeZone()).toLocalTime();
@@ -398,6 +394,18 @@ public class PayrollService {
                 currentDate = currentDate.plusDays(1);
             }
 
+            BigDecimal attendanceDeductionTotal = absentDeductAmount.add(lateDeductAmount);
+            if (attendanceDeductionTotal.compareTo(basicPayPerPeriod) > 0) {
+                BigDecimal overflow = attendanceDeductionTotal.subtract(basicPayPerPeriod);
+                if (lateDeductAmount.compareTo(overflow) >= 0) {
+                    lateDeductAmount = lateDeductAmount.subtract(overflow);
+                } else {
+                    overflow = overflow.subtract(lateDeductAmount);
+                    lateDeductAmount = BigDecimal.ZERO;
+                    absentDeductAmount = absentDeductAmount.subtract(overflow).max(BigDecimal.ZERO);
+                }
+            }
+
             PayrollItem item = new PayrollItem();
             item.setEmployee(emp);
             item.setPayrollRun(run);
@@ -409,6 +417,16 @@ public class PayrollService {
             }
             item.setEarnings(calculatedEarnings);
             item.getEarnings().forEach(line -> line.setPayrollItem(item));
+
+            BigDecimal earningsTotal = item.getEarnings() == null
+                    ? BigDecimal.ZERO
+                    : item.getEarnings().stream()
+                            .map(EarningsLine::getAmount)
+                            .filter(amount -> amount != null)
+                            .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+            BigDecimal grossPay = basicPayPerPeriod.add(earningsTotal).setScale(2, RoundingMode.HALF_UP);
+            item.setGrossPay(grossPay);
 
             List<DeductionsLine> calculatedDeductions = payrollCalculator.setDeductions(
                     emp,
@@ -422,13 +440,6 @@ public class PayrollService {
             item.setDeductions(calculatedDeductions);
             item.getDeductions().forEach(line -> line.setPayrollItem(item));
 
-            BigDecimal earningsTotal = item.getEarnings() == null
-                    ? BigDecimal.ZERO
-                    : item.getEarnings().stream()
-                            .map(EarningsLine::getAmount)
-                            .filter(amount -> amount != null)
-                            .reduce(BigDecimal.ZERO, BigDecimal::add);
-
             BigDecimal deductionsTotal = item.getDeductions() == null
                     ? BigDecimal.ZERO
                     : item.getDeductions().stream()
@@ -436,15 +447,19 @@ public class PayrollService {
                             .filter(amount -> amount != null)
                             .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-            BigDecimal grossPay = basicPayPerPeriod.add(earningsTotal).setScale(2, RoundingMode.HALF_UP);
             BigDecimal netPay = grossPay.subtract(deductionsTotal).setScale(2, RoundingMode.HALF_UP);
-
-            item.setGrossPay(grossPay);
             item.setNetPay(netPay);
 
             items.add(item);
         }
     }
+
+    private BigDecimal calculateExpectedShiftHours(TemplateShiftSchedule schedule) {
+        return payrollCalculator.deductUnpaidLunchHour(
+                payrollCalculator.calculateHours(schedule.getStartTime(), schedule.getEndTime())
+        );
+    }
+
     private AttendanceLog findInLogForDate(List<AttendanceLog> attendanceLogs, LocalDate workDate) {
         return attendanceLogs.stream()
                 .filter(this::isInLog)

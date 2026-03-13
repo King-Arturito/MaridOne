@@ -1,20 +1,39 @@
 package org.example.maridone.testing;
 
+import java.math.BigDecimal;
+import java.time.DayOfWeek;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.LocalTime;
+import java.time.ZoneOffset;
+import java.time.ZonedDateTime;
+import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
+import java.util.List;
+
 import org.example.maridone.core.bank.BankAccount;
 import org.example.maridone.core.bank.BankAccountRepository;
 import org.example.maridone.core.employee.Employee;
 import org.example.maridone.core.employee.EmployeeRepository;
 import org.example.maridone.core.user.UserAccount;
 import org.example.maridone.embeddable.Address;
-import org.example.maridone.enums.*;
+import org.example.maridone.enums.AccountStatus;
+import org.example.maridone.enums.DeductionType;
+import org.example.maridone.enums.EmploymentStatus;
+import org.example.maridone.enums.ExemptionStatus;
+import org.example.maridone.enums.LeaveType;
+import org.example.maridone.enums.PayrollStatus;
+import org.example.maridone.enums.Position;
+import org.example.maridone.enums.RunType;
+import org.example.maridone.enums.Status;
 import org.example.maridone.leave.balance.LeaveBalance;
 import org.example.maridone.leave.balance.LeaveBalanceRepository;
 import org.example.maridone.leave.request.LeaveRequest;
 import org.example.maridone.leave.request.LeaveRequestRepository;
 import org.example.maridone.notification.Notification;
 import org.example.maridone.notification.NotificationRepository;
-import org.example.maridone.payroll.item.PayrollItem;
 import org.example.maridone.payroll.dispute.DisputeRequest;
+import org.example.maridone.payroll.item.PayrollItem;
 import org.example.maridone.payroll.item.component.DeductionsLine;
 import org.example.maridone.payroll.item.component.EarningsLine;
 import org.example.maridone.payroll.run.PayrollItemRepository;
@@ -30,11 +49,6 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 
 import jakarta.annotation.PostConstruct;
-import java.math.BigDecimal;
-import java.time.*;
-import java.time.temporal.ChronoUnit;
-import java.util.ArrayList;
-import java.util.List;
 
 @Component
 @Profile("dev")
@@ -252,8 +266,9 @@ public class SampleRows {
             TemplateShiftSchedule templateShiftSchedule = new TemplateShiftSchedule();
             templateShiftSchedule.setEmployee(emp);
             templateShiftSchedule.setDayOfWeek(DayOfWeek.of(k));
-            templateShiftSchedule.setStartTime(LocalTime.now());
-            templateShiftSchedule.setEndTime(LocalTime.now().plusHours(8));
+            // Changed to a 9-hour attendance window (8:00-17:00) since 1 unpaid lunch hour is included in attendance.
+            templateShiftSchedule.setStartTime(LocalTime.of(8, 0));
+            templateShiftSchedule.setEndTime(LocalTime.of(17, 0));
             templateShiftSchedules.add(templateShiftSchedule);
         }
 
