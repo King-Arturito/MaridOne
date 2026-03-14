@@ -19,6 +19,7 @@ import org.example.maridone.core.user.UserAccount;
 import org.example.maridone.embeddable.Address;
 import org.example.maridone.enums.AccountStatus;
 import org.example.maridone.enums.DeductionType;
+import org.example.maridone.enums.EarningsType;
 import org.example.maridone.enums.EmploymentStatus;
 import org.example.maridone.enums.ExemptionStatus;
 import org.example.maridone.enums.LeaveType;
@@ -34,6 +35,8 @@ import org.example.maridone.log.AttendanceLogRepository;
 import org.example.maridone.log.attendance.AttendanceLog;
 import org.example.maridone.notification.Notification;
 import org.example.maridone.notification.NotificationRepository;
+import org.example.maridone.overtime.OvertimeRequest;
+import org.example.maridone.overtime.OvertimeRequestRepository;
 import org.example.maridone.payroll.dispute.DisputeRequest;
 import org.example.maridone.payroll.item.PayrollItem;
 import org.example.maridone.payroll.item.component.DeductionsLine;
@@ -89,6 +92,9 @@ public class SampleRows {
     private AttendanceLogRepository attendanceLogRepository;
 
     @Autowired
+    private OvertimeRequestRepository overtimeRequestRepository;
+
+    @Autowired
     private PayrollItemRepository payrollItemRepository;
 
     @Autowired
@@ -132,6 +138,7 @@ public class SampleRows {
             createAndSaveLeaveBalances(emp, i);
             createAndSaveShiftSchedules(emp, i);
             createAndSaveAttendanceLogs(emp, i);
+            createAndSaveOvertimeRequests(emp, i);
 
             // 3. Create payroll item (will be saved via payrollRun cascade)
             PayrollItem item = createPayrollItem(emp, i, payrollRun);
@@ -300,6 +307,25 @@ public class SampleRows {
         }
     }
 
+    private void createAndSaveOvertimeRequests(Employee emp, int i) {
+        List<OvertimeRequest> overtimeRequests = new ArrayList<>();
+
+        if (i == 10) {
+            // Runtime-visible approved overtime for the October non-exempt case.
+            overtimeRequests.add(createApprovedOvertimeRequest(
+                    emp,
+                    LocalDate.of(2026, 10, 22),
+                    LocalTime.of(18, 0),
+                    LocalTime.of(20, 0),
+                    "Seeded October OT for payroll runtime verification"
+            ));
+        }
+
+        if (!overtimeRequests.isEmpty()) {
+            overtimeRequestRepository.saveAll(overtimeRequests);
+        }
+    }
+
     private void seedNonExemptRuntimeAttendance(List<AttendanceLog> attendanceLogs, Employee emp) {
         // 15th payout: Jan 26-Feb 10, 2026. No holidays in the current PH cache, useful for >13-day coverage.
         addAttendanceRange(
@@ -411,6 +437,28 @@ public class SampleRows {
         log.setTimestamp(workDate.atTime(time).atZone(SEED_TIME_ZONE).toInstant());
         log.setDirection(direction);
         return log;
+    }
+
+    private OvertimeRequest createApprovedOvertimeRequest(
+            Employee emp,
+            LocalDate workDate,
+            LocalTime startTime,
+            LocalTime endTime,
+            String reason
+    ) {
+        OvertimeRequest request = new OvertimeRequest();
+        request.setEmployee(emp);
+        request.setRequestStatus(Status.APPROVED);
+        request.setRequestAt(workDate.minusDays(1).atTime(9, 0).atZone(SEED_TIME_ZONE).toInstant());
+        request.setWorkDate(workDate);
+        request.setStartTime(workDate.atTime(startTime));
+        request.setEndTime(workDate.atTime(endTime));
+        request.setOvertimeType(EarningsType.OVERTIME);
+        request.setReason(reason);
+        request.setApprover("seed-admin");
+        request.setApprovedAt(workDate.minusDays(1).atTime(10, 0).atZone(SEED_TIME_ZONE).toInstant());
+        request.setApproveReason("Seeded approved overtime");
+        return request;
     }
 
     private PayrollItem createPayrollItem(Employee emp, int i, PayrollRun payrollRun) {
