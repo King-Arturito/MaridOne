@@ -355,6 +355,34 @@ class PayrollServiceTest {
     }
 
     @Test
+    void processPayrollNonExempt_TwentyMinuteLate_ShouldRoundChargeableMinutesToFive() {
+        LocalDate workDate = LocalDate.of(2026, 3, 2);
+        Employee emp = buildNonExemptEmployee(1L, new BigDecimal("624000.00"));
+        PayrollRun run = buildSingleDayRun(workDate);
+        TemplateShiftSchedule schedule = buildSchedule(emp, workDate, LocalTime.of(8, 0), LocalTime.of(17, 0));
+        List<AttendanceLog> logs = List.of(
+                buildAttendance(1L, workDate, LocalTime.of(8, 20), "IN"),
+                buildAttendance(1L, workDate, LocalTime.of(17, 0), "OUT")
+        );
+
+        stubCommonDependencies(logs, schedule, HolidayLookup.empty(), List.of(), List.of());
+
+        List<PayrollItem> items = new ArrayList<>();
+        payrollService.processPayrollNonExempt(run, items, List.of(emp));
+
+        Assertions.assertEquals(1, items.size());
+        PayrollItem item = items.get(0);
+
+        DeductionsLine lateLine = item.getDeductions().stream()
+                .filter(d -> d.getDeductionType() == DeductionType.LATE_PENALTY)
+                .findFirst()
+                .orElseThrow();
+        assertBigDecimalEquals("20.83", lateLine.getAmount());
+        assertBigDecimalEquals("26000.00", item.getGrossPay());
+        assertBigDecimalEquals("21879.24", item.getNetPay());
+    }
+
+    @Test
     void processPayrollNonExempt_GhostEmployee_ShouldKeepStatutoryLinesAndAllowNegativeNetPay() {
         Employee emp = buildNonExemptEmployee(1L, new BigDecimal("480000.00"));
         PayrollRun run = new PayrollRun();
@@ -608,9 +636,9 @@ class PayrollServiceTest {
                 .findFirst()
                 .orElseThrow();
 
-        assertBigDecimalEquals("1993.61", absentLine.getAmount());
+        assertBigDecimalEquals("2000.00", absentLine.getAmount());
         assertBigDecimalEquals("26000.00", item.getGrossPay());
-        assertBigDecimalEquals("20301.01", item.getNetPay());
+        assertBigDecimalEquals("20295.90", item.getNetPay());
     }
 
     @Test

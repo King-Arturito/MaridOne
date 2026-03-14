@@ -43,9 +43,8 @@ public class PayrollCalculator {
         List<EarningsLine> earnings =  new ArrayList<>();
         BigDecimal grossPay = normalizeMoney(item.getGrossPay());
         LocalDate earningsDate = resolveEarningsDate(item);
-        if (emp.getExemptionStatus().equals(ExemptionStatus.EXEMPT)) {
-            earnings.add(createBaseEarningsLine(item, grossPay, earningsDate));
-        } else if (emp.getExemptionStatus().equals(ExemptionStatus.NON_EXEMPT)) {
+        if (emp.getExemptionStatus().equals(ExemptionStatus.EXEMPT)
+                || emp.getExemptionStatus().equals(ExemptionStatus.NON_EXEMPT)) {
             earnings.add(createBaseEarningsLine(item, grossPay, earningsDate));
         }
         return earnings;
@@ -109,7 +108,7 @@ public class PayrollCalculator {
         addDeductionLine(deductions, item, DeductionType.LATE_PENALTY, collectedLate);
 
         BigDecimal payAfterAttendance = grossPay.subtract(collectedAbsent).subtract(collectedLate);
-        BigDecimal monthlyBasicPay = yearlySalary.divide(BigDecimal.valueOf(12), 2, RoundingMode.HALF_UP);
+        BigDecimal monthlyBasicPay = payrollProperties.computeMonthlyBasicPay(yearlySalary);
         BigDecimal sssDue = payrollProperties.computeSssEmployeeSharePerCutoff(monthlyBasicPay);
         BigDecimal philHealthDue = payrollProperties.computePhilHealthEmployeeSharePerCutoff(monthlyBasicPay);
         BigDecimal pagibigDue = payrollProperties.computePagibigEmployeeSharePerCutoff(monthlyBasicPay);

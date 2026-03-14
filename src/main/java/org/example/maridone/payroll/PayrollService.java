@@ -227,7 +227,7 @@ public class PayrollService {
         return employees.stream()
                 .map(emp -> {
                     PayrollItem item = new PayrollItem();
-                    BigDecimal semiMonthlySalary = emp.getYearlySalary().divide(BigDecimal.valueOf(24), 2, RoundingMode.HALF_UP);
+                    BigDecimal semiMonthlySalary = payrollProperties.computeSemiMonthlyBasicPay(emp.getYearlySalary());
                     BigDecimal dailyAbsenceRate = payrollProperties.computeExemptDailyAbsenceRate(emp.getYearlySalary());
 
                     List<AttendanceLog> attendanceLogs = attendanceMap.getOrDefault(emp.getEmployeeId(), List.of());
@@ -331,10 +331,8 @@ public class PayrollService {
             List<AttendanceLog> attendanceLogs = attendanceMap.getOrDefault(emp.getEmployeeId(), List.of());
             List<LeaveRequest> leaves = leaveMap.getOrDefault(emp.getEmployeeId(), List.of());
 
-            BigDecimal monthlyBasicPay = emp.getYearlySalary().divide(BigDecimal.valueOf(12), 2, RoundingMode.HALF_UP);
-            BigDecimal basicPayPerPeriod = emp.getYearlySalary().divide(BigDecimal.valueOf(24), 2, RoundingMode.HALF_UP);
-            BigDecimal dailyRate = monthlyBasicPay.divide(BigDecimal.valueOf(26), 2, RoundingMode.HALF_UP);
-            BigDecimal hourlyRate = dailyRate.divide(BigDecimal.valueOf(8), 6, RoundingMode.HALF_UP);
+            BigDecimal basicPayPerPeriod = payrollProperties.computeSemiMonthlyBasicPay(emp.getYearlySalary());
+            BigDecimal hourlyRate = payrollProperties.computeHourlyRate(emp.getYearlySalary());
             Map<DayOfWeek, TemplateShiftSchedule> schedulesByDay = schedules.stream()
                     .collect(Collectors.toMap(
                             TemplateShiftSchedule::getDayOfWeek,
@@ -670,19 +668,20 @@ public class PayrollService {
         }
 
         BigDecimal missingMinutes = missingHours.multiply(BigDecimal.valueOf(60));
+        BigDecimal roundedMissingMinutes = missingMinutes.setScale(0, RoundingMode.HALF_UP);
         long lateMinutes = calculateLateMinutes(schedule, inLog, leave);
         long graceMinutes = Math.max(payrollProperties.getGracePeriod().toMinutes(), 0L);
         long coveredMinutes = Math.min(
-                missingMinutes.setScale(0, RoundingMode.HALF_UP).longValue(),
+                roundedMissingMinutes.longValue(),
                 Math.min(lateMinutes, graceMinutes)
         );
 
-        BigDecimal chargeableMinutes = missingMinutes.subtract(BigDecimal.valueOf(coveredMinutes));
+        BigDecimal chargeableMinutes = roundedMissingMinutes.subtract(BigDecimal.valueOf(coveredMinutes));
         if (chargeableMinutes.compareTo(BigDecimal.ZERO) <= 0) {
             return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
         }
 
-        return chargeableMinutes.divide(BigDecimal.valueOf(60), 2, RoundingMode.HALF_UP);
+        return chargeableMinutes.divide(BigDecimal.valueOf(60), 6, RoundingMode.HALF_UP);
     }
 
     private long calculateLateMinutes(TemplateShiftSchedule schedule, AttendanceLog inLog, LeaveRequest leave) {

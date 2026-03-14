@@ -30,6 +30,8 @@ import org.example.maridone.leave.balance.LeaveBalance;
 import org.example.maridone.leave.balance.LeaveBalanceRepository;
 import org.example.maridone.leave.request.LeaveRequest;
 import org.example.maridone.leave.request.LeaveRequestRepository;
+import org.example.maridone.log.AttendanceLogRepository;
+import org.example.maridone.log.attendance.AttendanceLog;
 import org.example.maridone.notification.Notification;
 import org.example.maridone.notification.NotificationRepository;
 import org.example.maridone.payroll.dispute.DisputeRequest;
@@ -49,10 +51,15 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 
 import jakarta.annotation.PostConstruct;
+import java.time.ZoneId;
+import java.util.Map;
+import java.util.Set;
 
 @Component
 @Profile("dev")
 public class SampleRows {
+
+    private static final ZoneId SEED_TIME_ZONE = ZoneId.of("Asia/Manila");
 
     @Autowired
     private EmployeeRepository employeeRepository;
@@ -77,6 +84,9 @@ public class SampleRows {
 
     @Autowired
     private LeaveBalanceRepository leaveBalanceRepository;
+
+    @Autowired
+    private AttendanceLogRepository attendanceLogRepository;
 
     @Autowired
     private PayrollItemRepository payrollItemRepository;
@@ -121,6 +131,7 @@ public class SampleRows {
             createAndSaveLeaveRequests(emp, i);
             createAndSaveLeaveBalances(emp, i);
             createAndSaveShiftSchedules(emp, i);
+            createAndSaveAttendanceLogs(emp, i);
 
             // 3. Create payroll item (will be saved via payrollRun cascade)
             PayrollItem item = createPayrollItem(emp, i, payrollRun);
@@ -275,6 +286,133 @@ public class SampleRows {
         templateShiftRepository.saveAll(templateShiftSchedules);
     }
 
+    private void createAndSaveAttendanceLogs(Employee emp, int i) {
+        List<AttendanceLog> attendanceLogs = new ArrayList<>();
+
+        if (i == 10) {
+            seedNonExemptRuntimeAttendance(attendanceLogs, emp);
+        } else if (i == 8) {
+            seedExemptRuntimeAttendance(attendanceLogs, emp);
+        }
+
+        if (!attendanceLogs.isEmpty()) {
+            attendanceLogRepository.saveAll(attendanceLogs);
+        }
+    }
+
+    private void seedNonExemptRuntimeAttendance(List<AttendanceLog> attendanceLogs, Employee emp) {
+        // 15th payout: Jan 26-Feb 10, 2026. No holidays in the current PH cache, useful for >13-day coverage.
+        addAttendanceRange(
+                attendanceLogs,
+                emp,
+                LocalDate.of(2026, 1, 26),
+                LocalDate.of(2026, 2, 10),
+                Set.of(LocalDate.of(2026, 1, 30)),
+                Map.of(
+                        LocalDate.of(2026, 2, 2), new SeedAttendancePair(LocalTime.of(8, 30), LocalTime.of(17, 0))
+                )
+        );
+
+        // 15th payout: Mar 26-Apr 10, 2026. Holiday-reduced window used for <13 deductible days.
+        addAttendanceRange(
+                attendanceLogs,
+                emp,
+                LocalDate.of(2026, 3, 26),
+                LocalDate.of(2026, 4, 10),
+                Set.of(
+                        LocalDate.of(2026, 3, 28),
+                        LocalDate.of(2026, 4, 3),
+                        LocalDate.of(2026, 4, 9)
+                ),
+                Map.of(
+                        LocalDate.of(2026, 3, 29), new SeedAttendancePair(LocalTime.of(8, 10), LocalTime.of(17, 0)),
+                        LocalDate.of(2026, 4, 2), new SeedAttendancePair(LocalTime.of(8, 0), LocalTime.of(17, 0)),
+                        LocalDate.of(2026, 4, 4), new SeedAttendancePair(LocalTime.of(8, 0), LocalTime.of(17, 0))
+                )
+        );
+
+        // 30th payout: Oct 11-25, 2026. Clean no-holiday window for ordinary attendance deductions.
+        addAttendanceRange(
+                attendanceLogs,
+                emp,
+                LocalDate.of(2026, 10, 11),
+                LocalDate.of(2026, 10, 25),
+                Set.of(),
+                Map.of(
+                        LocalDate.of(2026, 10, 14), new SeedAttendancePair(LocalTime.of(8, 0), LocalTime.of(16, 0)),
+                        LocalDate.of(2026, 10, 18), new SeedAttendancePair(LocalTime.of(8, 20), LocalTime.of(17, 0)),
+                        // Overnight attendance to surface a visible night differential line in the October test run.
+                        LocalDate.of(2026, 10, 20), new SeedAttendancePair(LocalTime.of(21, 0), LocalTime.of(6, 0), 1)
+                )
+        );
+    }
+
+    private void seedExemptRuntimeAttendance(List<AttendanceLog> attendanceLogs, Employee emp) {
+        // Exempt runtime logs are seeded to show handbook behavior: whole-day absence may deduct, but lates do not.
+        addAttendanceRange(
+                attendanceLogs,
+                emp,
+                LocalDate.of(2026, 1, 26),
+                LocalDate.of(2026, 2, 10),
+                Set.of(LocalDate.of(2026, 2, 1)),
+                Map.of(
+                        LocalDate.of(2026, 2, 3), new SeedAttendancePair(LocalTime.of(9, 0), LocalTime.of(17, 0))
+                )
+        );
+
+        addAttendanceRange(
+                attendanceLogs,
+                emp,
+                LocalDate.of(2026, 3, 26),
+                LocalDate.of(2026, 4, 10),
+                Set.of(LocalDate.of(2026, 4, 8)),
+                Map.of(
+                        LocalDate.of(2026, 3, 27), new SeedAttendancePair(LocalTime.of(9, 30), LocalTime.of(17, 0))
+                )
+        );
+
+        addAttendanceRange(
+                attendanceLogs,
+                emp,
+                LocalDate.of(2026, 10, 11),
+                LocalDate.of(2026, 10, 25),
+                Set.of(),
+                Map.of(
+                        LocalDate.of(2026, 10, 16), new SeedAttendancePair(LocalTime.of(8, 45), LocalTime.of(17, 0))
+                )
+        );
+    }
+
+    private void addAttendanceRange(
+            List<AttendanceLog> attendanceLogs,
+            Employee emp,
+            LocalDate startDate,
+            LocalDate endDate,
+            Set<LocalDate> absentDates,
+            Map<LocalDate, SeedAttendancePair> overrides
+    ) {
+        LocalDate currentDate = startDate;
+        while (!currentDate.isAfter(endDate)) {
+            if (!absentDates.contains(currentDate)) {
+                SeedAttendancePair pair = overrides.getOrDefault(
+                        currentDate,
+                        new SeedAttendancePair(LocalTime.of(8, 0), LocalTime.of(17, 0))
+                );
+                attendanceLogs.add(createAttendanceLog(emp, currentDate, pair.logIn(), "IN"));
+                attendanceLogs.add(createAttendanceLog(emp, currentDate.plusDays(pair.logOutDayOffset()), pair.logOut(), "OUT"));
+            }
+            currentDate = currentDate.plusDays(1);
+        }
+    }
+
+    private AttendanceLog createAttendanceLog(Employee emp, LocalDate workDate, LocalTime time, String direction) {
+        AttendanceLog log = new AttendanceLog();
+        log.setEmployeeId(emp.getEmployeeId());
+        log.setTimestamp(workDate.atTime(time).atZone(SEED_TIME_ZONE).toInstant());
+        log.setDirection(direction);
+        return log;
+    }
+
     private PayrollItem createPayrollItem(Employee emp, int i, PayrollRun payrollRun) {
         PayrollItem payrollItem = new PayrollItem();
         payrollItem.setEmployee(emp);
@@ -345,5 +483,11 @@ public class SampleRows {
         }
 
         return calendar;
+    }
+
+    private record SeedAttendancePair(LocalTime logIn, LocalTime logOut, long logOutDayOffset) {
+        private SeedAttendancePair(LocalTime logIn, LocalTime logOut) {
+            this(logIn, logOut, 0);
+        }
     }
 }
