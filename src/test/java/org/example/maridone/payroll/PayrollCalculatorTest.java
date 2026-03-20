@@ -4,7 +4,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 
-import org.example.maridone.config.PayrollProperties;
+import org.example.maridone.config.PayrollConfig;
 import org.example.maridone.core.employee.Employee;
 import org.example.maridone.enums.DeductionType;
 import org.example.maridone.enums.ExemptionStatus;
@@ -28,15 +28,15 @@ class PayrollCalculatorTest {
 
     @Mock
     private EarningsRepository earningsRepository;
-
     @Mock
     private DeductionsRepository deductionsRepository;
-
-    @Spy
-    private PayrollProperties payrollProperties = new PayrollProperties();
-
+    @Mock
+    private PayrollConfig payrollConfig;
     @InjectMocks
     private PayrollCalculator payrollCalculator;
+
+    @Spy
+    private BracketService bracketService = new BracketService(payrollConfig);
 
     @Test
     void setEarnings_ShouldCreateSingleLine_ForExemptEmployee() {

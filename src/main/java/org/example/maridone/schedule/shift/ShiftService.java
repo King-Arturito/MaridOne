@@ -4,7 +4,7 @@ package org.example.maridone.schedule.shift;
 import org.example.maridone.annotation.ExecutionTime;
 import org.example.maridone.annotation.SystematicScheduling;
 import org.example.maridone.common.CommonSpecs;
-import org.example.maridone.config.DefaultProperties;
+import org.example.maridone.config.DefaultConfig;
 import org.example.maridone.core.employee.Employee;
 import org.example.maridone.core.employee.EmployeeRepository;
 import org.example.maridone.enums.EmploymentStatus;
@@ -36,7 +36,7 @@ public class ShiftService {
     private final EmployeeRepository employeeRepository;
     private final LeaveRequestRepository leaveRequestRepository;
     private final ScheduleMapper scheduleMapper;
-    private final DefaultProperties defaultProperties;
+    private final DefaultConfig defaultConfig;
 
     public ShiftService(
             TemplateShiftRepository templateShiftRepository,
@@ -44,13 +44,13 @@ public class ShiftService {
             DailyShiftRepository dailyShiftRepository,
             LeaveRequestRepository leaveRequestRepository,
             ScheduleMapper scheduleMapper,
-            DefaultProperties defaultProperties) {
+            DefaultConfig defaultConfig) {
         this.templateShiftRepository = templateShiftRepository;
         this.employeeRepository = employeeRepository;
         this.dailyShiftRepository = dailyShiftRepository;
         this.leaveRequestRepository = leaveRequestRepository;
         this.scheduleMapper = scheduleMapper;
-        this.defaultProperties = defaultProperties;
+        this.defaultConfig = defaultConfig;
     }
 
     //create all for 7 days [monday, ...., sunday]
@@ -114,7 +114,7 @@ public class ShiftService {
     @Transactional
     @SystematicScheduling
     public void setDailyShifts() {
-        LocalDate today = LocalDate.now(defaultProperties.getTimeZone());
+        LocalDate today = LocalDate.now(defaultConfig.getTimeZone());
         DayOfWeek targetDay = today.getDayOfWeek();
         List<DailyShiftSchedule> schedulesToSave = new ArrayList<>();
 
@@ -136,9 +136,6 @@ public class ShiftService {
                 ));
 
         //create a mapping for empId -> many leaves
-        /*
-            DOESNT SUPPORT MANY LEAVES YET
-        */
         Map<Long, List<LeaveRequest>> empToRequests = leaveRequestRepository
                 .findApprovedLeavesForDay(today.atStartOfDay(), today.plusDays(1).atStartOfDay())
                 .stream()

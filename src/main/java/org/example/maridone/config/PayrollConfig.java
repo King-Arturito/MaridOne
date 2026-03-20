@@ -1,22 +1,21 @@
 package org.example.maridone.config;
 
+import org.example.maridone.enums.DeductionType;
+import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.stereotype.Component;
+import org.springframework.validation.annotation.Validated;
+
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.time.Duration;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
 
-import org.example.maridone.enums.DeductionType;
-import org.springframework.boot.context.properties.ConfigurationProperties;
-import org.springframework.stereotype.Component;
-
 @Component
 @ConfigurationProperties("payroll")
-public class PayrollProperties {
-
-    //todo: verify grace periods
-    private Duration gracePeriod = Duration.of(15, ChronoUnit.MINUTES);
+@Validated
+public class PayrollConfig {
+    private Duration gracePeriod = Duration.of(0, ChronoUnit.MINUTES);
     private BigDecimal overtimeMultiplier = BigDecimal.valueOf(1.25);
     private BigDecimal nightDifferentialMultiplier = BigDecimal.valueOf(0.10);
     private BigDecimal restDayWorkMultiplier = BigDecimal.valueOf(1.30);
@@ -37,10 +36,11 @@ public class PayrollProperties {
     private BigDecimal pagibigMfsCap = BigDecimal.valueOf(10_000);
 
     /*
-        minimum weekly hours
-        default: 48 hours, 9 hours per day including lunch break, 6 days a week
-    */
+       minimum weekly hours
+       default: 48 hours, 9 hours per day including lunch break, 6 days a week
+   */
     private BigDecimal defaultMinimumWeekly = BigDecimal.valueOf(48);
+
     private List<WithholdingTaxBracket> withholdingTaxBrackets = defaultWithholdingTaxBrackets();
 
     public Duration getGracePeriod() {
@@ -203,150 +203,12 @@ public class PayrollProperties {
         this.pagibigMfsCap = pagibigMfsCap;
     }
 
-    public List<WithholdingTaxBracket> getWithholdingTaxBrackets() {
-        return withholdingTaxBrackets;
-    }
-
     public void setWithholdingTaxBrackets(List<WithholdingTaxBracket> withholdingTaxBrackets) {
         this.withholdingTaxBrackets = withholdingTaxBrackets;
     }
 
-    public BigDecimal computeWithholdingTaxPerCutoff(BigDecimal taxableCompensationPerCutoff) {
-        BigDecimal nti = normalizeMoney(taxableCompensationPerCutoff);
-        WithholdingTaxBracket bracket = resolveWithholdingTaxBracket(nti);
-        if (bracket == null || bracket.getRate().compareTo(BigDecimal.ZERO) <= 0) {
-            return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
-        }
-
-        BigDecimal excess = nti.subtract(bracket.getLowerLimit());
-        BigDecimal withholding = bracket.getBaseTax().add(excess.multiply(bracket.getRate()));
-        return normalizeMoney(withholding);
-    }
-
-    public DeductionType resolveWithholdingDeductionType(BigDecimal taxableCompensationPerCutoff) {
-        WithholdingTaxBracket bracket = resolveWithholdingTaxBracket(taxableCompensationPerCutoff);
-        return bracket == null ? DeductionType.BRACKET_LEVEL_ONE : bracket.getDeductionType();
-    }
-
-    public BigDecimal computeMonthlyBasicPay(BigDecimal yearlyCompensation) {
-        BigDecimal yearly = normalizeMoney(yearlyCompensation);
-        if (yearly.compareTo(BigDecimal.ZERO) <= 0) {
-            return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
-        }
-
-        return yearly.divide(BigDecimal.valueOf(12), 2, RoundingMode.HALF_UP);
-    }
-
-    public BigDecimal computeSemiMonthlyBasicPay(BigDecimal yearlyCompensation) {
-        BigDecimal yearly = normalizeMoney(yearlyCompensation);
-        if (yearly.compareTo(BigDecimal.ZERO) <= 0) {
-            return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
-        }
-
-        return yearly.divide(BigDecimal.valueOf(24), 2, RoundingMode.HALF_UP);
-    }
-
-    public BigDecimal computeDailyRate(BigDecimal yearlyCompensation) {
-        BigDecimal monthly = computeMonthlyBasicPay(yearlyCompensation);
-        if (monthly.compareTo(BigDecimal.ZERO) <= 0) {
-            return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
-        }
-
-        return monthly.divide(BigDecimal.valueOf(26), 2, RoundingMode.HALF_UP);
-    }
-
-    public BigDecimal computeHourlyRate(BigDecimal yearlyCompensation) {
-        BigDecimal daily = computeDailyRate(yearlyCompensation);
-        if (daily.compareTo(BigDecimal.ZERO) <= 0) {
-            return BigDecimal.ZERO.setScale(6, RoundingMode.HALF_UP);
-        }
-
-        return daily.divide(BigDecimal.valueOf(8), 6, RoundingMode.HALF_UP);
-    }
-
-    public BigDecimal computeSssEmployeeSharePerCutoff(BigDecimal monthlyCompensation) {
-        BigDecimal msc = resolveSssMsc(monthlyCompensation);
-        if (msc.compareTo(BigDecimal.ZERO) <= 0) {
-            return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
-        }
-        BigDecimal monthlyEmployeeShare = msc.multiply(sssEmployeeRate);
-        return monthlyEmployeeShare.divide(BigDecimal.valueOf(2), 2, RoundingMode.HALF_UP);
-    }
-
-    public BigDecimal computePhilHealthEmployeeSharePerCutoff(BigDecimal monthlyCompensation) {
-        BigDecimal monthly = normalizeMoney(monthlyCompensation);
-        if (monthly.compareTo(BigDecimal.ZERO) <= 0) {
-            return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
-        }
-
-        BigDecimal adjustedMonthly = monthly.max(philHealthFloor).min(philHealthCeiling);
-        BigDecimal employeeMonthlyShare = adjustedMonthly.multiply(philHealthEmployeeRate);
-        return employeeMonthlyShare.divide(BigDecimal.valueOf(2), 2, RoundingMode.HALF_UP);
-    }
-
-    public BigDecimal computePagibigEmployeeSharePerCutoff(BigDecimal monthlyCompensation) {
-        BigDecimal monthly = normalizeMoney(monthlyCompensation);
-        if (monthly.compareTo(BigDecimal.ZERO) <= 0) {
-            return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
-        }
-
-        BigDecimal mfs = monthly.min(pagibigMfsCap);
-        BigDecimal rate = monthly.compareTo(pagibigLowerSalaryThreshold) <= 0
-                ? pagibigLowerRate
-                : pagibigHigherRate;
-
-        BigDecimal monthlyShare = mfs.multiply(rate);
-        return monthlyShare.divide(BigDecimal.valueOf(2), 2, RoundingMode.HALF_UP);
-    }
-
-    public BigDecimal computeExemptDailyAbsenceRate(BigDecimal yearlyCompensation) {
-        return computeDailyRate(yearlyCompensation);
-    }
-
-    public BigDecimal resolveHolidayOrRestDayMultiplier(boolean isRestDay, boolean isHoliday, boolean isRegularHoliday) {
-        if (isRegularHoliday) {
-            return regularHolidayWorkMultiplier;
-        }
-        if (isHoliday) {
-            return specialHolidayWorkMultiplier;
-        }
-        if (isRestDay) {
-            return restDayWorkMultiplier;
-        }
-        return BigDecimal.ONE;
-    }
-
-    private WithholdingTaxBracket resolveWithholdingTaxBracket(BigDecimal taxableCompensationPerCutoff) {
-        BigDecimal nti = normalizeMoney(taxableCompensationPerCutoff);
-        for (WithholdingTaxBracket bracket : withholdingTaxBrackets) {
-            boolean aboveLower = nti.compareTo(bracket.getLowerLimit()) >= 0;
-            boolean withinUpper = bracket.getUpperLimit() == null || nti.compareTo(bracket.getUpperLimit()) <= 0;
-            if (aboveLower && withinUpper) {
-                return bracket;
-            }
-        }
-        return withholdingTaxBrackets.isEmpty() ? null : withholdingTaxBrackets.get(withholdingTaxBrackets.size() - 1);
-    }
-
-    private BigDecimal resolveSssMsc(BigDecimal monthlyCompensation) {
-        BigDecimal monthly = normalizeMoney(monthlyCompensation);
-        if (monthly.compareTo(BigDecimal.ZERO) <= 0) {
-            return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
-        }
-
-        BigDecimal clamped = monthly.max(sssMinimumMsc).min(sssMaximumMsc);
-        BigDecimal roundedMsc = clamped
-                .divide(sssMscStep, 0, RoundingMode.HALF_UP)
-                .multiply(sssMscStep);
-
-        return roundedMsc.setScale(2, RoundingMode.HALF_UP);
-    }
-
-    private BigDecimal normalizeMoney(BigDecimal value) {
-        if (value == null) {
-            return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
-        }
-        return value.setScale(2, RoundingMode.HALF_UP);
+    public List<WithholdingTaxBracket> getWithholdingTaxBrackets() {
+        return withholdingTaxBrackets;
     }
 
     private List<WithholdingTaxBracket> defaultWithholdingTaxBrackets() {
@@ -425,3 +287,4 @@ public class PayrollProperties {
         }
     }
 }
+

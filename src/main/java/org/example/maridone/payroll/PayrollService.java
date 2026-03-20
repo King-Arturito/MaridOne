@@ -3,7 +3,6 @@ package org.example.maridone.payroll;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.DayOfWeek;
-import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -15,16 +14,13 @@ import java.util.stream.Collectors;
 
 import org.example.maridone.annotation.ExecutionTime;
 import org.example.maridone.common.CommonSpecs;
-import org.example.maridone.config.DefaultProperties;
-import org.example.maridone.config.PayrollProperties;
+import org.example.maridone.config.DefaultConfig;
+import org.example.maridone.config.PayrollConfig;
 import org.example.maridone.core.employee.Employee;
 import org.example.maridone.core.employee.EmployeeRepository;
 import org.example.maridone.enums.EmploymentStatus;
 import org.example.maridone.enums.ExemptionStatus;
 import org.example.maridone.enums.Status;
-import org.example.maridone.exception.notfound.EmployeeNotFoundException;
-import org.example.maridone.exception.notfound.ItemNotFoundException;
-import org.example.maridone.exception.notfound.RunNotFoundException;
 import org.example.maridone.holiday.HolidayLookup;
 import org.example.maridone.holiday.HolidayService;
 import org.example.maridone.leave.request.LeaveRequest;
@@ -34,9 +30,6 @@ import org.example.maridone.log.attendance.AttendanceLog;
 import org.example.maridone.overtime.OvertimeRequest;
 import org.example.maridone.overtime.OvertimeRequestRepository;
 import org.example.maridone.overtime.spec.OvertimeSpecs;
-import org.example.maridone.payroll.dto.ItemDetailsDto;
-import org.example.maridone.payroll.dto.ItemSummaryDto;
-import org.example.maridone.payroll.dto.PayrollItemDto;
 import org.example.maridone.payroll.dto.RunCreateDto;
 import org.example.maridone.payroll.item.PayrollItem;
 import org.example.maridone.payroll.item.component.DeductionsLine;
@@ -45,17 +38,12 @@ import org.example.maridone.payroll.mapper.PayrollMapper;
 import org.example.maridone.payroll.run.PayrollItemRepository;
 import org.example.maridone.payroll.run.PayrollRun;
 import org.example.maridone.payroll.run.PayrollRunRepository;
-import org.example.maridone.payroll.spec.ItemSpecs;
 import org.example.maridone.schedule.shift.TemplateShiftRepository;
 import org.example.maridone.schedule.shift.TemplateShiftSchedule;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
-import jakarta.validation.Valid;
 
 
 @Service
@@ -71,8 +59,9 @@ public class PayrollService {
     private final HolidayService holidayService;
     private final PayrollCalculator payrollCalculator;
     private final PayrollMapper payrollMapper;
-    private final DefaultProperties defaultProperties;
-    private final PayrollProperties payrollProperties;
+    private final DefaultConfig defaultConfig;
+    private final PayrollConfig payrollConfig;
+    private final BracketService bracketService;
 
     public PayrollService(
             PayrollRunRepository payrollRunRepository,
@@ -85,8 +74,9 @@ public class PayrollService {
             HolidayService holidayService,
             PayrollCalculator payrollCalculator,
             PayrollMapper payrollMapper,
-            DefaultProperties defaultProperties,
-            PayrollProperties payrollProperties
+            DefaultConfig defaultConfig,
+            PayrollConfig payrollConfig,
+            BracketService bracketService
     )
     {
         this.payrollRunRepository = payrollRunRepository;
@@ -99,21 +89,12 @@ public class PayrollService {
         this.holidayService = holidayService;
         this.payrollCalculator = payrollCalculator;
         this.payrollMapper = payrollMapper;
-        this.defaultProperties = defaultProperties;
-        this.payrollProperties = payrollProperties;
+        this.defaultConfig = defaultConfig;
+        this.payrollConfig = payrollConfig;
+        this.bracketService = bracketService;
     }
 
-    @Transactional
-    @ExecutionTime
-    public List<ItemDetailsDto> getItems(Long empId) {
 
-        Specification<PayrollItem> spec = Specification.allOf(
-                ItemSpecs.hasEmployeeId(empId)
-        );
-        List<PayrollItem> items = payrollItemRepository.findAll(spec);
-
-        return payrollMapper.toItemDetailsDtos(items);
-    }
 
     @Transactional
     @ExecutionTime
@@ -128,55 +109,17 @@ public class PayrollService {
         return run;
     }
 
-    @Transactional
-    @ExecutionTime
-    public ItemDetailsDto createItem(@Valid PayrollItemDto payload) {
-        PayrollItem item = new PayrollItem();
-        PayrollRun run = payrollRunRepository.findById(payload.getPayId()).orElseThrow(
-                () -> new RunNotFoundException("Payroll Run ID:" + payload.getPayId() + " not found.")
-        );
-
-        Employee emp = employeeRepository.findById(payload.getEmpId()).orElseThrow(
-                () -> new EmployeeNotFoundException(payload.getEmpId())
-        );
-
-        item.setPayrollRun(run);
-        item.setEmployee(emp);
-        item.setGrossPay(BigDecimal.valueOf(-1));
-        item.setNetPay(BigDecimal.valueOf(-1));
-        payrollItemRepository.save(item);
-        return payrollMapper.toItemDetailsDto(item);
-    }
-
-    @Transactional
-    @ExecutionTime
-    public PayrollItemDto updateItem(PayrollItemDto payload, Long itemId) {
-        PayrollItem item = payrollItemRepository.findById(itemId).orElseThrow(
-                () -> new ItemNotFoundException(itemId)
-        );
-
-        item.setGrossPay(payload.getGrossPay());
-        item.setNetPay(payload.getNetPay());
-        payrollItemRepository.save(item);
-        return payrollMapper.toPayrollItemDto(item);
-    }
-
-    public Page<ItemSummaryDto> getRunItems(Long payId, Pageable pageable) {
-        if (!payrollRunRepository.existsById(payId)) {
-            throw new RunNotFoundException("Payroll Run ID:" + payId + " not found.");
-        }
-
-        Page<PayrollItem> items = payrollItemRepository.findByPayrollRun_PayId(payId, pageable);
-        return items.map(payrollMapper::toItemSummaryDto);
-    }
 
     @Transactional
     @ExecutionTime
     public void processPayroll(RunCreateDto payload) {
+        //create a payroll run for periodStart - periodEnd
         PayrollRun run = createRun(payload);
 
         Specification<Employee> spec = CommonSpecs.fieldNotEquals("employmentStatus", EmploymentStatus.TERMINATED);
+        //get non-terminated employees
         List<Employee> employees = employeeRepository.findAll(spec);
+        //separate employees by exempt and nonexempt
         Map<Boolean, List<Employee>> partitioned = employees.stream()
                 .collect(Collectors.partitioningBy(
                         emp -> emp.getExemptionStatus().equals(ExemptionStatus.EXEMPT)
@@ -190,8 +133,12 @@ public class PayrollService {
         payrollItemRepository.saveAll(items);
     }
 
+
+    //for exempt employees
     @Transactional
     public List<PayrollItem> processPayrollExempt(PayrollRun run, List<Employee> employees) {
+        //get all employee ids of exempt employees
+        //already filtered by processPayroll()
         List<Long> employeeIds = employees.stream()
                 .map(Employee::getEmployeeId)
                 .toList();
@@ -199,24 +146,43 @@ public class PayrollService {
             return List.of();
         }
 
+        //get start period of the payroll run
         Instant periodStart = run.getPeriodStart()
-                .atStartOfDay(defaultProperties.getTimeZone())
+                .atStartOfDay(defaultConfig.getTimeZone())
                 .toInstant();
 
+        //sort the attendance log by timestamp [OLDEST FIRST]
         Sort sorting = Sort.by(Sort.Direction.ASC, "timestamp");
+
+        /*
+         * get a sorted list of attendance logs for a specific group of employees
+         * that occurred within a defined time window.
+         *
+         * employeeIds: whose logs will we get?
+         * periodStart:  The start of the time period (inclusive)
+         * periodEnd: The end of the time period (inclusive)
+         *      +6 hours to obtain night diff logs too
+         * sorting: sorted by oldest logs first
+         */
         List<AttendanceLog> allLogs = attendanceLogRepository.findByEmployeeIdInAndTimestampBetween(
                 employeeIds,
                 periodStart,
-                run.getPeriodEnd().atTime(LocalTime.MAX).plusHours(6).atZone(defaultProperties.getTimeZone()).toInstant(),
+                run.getPeriodEnd().atTime(LocalTime.MAX).plusHours(6).atZone(defaultConfig.getTimeZone()).toInstant(),
                 sorting
         );
+
+        //get all schedules of employees in employeeIds
         List<TemplateShiftSchedule> allSchedules = templateShiftRepository.findByEmployee_EmployeeIdIn(employeeIds);
+        //get all APPROVED leaves of employees in employeeIds for payroll period
         List<LeaveRequest> allLeaves = leaveRequestRepository.findApprovedLeavesForPeriod(
-                employeeIds, run.getPeriodStart(), run.getPeriodEnd()
+                employeeIds, run.getPeriodStart().atStartOfDay(), run.getPeriodEnd().plusDays(1).atStartOfDay()
         );
+
+        //find any holidays for a day in payroll period
         HolidayLookup holidayLookup = holidayService.getHolidayLookup(run.getPeriodStart(), run.getPeriodEnd());
         Set<LocalDate> holidayDates = holidayLookup.holidayDates();
 
+        //group List of Objects(Attendance, TemplateShifts, LeaveRequest) to an employeeId inside their object
         Map<Long, List<AttendanceLog>> attendanceMap = safeList(allLogs).stream()
                 .collect(Collectors.groupingBy(AttendanceLog::getEmployeeId));
         Map<Long, List<TemplateShiftSchedule>> scheduleMap = safeList(allSchedules).stream()
@@ -224,13 +190,19 @@ public class PayrollService {
         Map<Long, List<LeaveRequest>> leaveMap = safeList(allLeaves).stream()
                 .collect(Collectors.groupingBy(leave -> leave.getEmployee().getEmployeeId()));
 
+        //iterate through employees
         return employees.stream()
                 .map(emp -> {
+                    //create payroll item for the employee
                     PayrollItem item = new PayrollItem();
-                    BigDecimal semiMonthlySalary = payrollProperties.computeSemiMonthlyBasicPay(emp.getYearlySalary());
-                    BigDecimal dailyAbsenceRate = payrollProperties.computeExemptDailyAbsenceRate(emp.getYearlySalary());
 
+                    //compute salary for payroll period
+                    BigDecimal semiMonthlySalary = payrollCalculator.computeSemiMonthlyBasicPay(emp.getYearlySalary());
+                    //compute how much should be subtracted per day.
+                    BigDecimal dailyAbsenceRate = payrollCalculator.computeExemptDailyAbsenceRate(emp.getYearlySalary());
+                    //get attendance of employee, else empty list
                     List<AttendanceLog> attendanceLogs = attendanceMap.getOrDefault(emp.getEmployeeId(), List.of());
+                    //get
                     List<TemplateShiftSchedule> schedules = scheduleMap.getOrDefault(emp.getEmployeeId(), List.of());
                     List<LeaveRequest> leaves = leaveMap.getOrDefault(emp.getEmployeeId(), List.of());
                     Map<DayOfWeek, TemplateShiftSchedule> schedulesByDay = schedules.stream()
@@ -281,7 +253,7 @@ public class PayrollService {
         }
 
         Instant periodStart = run.getPeriodStart()
-                .atStartOfDay(defaultProperties.getTimeZone())
+                .atStartOfDay(defaultConfig.getTimeZone())
                 .toInstant();
 
         Sort sorting = Sort.by(Sort.Direction.ASC, "timestamp");
@@ -289,7 +261,7 @@ public class PayrollService {
                 .findByEmployeeIdInAndTimestampBetween(
                         employeeIds,
                         periodStart,
-                        run.getPeriodEnd().atTime(LocalTime.MAX).plusHours(6).atZone(defaultProperties.getTimeZone()).toInstant(),
+                        run.getPeriodEnd().atTime(LocalTime.MAX).plusHours(6).atZone(defaultConfig.getTimeZone()).toInstant(),
                         sorting);
 
         Specification<OvertimeRequest> overtimeSpecs = Specification.allOf(
@@ -331,8 +303,8 @@ public class PayrollService {
             List<AttendanceLog> attendanceLogs = attendanceMap.getOrDefault(emp.getEmployeeId(), List.of());
             List<LeaveRequest> leaves = leaveMap.getOrDefault(emp.getEmployeeId(), List.of());
 
-            BigDecimal basicPayPerPeriod = payrollProperties.computeSemiMonthlyBasicPay(emp.getYearlySalary());
-            BigDecimal hourlyRate = payrollProperties.computeHourlyRate(emp.getYearlySalary());
+            BigDecimal basicPayPerPeriod = payrollCalculator.computeSemiMonthlyBasicPay(emp.getYearlySalary());
+            BigDecimal hourlyRate = payrollCalculator.computeHourlyRate(emp.getYearlySalary());
             Map<DayOfWeek, TemplateShiftSchedule> schedulesByDay = schedules.stream()
                     .collect(Collectors.toMap(
                             TemplateShiftSchedule::getDayOfWeek,
@@ -350,8 +322,8 @@ public class PayrollService {
 
                 TemplateShiftSchedule todaysSchedule = schedulesByDay.get(loopDate.getDayOfWeek());
 
-                AttendanceLog dayInLog = findInLogForDate(attendanceLogs, loopDate);
-                AttendanceLog dayOutLog = findOutLogAfterIn(attendanceLogs, dayInLog, loopDate);
+                AttendanceLog dayInLog = payrollCalculator.findInLogForDate(attendanceLogs, loopDate);
+                AttendanceLog dayOutLog = payrollCalculator.findOutLogAfterIn(attendanceLogs, dayInLog, loopDate);
                 boolean hasCompleteAttendancePair = dayInLog != null && dayOutLog != null;
 
               //todo: verify
@@ -364,7 +336,7 @@ public class PayrollService {
                 boolean isRestDay = (todaysSchedule == null);
                 boolean isHoliday = holidayDates.contains(loopDate);
                 boolean isRegularHoliday = regularHolidayDates.contains(loopDate);
-                BigDecimal dayWorkMultiplier = payrollProperties.resolveHolidayOrRestDayMultiplier(
+                BigDecimal dayWorkMultiplier = payrollCalculator.resolveHolidayOrRestDayMultiplier(
                         isRestDay,
                         isHoliday,
                         isRegularHoliday
@@ -378,8 +350,8 @@ public class PayrollService {
                         Instant inInstant = dayInLog.getTimestamp();
                         Instant outInstant = dayOutLog.getTimestamp();
 
-                        LocalTime logIn = inInstant.atZone(defaultProperties.getTimeZone()).toLocalTime();
-                        LocalTime logOut = outInstant.atZone(defaultProperties.getTimeZone()).toLocalTime();
+                        LocalTime logIn = inInstant.atZone(defaultConfig.getTimeZone()).toLocalTime();
+                        LocalTime logOut = outInstant.atZone(defaultConfig.getTimeZone()).toLocalTime();
 
                         BigDecimal hoursWorked = payrollCalculator.deductUnpaidLunchHour(
                                 payrollCalculator.calculateHours(logIn, logOut)
@@ -406,7 +378,7 @@ public class PayrollService {
                     if (todaysLeave != null) {
                         // Approved leaves are currently treated as paid leave in payroll because unpaid leave is not modeled yet.
               //todo: verify
-                        leaveHours = payrollCalculator.calculateHours(todaysLeave.getStartTime(), todaysLeave.getEndTime());
+                            leaveHours = payrollCalculator.calculateHours(todaysLeave.getStartTime(), todaysLeave.getEndTime());
                         if (leaveHours.compareTo(expectedHours) > 0) {
                             leaveHours = expectedHours;
                         }
@@ -417,8 +389,8 @@ public class PayrollService {
                     } else if (!hasCompleteAttendancePair) {
                         absentDeductAmount = absentDeductAmount.add(expectedRemainingHours.multiply(hourlyRate));
                     } else {
-                        LocalTime logIn = dayInLog.getTimestamp().atZone(defaultProperties.getTimeZone()).toLocalTime();
-                        LocalTime logOut = dayOutLog.getTimestamp().atZone(defaultProperties.getTimeZone()).toLocalTime();
+                        LocalTime logIn = dayInLog.getTimestamp().atZone(defaultConfig.getTimeZone()).toLocalTime();
+                        LocalTime logOut = dayOutLog.getTimestamp().atZone(defaultConfig.getTimeZone()).toLocalTime();
                         BigDecimal actualHours = payrollCalculator.deductUnpaidLunchHour(
                                 payrollCalculator.calculateHours(logIn, logOut)
                         );
@@ -438,8 +410,8 @@ public class PayrollService {
                 }
 
                 if (hasCompleteAttendancePair) {
-                    LocalTime logIn = dayInLog.getTimestamp().atZone(defaultProperties.getTimeZone()).toLocalTime();
-                    LocalTime logOut = dayOutLog.getTimestamp().atZone(defaultProperties.getTimeZone()).toLocalTime();
+                    LocalTime logIn = dayInLog.getTimestamp().atZone(defaultConfig.getTimeZone()).toLocalTime();
+                    LocalTime logOut = dayOutLog.getTimestamp().atZone(defaultConfig.getTimeZone()).toLocalTime();
 
                     BigDecimal nsdHours = payrollCalculator.calculateNightDiffHours(logIn, logOut);
                     if (nsdHours.compareTo(BigDecimal.ZERO) > 0) {
@@ -447,7 +419,7 @@ public class PayrollService {
                         nsdLine.setEarningsDate(loopDate);
                         nsdLine.setHours(nsdHours);
                         BigDecimal nsdRateMultiplier = dayWorkMultiplier.multiply(
-                                payrollProperties.getNightDifferentialMultiplier()
+                                payrollConfig.getNightDifferentialMultiplier()
                         );
                         nsdLine.setRate(hourlyRate.multiply(nsdRateMultiplier));
                         nsdLine.setAmount(nsdHours.multiply(nsdLine.getRate()));
@@ -460,7 +432,7 @@ public class PayrollService {
                     EarningsLine otLine = new EarningsLine();
                     otLine.setEarningsDate(loopDate);
                     otLine.setHours(payrollCalculator.calculateHours(ot.getStartTime().toLocalTime(), ot.getEndTime().toLocalTime()));
-                    BigDecimal overtimeRateMultiplier = dayWorkMultiplier.multiply(payrollProperties.getOvertimeMultiplier());
+                    BigDecimal overtimeRateMultiplier = dayWorkMultiplier.multiply(payrollConfig.getOvertimeMultiplier());
                     otLine.setRate(hourlyRate.multiply(overtimeRateMultiplier));
                     otLine.setAmount(otLine.getHours().multiply(otLine.getRate()));
                     otLine.setOvertime(true);
@@ -550,7 +522,7 @@ public class PayrollService {
             TemplateShiftSchedule todaysSchedule = schedulesByDay.get(currentDate.getDayOfWeek());
             boolean isHoliday = holidayDates.contains(currentDate);
             LeaveRequest todaysLeave = findLeaveForDate(leaves, currentDate);
-            boolean hasAttendance = hasAnyAttendanceLogForDate(attendanceLogs, currentDate);
+            boolean hasAttendance = payrollCalculator.hasAnyAttendanceLogForDate(attendanceLogs, currentDate);
 
             // Exempt staff are treated as salary-preserved unless they miss the whole scheduled day without approved leave.
             if (todaysSchedule != null && !isHoliday && todaysLeave == null && !hasAttendance) {
@@ -581,8 +553,8 @@ public class PayrollService {
             TemplateShiftSchedule todaysSchedule = schedulesByDay.get(loopDate.getDayOfWeek());
             boolean isHoliday = holidayDates.contains(loopDate);
             if (todaysSchedule != null && !isHoliday) {
-                AttendanceLog dayInLog = findInLogForDate(attendanceLogs, loopDate);
-                AttendanceLog dayOutLog = findOutLogAfterIn(attendanceLogs, dayInLog, loopDate);
+                AttendanceLog dayInLog = payrollCalculator.findInLogForDate(attendanceLogs, loopDate);
+                AttendanceLog dayOutLog = payrollCalculator.findOutLogAfterIn(attendanceLogs, dayInLog, loopDate);
                 boolean hasCompleteAttendancePair = dayInLog != null && dayOutLog != null;
 
                 LeaveRequest todaysLeave = findLeaveForDate(leaves, loopDate);
@@ -594,8 +566,8 @@ public class PayrollService {
                     if (!hasCompleteAttendancePair) {
                         absentDeductAmount = absentDeductAmount.add(expectedRemainingHours.multiply(hourlyRate));
                     } else {
-                        LocalTime logIn = dayInLog.getTimestamp().atZone(defaultProperties.getTimeZone()).toLocalTime();
-                        LocalTime logOut = dayOutLog.getTimestamp().atZone(defaultProperties.getTimeZone()).toLocalTime();
+                        LocalTime logIn = dayInLog.getTimestamp().atZone(defaultConfig.getTimeZone()).toLocalTime();
+                        LocalTime logOut = dayOutLog.getTimestamp().atZone(defaultConfig.getTimeZone()).toLocalTime();
                         BigDecimal actualHours = payrollCalculator.deductUnpaidLunchHour(
                                 payrollCalculator.calculateHours(logIn, logOut)
                         );
@@ -651,7 +623,6 @@ public class PayrollService {
             return BigDecimal.ZERO;
         }
 
-        // Approved leaves are currently treated as paid leave in payroll because unpaid leave is not modeled yet.
         BigDecimal leaveHours = payrollCalculator.calculateHours(leave.getStartTime(), leave.getEndTime());
         if (leaveHours.compareTo(expectedHours) > 0) {
             return expectedHours;
@@ -671,8 +642,8 @@ public class PayrollService {
 
         BigDecimal missingMinutes = missingHours.multiply(BigDecimal.valueOf(60));
         BigDecimal roundedMissingMinutes = missingMinutes.setScale(0, RoundingMode.HALF_UP);
-        long lateMinutes = calculateLateMinutes(schedule, inLog, leave);
-        long graceMinutes = Math.max(payrollProperties.getGracePeriod().toMinutes(), 0L);
+        long lateMinutes = payrollCalculator.calculateLateMinutes(schedule, inLog, leave);
+        long graceMinutes = Math.max(payrollConfig.getGracePeriod().toMinutes(), 0L);
         long coveredMinutes = Math.min(
                 roundedMissingMinutes.longValue(),
                 Math.min(lateMinutes, graceMinutes)
@@ -686,82 +657,13 @@ public class PayrollService {
         return chargeableMinutes.divide(BigDecimal.valueOf(60), 6, RoundingMode.HALF_UP);
     }
 
-    private long calculateLateMinutes(TemplateShiftSchedule schedule, AttendanceLog inLog, LeaveRequest leave) {
-        if (schedule == null || inLog == null) {
-            return 0L;
-        }
-
-        LocalTime expectedStart = resolveExpectedStartTime(schedule, leave);
-        LocalTime actualIn = inLog.getTimestamp().atZone(defaultProperties.getTimeZone()).toLocalTime();
-        if (!actualIn.isAfter(expectedStart)) {
-            return 0L;
-        }
-
-        return Duration.between(expectedStart, actualIn).toMinutes();
-    }
-
-    private LocalTime resolveExpectedStartTime(TemplateShiftSchedule schedule, LeaveRequest leave) {
-        LocalTime scheduleStart = schedule.getStartTime();
-        if (leave == null || leave.getStartTime() == null || leave.getEndTime() == null) {
-            return scheduleStart;
-        }
-
-        boolean leaveCoversShiftStart = !leave.getStartTime().isAfter(scheduleStart)
-                && leave.getEndTime().isAfter(scheduleStart);
-        return leaveCoversShiftStart ? leave.getEndTime() : scheduleStart;
-    }
-
     private LeaveRequest findLeaveForDate(List<LeaveRequest> leaves, LocalDate workDate) {
         return leaves.stream()
-                .filter(l -> l.getLeaveDate().equals(workDate))
+                .filter(l -> l.coversDate(workDate))
                 .findFirst()
                 .orElse(null);
     }
 
-    private boolean hasAnyAttendanceLogForDate(List<AttendanceLog> attendanceLogs, LocalDate workDate) {
-        return attendanceLogs.stream()
-                .anyMatch(log -> log.getTimestamp()
-                        .atZone(defaultProperties.getTimeZone())
-                        .toLocalDate()
-                        .equals(workDate));
-    }
-
-    private AttendanceLog findInLogForDate(List<AttendanceLog> attendanceLogs, LocalDate workDate) {
-        return attendanceLogs.stream()
-                .filter(this::isInLog)
-                .filter(log -> log.getTimestamp()
-                        .atZone(defaultProperties.getTimeZone())
-                        .toLocalDate()
-                        .equals(workDate))
-                .findFirst()
-                .orElse(null);
-    }
-
-    private AttendanceLog findOutLogAfterIn(List<AttendanceLog> attendanceLogs, AttendanceLog inLog, LocalDate workDate) {
-        if (inLog == null) {
-            return null;
-        }
-
-        Instant cutoff = workDate.plusDays(1)
-                .atTime(LocalTime.of(6, 0))
-                .atZone(defaultProperties.getTimeZone())
-                .toInstant();
-
-        return attendanceLogs.stream()
-                .filter(this::isOutLog)
-                .filter(log -> log.getTimestamp().isAfter(inLog.getTimestamp()))
-                .filter(log -> !log.getTimestamp().isAfter(cutoff))
-                .findFirst()
-                .orElse(null);
-    }
-
-    private boolean isInLog(AttendanceLog log) {
-        return log.getDirection() != null && log.getDirection().trim().equalsIgnoreCase("IN");
-    }
-
-    private boolean isOutLog(AttendanceLog log) {
-        return log.getDirection() != null && log.getDirection().trim().equalsIgnoreCase("OUT");
-    }
 
     private <T> List<T> safeList(List<T> values) {
         return values == null ? List.of() : values;

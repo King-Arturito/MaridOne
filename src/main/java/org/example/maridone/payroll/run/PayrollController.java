@@ -6,6 +6,7 @@ import org.example.maridone.marker.OnCreate;
 import org.example.maridone.marker.OnUpdate;
 import org.example.maridone.payroll.PayrollService;
 import org.example.maridone.payroll.dto.*;
+import org.example.maridone.payroll.item.PayrollItemService;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
@@ -21,22 +22,24 @@ import java.util.List;
 @RequestMapping("/api/payroll")
 public class PayrollController {
     private final PayrollService payrollService;
+    private final PayrollItemService payrollItemService;
 
-    public PayrollController(PayrollService payrollService) {
+    public PayrollController(PayrollService payrollService, PayrollItemService payrollItemService) {
         this.payrollService = payrollService;
+        this.payrollItemService = payrollItemService;
     }
 
     @GetMapping("/item/{empId}")
     @PreAuthorize("@userCheck.isSelf(#empId, authentication.getName())")
     public List<ItemDetailsDto> getItems(@PathVariable Long empId) {
-        return payrollService.getItems(empId);
+        return payrollItemService.getItems(empId);
     }
 
     @GetMapping("/run/{payId}/items")
     @PreAuthorize("hasRole('HR')")
     @AuditLog
     public Page<ItemSummaryDto> getRunItems(@PathVariable Long payId, Pageable pageable) {
-        return payrollService.getRunItems(payId, pageable);
+        return payrollItemService.getRunItems(payId, pageable);
     }
 
      /*
@@ -62,7 +65,7 @@ public class PayrollController {
     @PreAuthorize("hasRole('HR')")
     @AuditLog
     public ResponseEntity<ItemDetailsDto> createItem(@RequestBody @Validated(OnCreate.class) PayrollItemDto payload) {
-        ItemDetailsDto item = payrollService.createItem(payload);
+        ItemDetailsDto item = payrollItemService.createItem(payload);
         URI location = ServletUriComponentsBuilder
                 .fromCurrentRequest()
                 .path("/{id}")
@@ -75,7 +78,7 @@ public class PayrollController {
     @PreAuthorize("hasRole('HR')")
     @AuditLog
     public ResponseEntity<PayrollItemDto> updateItem(@RequestBody @Validated(OnUpdate.class) PayrollItemDto payload, @PathVariable Long itemId) {
-        PayrollItemDto item = payrollService.updateItem(payload, itemId);
+        PayrollItemDto item = payrollItemService.updateItem(payload, itemId);
         return ResponseEntity.ok(item);
     }
 

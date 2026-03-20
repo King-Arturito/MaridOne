@@ -4,7 +4,7 @@ import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.io.Decoders;
 import io.jsonwebtoken.security.Keys;
-import org.example.maridone.config.JwtProperties;
+import org.example.maridone.config.JwtConfig;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Service;
@@ -19,10 +19,10 @@ import java.util.Map;
 @Service
 public class JwtService {
 
-    private final JwtProperties jwtProperties;
+    private final JwtConfig jwtConfig;
 
-    public JwtService(JwtProperties jwtProperties) {
-        this.jwtProperties = jwtProperties;
+    public JwtService(JwtConfig jwtConfig) {
+        this.jwtConfig = jwtConfig;
     }
 
     public String generateToken(UserDetails user) {
@@ -37,13 +37,13 @@ public class JwtService {
     }
 
     public String generateToken(Map<String, Object> claims, UserDetails user) {
-        return buildToken(claims, user, jwtProperties.getExpiration());
+        return buildToken(claims, user, jwtConfig.getExpiration());
     }
 
     public String generateRefreshToken(UserDetails user, boolean rememberMe) {
         long expiry = rememberMe
-                ? jwtProperties.getRememberMeExpiration()
-                : jwtProperties.getRefreshTokenExpiration();
+                ? jwtConfig.getRememberMeExpiration()
+                : jwtConfig.getRefreshTokenExpiration();
         return buildToken(new HashMap<>(), user, expiry);
     }
 
@@ -53,7 +53,7 @@ public class JwtService {
                 .subject(user.getUsername())
                 .issuedAt(new Date(System.currentTimeMillis()))
                 .expiration(new Date(System.currentTimeMillis() + expiration))
-                .signWith(getKey(jwtProperties.getSecret()))
+                .signWith(getKey(jwtConfig.getSecret()))
                 .compact();
     }
     private Key getKey(String secret) {
@@ -76,7 +76,7 @@ public class JwtService {
 
     private Claims extractAllClaims(String token) {
         return Jwts.parser()
-                .verifyWith((SecretKey) getKey(jwtProperties.getSecret()))
+                .verifyWith((SecretKey) getKey(jwtConfig.getSecret()))
                 .build()
                 .parseSignedClaims(token)
                 .getPayload();

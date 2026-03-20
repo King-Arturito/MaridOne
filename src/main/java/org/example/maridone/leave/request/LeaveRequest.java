@@ -6,6 +6,7 @@ import org.example.maridone.core.employee.Employee;
 import org.example.maridone.enums.Status;
 import org.hibernate.annotations.Check;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Entity
@@ -100,4 +101,20 @@ public class LeaveRequest {
     public void setApproverReason(String approverReason) {
         this.approverReason = approverReason;
     }
+
+
+
+    public boolean coversDate(LocalDate targetDate) {
+        if (targetDate == null || startDateTime == null || endDateTime == null) {
+            return false;
+        }
+
+        LocalDate startDate = startDateTime.toLocalDate();
+        LocalDate endDate = endDateTime.toLocalDate();
+
+        return !targetDate.isBefore(startDate) && !targetDate.isAfter(endDate);
+    }
+
+
+
 }

@@ -7,8 +7,9 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
 
-import org.example.maridone.config.DefaultProperties;
-import org.example.maridone.config.PayrollProperties;
+import org.example.maridone.config.DefaultConfig;
+import org.example.maridone.config.PayrollConfig;
+import org.example.maridone.payroll.BracketService;
 import org.example.maridone.core.employee.Employee;
 import org.example.maridone.enums.EarningsType;
 import org.example.maridone.enums.DeductionType;
@@ -29,7 +30,6 @@ import org.example.maridone.payroll.item.component.DeductionsLine;
 import org.example.maridone.payroll.item.component.DeductionsRepository;
 import org.example.maridone.payroll.item.component.EarningsLine;
 import org.example.maridone.payroll.item.component.EarningsRepository;
-import org.example.maridone.payroll.dto.ItemDetailsDto;
 import org.example.maridone.payroll.mapper.PayrollMapper;
 import org.example.maridone.schedule.shift.TemplateShiftRepository;
 import org.example.maridone.schedule.shift.TemplateShiftSchedule;
@@ -58,18 +58,19 @@ class PayrollServiceTest {
     @Mock private OvertimeRequestRepository overtimeRequestRepository;
     @Mock private LeaveRequestRepository leaveRequestRepository;
     @Mock private HolidayService holidayService;
-    @Mock private DefaultProperties defaultProperties;
+    @Mock private DefaultConfig defaultConfig;
     @Mock private EarningsRepository earningsRepository;
     @Mock private DeductionsRepository deductionsRepository;
     @Mock private PayrollMapper payrollMapper;
 
     private PayrollService payrollService;
-    private PayrollProperties payrollProperties;
+    private BracketService bracketService;
+    private PayrollConfig payrollConfig;
 
     @BeforeEach
     void setUp() {
-        payrollProperties = new PayrollProperties();
-        PayrollCalculator payrollCalculator = new PayrollCalculator(earningsRepository, deductionsRepository, payrollProperties);
+        bracketService = new BracketService(payrollConfig);
+        PayrollCalculator payrollCalculator = new PayrollCalculator(earningsRepository, deductionsRepository, bracketService, defaultConfig, payrollConfig);
         payrollService = new PayrollService(
                 payrollRunRepository,
                 payrollItemRepository,
@@ -81,24 +82,13 @@ class PayrollServiceTest {
                 holidayService,
                 payrollCalculator,
                 payrollMapper,
-                defaultProperties,
-                payrollProperties
+                defaultConfig,
+                payrollConfig,
+                bracketService
         );
     }
 
-    @Test
-    void getItems_ShouldReturnDtos() {
-        Long empId = 1L;
-        PayrollItem item = new PayrollItem();
-        ItemDetailsDto dto = new ItemDetailsDto();
 
-        when(payrollItemRepository.findAll(any(Specification.class))).thenReturn(List.of(item));
-        when(payrollMapper.toItemDetailsDtos(anyList())).thenReturn(List.of(dto));
-
-        List<ItemDetailsDto> result = payrollService.getItems(empId);
-
-        Assertions.assertFalse(result.isEmpty());
-    }
 
     @Test
     void processPayrollNonExempt_RegularHoliday_ShouldApplyTwoHundredPercentPremium() {
@@ -751,7 +741,7 @@ class PayrollServiceTest {
             List<OvertimeRequest> overtimeRequests,
             List<LeaveRequest> leaves
     ) {
-        when(defaultProperties.getTimeZone()).thenReturn(ZONE);
+        when(defaultConfig.getTimeZone()).thenReturn(ZONE);
         when(attendanceLogRepository.findByEmployeeIdInAndTimestampBetween(anyList(), any(Instant.class), any(Instant.class), any()))
                 .thenReturn(logs);
         when(overtimeRequestRepository.findAll(any(Specification.class)))
@@ -769,12 +759,12 @@ class PayrollServiceTest {
             List<TemplateShiftSchedule> schedules,
             List<LeaveRequest> leaves
     ) {
-        when(defaultProperties.getTimeZone()).thenReturn(ZONE);
+        when(defaultConfig.getTimeZone()).thenReturn(ZONE);
         when(attendanceLogRepository.findByEmployeeIdInAndTimestampBetween(anyList(), any(Instant.class), any(Instant.class), any()))
                 .thenReturn(logs);
         when(templateShiftRepository.findByEmployee_EmployeeIdIn(anyList()))
                 .thenReturn(schedules);
-        when(leaveRequestRepository.findApprovedLeavesForPeriod(anyList(), any(LocalDate.class), any(LocalDate.class)))
+        when(leaveRequestRepository.findApprovedLeavesForPeriod(anyList(), any(LocalDateTime.class), any(LocalDateTime.class)))
                 .thenReturn(leaves);
         when(holidayService.getHolidayLookup(any(LocalDate.class), any(LocalDate.class)))
                 .thenReturn(HolidayLookup.empty());

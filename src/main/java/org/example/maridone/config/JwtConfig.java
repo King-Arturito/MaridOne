@@ -10,7 +10,7 @@ import org.springframework.validation.annotation.Validated;
 @ConfigurationProperties("jwt")
 @Component
 @Validated
-public class JwtProperties {
+public class JwtConfig {
     @NotEmpty(message = "No provided JWT Secret Key.")
     private String secret;
     //1 day
