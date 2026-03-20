@@ -5,7 +5,6 @@ import org.example.maridone.core.dto.EmployeeDetailsDto;
 import org.example.maridone.core.dto.EmployeeRequestDto;
 import org.example.maridone.core.dto.EmployeeResponseDto;
 import org.example.maridone.core.filter.EmployeeFilter;
-import org.example.maridone.core.user.UserAccountService;
 import org.example.maridone.marker.HrUpdate;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -26,17 +25,14 @@ import java.net.URI;
 public class EmployeeController {
 
     private final EmployeeService employeeService;
-    private final UserAccountService userAccountService;
 
-    public EmployeeController(EmployeeService employeeService,
-                              UserAccountService userAccountService) {
+    public EmployeeController(EmployeeService employeeService) {
         this.employeeService = employeeService;
-        this.userAccountService = userAccountService;
     }
 
     // ENDPOINT: /api/employees/create
     @PostMapping("/create")
-    @PreAuthorize("hasRole('MANAGEMENT')")
+    @PreAuthorize("hasAnyRole('MANAGEMENT', 'HR')")
     @AuditLog
     public ResponseEntity<EmployeeResponseDto> createEmployee(@RequestBody EmployeeRequestDto employeeRequestDto) {
         EmployeeResponseDto response = employeeService.createEmployee(employeeRequestDto);
@@ -69,6 +65,7 @@ public class EmployeeController {
     // id is dynamic
     //returns a status code instead of automatically showing it in the HRIS
     @PatchMapping("/{id}")
+    @PreAuthorize("isAuthenticated()")
     @AuditLog
     public ResponseEntity<EmployeeResponseDto> updateEmployee(@PathVariable Long id, @RequestBody EmployeeRequestDto employeeRequestDto) {
         EmployeeResponseDto response =  employeeService.updateEmployee(id, employeeRequestDto);

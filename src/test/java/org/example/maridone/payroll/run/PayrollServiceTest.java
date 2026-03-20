@@ -1,11 +1,7 @@
 package org.example.maridone.payroll.run;
 
 import java.math.BigDecimal;
-import java.time.DayOfWeek;
-import java.time.Instant;
-import java.time.LocalDate;
-import java.time.LocalTime;
-import java.time.ZoneId;
+import java.time.*;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -236,9 +232,8 @@ class PayrollServiceTest {
         TemplateShiftSchedule schedule = buildSchedule(emp, workDate, LocalTime.of(8, 0), LocalTime.of(17, 0));
         LeaveRequest leave = new LeaveRequest();
         leave.setEmployee(emp);
-        leave.setLeaveDate(workDate);
-        leave.setStartTime(LocalTime.of(8, 0));
-        leave.setEndTime(LocalTime.of(10, 0));
+        leave.setStartDateTime(LocalDateTime.of(LocalDate.now(), LocalTime.of(80, 0)));
+        leave.setStartDateTime(LocalDateTime.of(LocalDate.now(), LocalTime.of(10, 0)));
 
         stubCommonDependencies(List.of(), schedule, HolidayLookup.empty(), List.of(), List.of(leave));
 
@@ -763,7 +758,7 @@ class PayrollServiceTest {
                 .thenReturn(overtimeRequests);
         when(templateShiftRepository.findByEmployee_EmployeeIdIn(anyList()))
                 .thenReturn(schedules);
-        when(leaveRequestRepository.findApprovedLeavesForPeriod(anyList(), any(LocalDate.class), any(LocalDate.class)))
+        when(leaveRequestRepository.findApprovedLeavesForPeriod(anyList(), any(LocalDateTime.class), any(LocalDateTime.class)))
                 .thenReturn(leaves);
         when(holidayService.getHolidayLookup(any(LocalDate.class), any(LocalDate.class)))
                 .thenReturn(holidayLookup);

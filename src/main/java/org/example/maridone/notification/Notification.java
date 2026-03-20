@@ -28,7 +28,7 @@ public class Notification {
     @Column(name = "importance", nullable = false)
     private String importance;
 
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "employee_id", nullable = false)
     @JsonIgnore
     private Employee employee;

@@ -18,8 +18,11 @@ CREATE TABLE employee (
     state                 VARCHAR(255),
     country               VARCHAR(255),
     zip_code              VARCHAR(255),
+    manager_id            BIGINT
 
     CONSTRAINT employee_employment_status_check CHECK (employment_status IN ('REGULAR', 'NEW_HIRE', 'PART_TIME', 'TERMINATED', 'SUSPENDED')),
     CONSTRAINT employee_exemption_status_check  CHECK (exemption_status  IN ('EXEMPT', 'NON_EXEMPT')),
-    CONSTRAINT employee_position_check          CHECK (position          IN ('MANAGEMENT', 'HR', 'ACCOUNTING', 'EMPLOYEE', 'MANAGER', 'UNKNOWN'))
+    CONSTRAINT employee_position_check          CHECK (position          IN ('MANAGEMENT', 'HR', 'ACCOUNTING', 'EMPLOYEE', 'MANAGER', 'UNKNOWN')),
+    CONSTRAINT fk_employee_manager FOREIGN KEY (manager_id) REFERENCES Employee(emp_id)
+
 );

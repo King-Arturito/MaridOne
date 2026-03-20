@@ -140,7 +140,7 @@ public class ShiftService {
             DOESNT SUPPORT MANY LEAVES YET
         */
         Map<Long, List<LeaveRequest>> empToRequests = leaveRequestRepository
-                .findApprovedLeavesForDay(today)
+                .findApprovedLeavesForDay(today.atStartOfDay(), today.plusDays(1).atStartOfDay())
                 .stream()
                 .collect(Collectors.groupingBy(
                         leaveRequest -> leaveRequest.getEmployee().getEmployeeId()));
@@ -175,12 +175,8 @@ public class ShiftService {
                 : LocalDateTime.of(date, schedule.getEndTime());
 
 
-        LocalDateTime leaveFrom = LocalDateTime.of(leave.getLeaveDate(), leave.getStartTime());
-
-        //same applies here
-        LocalDateTime leaveTo = leave.getEndTime().isBefore(leave.getStartTime())
-                ? LocalDateTime.of(leave.getLeaveDate().plusDays(1), leave.getEndTime())
-                : LocalDateTime.of(leave.getLeaveDate(), leave.getEndTime());
+        LocalDateTime leaveFrom = leave.getStartDateTime();
+        LocalDateTime leaveTo = leave.getEndDateTime();
 
         // no overlap, generate normally
         if (leaveTo.isBefore(shiftStart) || leaveFrom.isAfter(shiftEnd)) {

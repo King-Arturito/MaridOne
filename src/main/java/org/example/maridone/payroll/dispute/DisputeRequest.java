@@ -40,7 +40,7 @@ public class DisputeRequest {
     @Column(name = "status_reason")
     private String statusReason;
 
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "item_id", nullable = false)
     @JsonIgnore
     private PayrollItem payrollItem;

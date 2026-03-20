@@ -306,7 +306,7 @@ public class PayrollService {
         List<TemplateShiftSchedule> allSchedules = templateShiftRepository.findByEmployee_EmployeeIdIn(employeeIds);
 
         List<LeaveRequest> allLeaves = leaveRequestRepository.findApprovedLeavesForPeriod(
-            employeeIds, run.getPeriodStart(), run.getPeriodEnd()
+            employeeIds, run.getPeriodStart().atStartOfDay(), run.getPeriodEnd().plusDays(1).atStartOfDay()
         );
 
         HolidayLookup holidayLookup = holidayService.getHolidayLookup(run.getPeriodStart(), run.getPeriodEnd());
@@ -354,6 +354,7 @@ public class PayrollService {
                 AttendanceLog dayOutLog = findOutLogAfterIn(attendanceLogs, dayInLog, loopDate);
                 boolean hasCompleteAttendancePair = dayInLog != null && dayOutLog != null;
 
+              //todo: verify
                 LeaveRequest todaysLeave = findLeaveForDate(leaves, loopDate);
 
                 List<OvertimeRequest> todaysOT = requests.stream()
@@ -404,6 +405,7 @@ public class PayrollService {
 
                     if (todaysLeave != null) {
                         // Approved leaves are currently treated as paid leave in payroll because unpaid leave is not modeled yet.
+              //todo: verify
                         leaveHours = payrollCalculator.calculateHours(todaysLeave.getStartTime(), todaysLeave.getEndTime());
                         if (leaveHours.compareTo(expectedHours) > 0) {
                             leaveHours = expectedHours;

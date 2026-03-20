@@ -15,7 +15,7 @@ public class DeductionsLine {
     @Column(name = "deductions_id", nullable = false)
     private Long deductionsId;
 
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "item_id", nullable = false)
     private PayrollItem payrollItem;
 

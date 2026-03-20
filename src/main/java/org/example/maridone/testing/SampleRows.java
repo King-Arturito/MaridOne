@@ -1,12 +1,7 @@
 package org.example.maridone.testing;
 
 import java.math.BigDecimal;
-import java.time.DayOfWeek;
-import java.time.Instant;
-import java.time.LocalDate;
-import java.time.LocalTime;
-import java.time.ZoneOffset;
-import java.time.ZonedDateTime;
+import java.time.*;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
@@ -258,9 +253,8 @@ public class SampleRows {
     private void createAndSaveLeaveRequests(Employee emp, int i) {
         LeaveRequest leaveRequest = new LeaveRequest();
         leaveRequest.setEmployee(emp);
-        leaveRequest.setLeaveDate(LocalDate.now());
-        leaveRequest.setStartTime(LocalTime.of(23, 30));
-        leaveRequest.setEndTime(LocalTime.of(0,30));
+        leaveRequest.setStartDateTime(LocalDateTime.of(LocalDate.now(), LocalTime.of(23,30)));
+        leaveRequest.setEndDateTime(LocalDateTime.of(LocalDate.now().plusDays(1), LocalTime.of(0,30)));
         leaveRequest.setRequestStatus(i % 2 == 0 ? Status.APPROVED : Status.PENDING);
         leaveRequest.setReason("Vacation request #" + i);
 

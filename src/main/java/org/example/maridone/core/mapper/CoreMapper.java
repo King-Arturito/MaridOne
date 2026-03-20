@@ -20,10 +20,13 @@ public interface CoreMapper {
     EmployeeResponseDto toEmployeeResponse(Employee employee);
 
     @Mapping(source = "employeeId", target = "id")
+    @Mapping(source = "manager.employeeId", target = "managerId")
+    @Mapping(source = "userAccount.username", target = "userAccountName")
     EmployeeDetailsDto toEmployeeDetailsDto(Employee employee);
 
     @Mapping(source = "employeeId", target = "id")
     List<EmployeeResponseDto> toEmployeeResponses(List<Employee> employees);
+
 
     Employee toEmployee(EmployeeRequestDto employeeRequestDto);
 

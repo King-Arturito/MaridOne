@@ -13,6 +13,8 @@ import org.example.maridone.embeddable.Address;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.List;
 
 @Table(name = "employee")
 @Entity
@@ -75,6 +77,30 @@ public class Employee {
     @OneToOne(mappedBy = "employee", cascade = CascadeType.ALL)
     private UserAccount userAccount;
 
+    //who is this employee's manager(if any)
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "manager_id", nullable = true)
+    private Employee manager;
+
+    //who does this employee handle? (if any)
+    @OneToMany(mappedBy = "manager")
+    private List<Employee> handledEmployees = new ArrayList<>();
+
+    public Employee getManager() {
+        return manager;
+    }
+
+    public void setManager(Employee manager) {
+        this.manager = manager;
+    }
+
+    public List<Employee> getHandledEmployees() {
+        return handledEmployees;
+    }
+
+    public void setHandledEmployees(List<Employee> handledEmployees) {
+        this.handledEmployees = handledEmployees;
+    }
 
     public Long getEmployeeId() {
         return employeeId;

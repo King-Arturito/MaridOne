@@ -4,12 +4,13 @@ import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import org.example.maridone.core.employee.Employee;
 import org.example.maridone.enums.Status;
+import org.hibernate.annotations.Check;
 
-import java.time.LocalDate;
-import java.time.LocalTime;
+import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "leave_request")
+@Check(constraints = "start_date < end_date")
 public class LeaveRequest {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -17,18 +18,15 @@ public class LeaveRequest {
     private Long requestId;
 
     @JsonIgnore
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "emp_id", nullable = false)
     private Employee employee;
 
-    @Column(name = "leave_date", nullable = false)
-    private LocalDate leaveDate;
+    @Column(name = "start_date", nullable = false)
+    private LocalDateTime startDateTime;
 
-    @Column(name = "start_time", nullable = false)
-    private LocalTime startTime;
-
-    @Column(name = "end_time", nullable = false)
-    private LocalTime endTime;
+    @Column(name = "end_date", nullable = false)
+    private LocalDateTime endDateTime;
 
     @Column(name = "approver", nullable = true)
     private String approver;
@@ -55,28 +53,20 @@ public class LeaveRequest {
         this.employee = employee;
     }
 
-    public LocalDate getLeaveDate() {
-        return leaveDate;
+    public LocalDateTime getStartDateTime() {
+        return startDateTime;
     }
 
-    public void setLeaveDate(LocalDate leaveDate) {
-        this.leaveDate = leaveDate;
+    public void setStartDateTime(LocalDateTime startDateTime) {
+        this.startDateTime = startDateTime;
     }
 
-    public LocalTime getStartTime() {
-        return startTime;
+    public LocalDateTime getEndDateTime() {
+        return endDateTime;
     }
 
-    public void setStartTime(LocalTime startTime) {
-        this.startTime = startTime;
-    }
-
-    public LocalTime getEndTime() {
-        return endTime;
-    }
-
-    public void setEndTime(LocalTime endTime) {
-        this.endTime = endTime;
+    public void setEndDateTime(LocalDateTime endDateTime) {
+        this.endDateTime = endDateTime;
     }
 
     public String getApprover() {

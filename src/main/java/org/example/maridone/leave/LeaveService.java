@@ -135,12 +135,14 @@ public class LeaveService {
 
     @Transactional
     @ExecutionTime
+    //todo: bulknotify annotation
     public LeaveRequest createLeaveRequest(LeaveRequestDto payload, Long empId) {
         Employee emp =  employeeRepository.findById(empId).orElseThrow(() -> new EmployeeNotFoundException(empId));
         LeaveRequest request = new LeaveRequest();
         request.setRequestStatus(Status.PENDING);
+        request.setStartDateTime(payload.getStartDateTime());
+        request.setEndDateTime(payload.getEndDateTime());
         request.setEmployee(emp);
-        request.setLeaveDate(payload.getLeaveDate());
         request.setReason(payload.getReason());
         leaveRequestRepository.save(request);
         return request;

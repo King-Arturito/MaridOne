@@ -17,7 +17,7 @@ public class EarningsLine {
     @Column(name = "earnings_id", nullable = false)
     private Long earningsId;
 
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "item_id", nullable = false)
     @JsonIgnore
     private PayrollItem payrollItem;
@@ -39,7 +39,7 @@ public class EarningsLine {
     @Column(name = "is_overtime", nullable = false)
     private Boolean isOvertime;
 
-    @OneToOne
+    @OneToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "earningsLine", nullable = true)
     @JsonIgnore
     private OvertimeRequest overtimeRequest;
