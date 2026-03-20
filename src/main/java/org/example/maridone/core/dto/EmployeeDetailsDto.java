@@ -82,6 +82,14 @@ public class EmployeeDetailsDto {
         this.exemptionStatus = exemptionStatus;
     }
 
+    public LocalDate getEmploymentDateStart() {
+        return employmentDateStart;
+    }
+
+    public void setEmploymentDateStart(LocalDate employmentDateStart) {
+        this.employmentDateStart = employmentDateStart;
+    }
+
     public String getEmail() {
         return email;
     }

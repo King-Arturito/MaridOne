@@ -44,6 +44,14 @@ public class LogController {
         return logService.getAttendance(empId, pageable);
     }
 
+    @GetMapping("/attendance/self/{empId}")
+    @PreAuthorize("@userCheck.isSelf(#empId, authentication.getName())")
+    public Page<AttendanceLog> getMyAttendance(
+            @PathVariable Long empId,
+            @PageableDefault(size = 25, sort = "timestamp", direction = Sort.Direction.DESC) Pageable pageable) {
+        return logService.getAttendance(empId, pageable);
+    }
+
 
     @GetMapping("/activity")
     @PreAuthorize("hasRole('HR')")

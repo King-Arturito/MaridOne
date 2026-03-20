@@ -95,7 +95,6 @@ public class OvertimeService {
     @ExecutionTime
     public Page<OvertimeResponseDto> getMyOvertimeRequests(Long empId, Pageable pageable) {
         Specification<OvertimeRequest> specs =  Specification.allOf(
-                OvertimeSpecs.hasStatus(Status.PENDING),
                 OvertimeSpecs.hasEmployeeId(empId)
         );
         Page<OvertimeRequest> myRequests = overtimeRequestRepository.findAll(specs, pageable);

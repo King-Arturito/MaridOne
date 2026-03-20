@@ -8,6 +8,7 @@ import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.example.maridone.config.PayrollProperties;
 import org.example.maridone.core.employee.Employee;
 import org.example.maridone.enums.DeductionType;
 import org.example.maridone.enums.ExemptionStatus;
@@ -24,14 +25,17 @@ public class PayrollCalculator {
 
     private final EarningsRepository earningsRepository;
     private final DeductionsRepository deductionsRepository;
+    private final PayrollProperties payrollProperties;
 
     public PayrollCalculator(
         EarningsRepository earningsRepository,
-        DeductionsRepository deductionsRepository
+        DeductionsRepository deductionsRepository,
+        PayrollProperties payrollProperties
     )
     {
         this.earningsRepository = earningsRepository;
         this.deductionsRepository = deductionsRepository;
+        this.payrollProperties = payrollProperties;
     }
 
 
@@ -39,33 +43,25 @@ public class PayrollCalculator {
         List<EarningsLine> earnings =  new ArrayList<>();
         BigDecimal grossPay = normalizeMoney(item.getGrossPay());
         LocalDate earningsDate = resolveEarningsDate(item);
-        if (emp.getExemptionStatus().equals(ExemptionStatus.EXEMPT)) {
-            EarningsLine earningsLine = new EarningsLine();
-            earningsLine.setRate(BigDecimal.ZERO);
-            earningsLine.setHours(BigDecimal.ZERO);
-            earningsLine.setAmount(grossPay);
-            earningsLine.setEarningsDate(earningsDate);
-            earningsLine.setPayrollItem(item);
-            earningsLine.setOvertime(false);
-            earnings.add(earningsLine);
-        } else if (emp.getExemptionStatus().equals(ExemptionStatus.NON_EXEMPT)) {
-            EarningsLine regularLine = new EarningsLine();
-            regularLine.setRate(BigDecimal.ZERO);
-            regularLine.setHours(BigDecimal.ZERO);
-            regularLine.setAmount(grossPay);
-            regularLine.setEarningsDate(earningsDate);
-            regularLine.setPayrollItem(item);
-            regularLine.setOvertime(false);
-            earnings.add(regularLine);
+        if (emp.getExemptionStatus().equals(ExemptionStatus.EXEMPT)
+                || emp.getExemptionStatus().equals(ExemptionStatus.NON_EXEMPT)) {
+            earnings.add(createBaseEarningsLine(item, grossPay, earningsDate));
         }
         return earnings;
     }
 
     public List<EarningsLine> setEarnings(Employee emp, PayrollItem item, List<EarningsLine> precomputedLines) {
-        if (precomputedLines == null || precomputedLines.isEmpty()) {
-            return List.of();
-        }
         LocalDate fallbackDate = resolveEarningsDate(item);
+        List<EarningsLine> earnings = new ArrayList<>();
+
+        if (emp.getExemptionStatus().equals(ExemptionStatus.NON_EXEMPT)) {
+            earnings.add(createBaseEarningsLine(item, normalizeMoney(item.getGrossPay()), fallbackDate));
+        }
+
+        if (precomputedLines == null || precomputedLines.isEmpty()) {
+            return earnings;
+        }
+
         for (EarningsLine line : precomputedLines) {
             line.setPayrollItem(item);
             if (line.getEarningsDate() == null) {
@@ -83,8 +79,9 @@ public class PayrollCalculator {
             if (line.getAmount() == null) {
                 line.setAmount(BigDecimal.ZERO);
             }
+            earnings.add(line);
         }
-        return precomputedLines;
+        return earnings;
     }
 
     public List<DeductionsLine> setDeductions(
@@ -111,10 +108,10 @@ public class PayrollCalculator {
         addDeductionLine(deductions, item, DeductionType.LATE_PENALTY, collectedLate);
 
         BigDecimal payAfterAttendance = grossPay.subtract(collectedAbsent).subtract(collectedLate);
-        BigDecimal monthlyBasicPay = yearlySalary.divide(BigDecimal.valueOf(12), 2, RoundingMode.HALF_UP);
-        BigDecimal sssDue = computeSssEmployeeSharePerCutoff(monthlyBasicPay);
-        BigDecimal philHealthDue = computePhilHealthEmployeeSharePerCutoff(monthlyBasicPay);
-        BigDecimal pagibigDue = computePagibigEmployeeSharePerCutoff(monthlyBasicPay);
+        BigDecimal monthlyBasicPay = payrollProperties.computeMonthlyBasicPay(yearlySalary);
+        BigDecimal sssDue = payrollProperties.computeSssEmployeeSharePerCutoff(monthlyBasicPay);
+        BigDecimal philHealthDue = payrollProperties.computePhilHealthEmployeeSharePerCutoff(monthlyBasicPay);
+        BigDecimal pagibigDue = payrollProperties.computePagibigEmployeeSharePerCutoff(monthlyBasicPay);
 
         BigDecimal nti = payAfterAttendance.subtract(sssDue).subtract(philHealthDue).subtract(pagibigDue);
         if (nti.compareTo(BigDecimal.ZERO) < 0) {
@@ -122,8 +119,8 @@ public class PayrollCalculator {
         }
         nti = normalizeMoney(nti);
 
-        BigDecimal withholdingDue = computeWithholdingTaxPerCutoff(nti);
-        DeductionType withholdingType = resolveTaxBracketType(nti);
+        BigDecimal withholdingDue = payrollProperties.computeWithholdingTaxPerCutoff(nti);
+        DeductionType withholdingType = payrollProperties.resolveWithholdingDeductionType(nti);
 
         addDeductionLine(deductions, item, DeductionType.SSS, sssDue);
         addDeductionLine(deductions, item, DeductionType.PHILHEALTH, philHealthDue);
@@ -206,102 +203,15 @@ public class PayrollCalculator {
         deductions.add(line);
     }
 
-    private BigDecimal computeWithholdingTaxPerCutoff(BigDecimal taxableCompensationPerCutoff) {
-        BigDecimal nti = normalizeMoney(taxableCompensationPerCutoff);
-        BigDecimal withholding;
-        if (nti.compareTo(BigDecimal.valueOf(10_417)) <= 0) {
-            withholding = BigDecimal.ZERO;
-        } else if (nti.compareTo(new BigDecimal("16666.99")) <= 0) {
-            withholding = nti.subtract(BigDecimal.valueOf(10_417)).multiply(BigDecimal.valueOf(0.15));
-        } else if (nti.compareTo(new BigDecimal("33332.99")) <= 0) {
-            withholding = BigDecimal.valueOf(937.50).add(
-                    nti.subtract(BigDecimal.valueOf(16_667)).multiply(BigDecimal.valueOf(0.20))
-            );
-        } else if (nti.compareTo(new BigDecimal("83332.99")) <= 0) {
-            withholding = BigDecimal.valueOf(4_270.83).add(
-                    nti.subtract(BigDecimal.valueOf(33_333)).multiply(BigDecimal.valueOf(0.25))
-            );
-        } else if (nti.compareTo(new BigDecimal("333332.99")) <= 0) {
-            withholding = BigDecimal.valueOf(16_770.83).add(
-                    nti.subtract(BigDecimal.valueOf(83_333)).multiply(BigDecimal.valueOf(0.30))
-            );
-        } else {
-            withholding = BigDecimal.valueOf(91_770.83).add(
-                    nti.subtract(BigDecimal.valueOf(333_333)).multiply(BigDecimal.valueOf(0.35))
-            );
-        }
-        return normalizeMoney(withholding);
-    }
-
-    private DeductionType resolveTaxBracketType(BigDecimal taxableCompensationPerCutoff) {
-        BigDecimal nti = normalizeMoney(taxableCompensationPerCutoff);
-        if (nti.compareTo(BigDecimal.valueOf(10_417)) <= 0) {
-            return DeductionType.BRACKET_LEVEL_ONE;
-        } else if (nti.compareTo(new BigDecimal("16666.99")) <= 0) {
-            return DeductionType.BRACKET_LEVEL_TWO;
-        } else if (nti.compareTo(new BigDecimal("33332.99")) <= 0) {
-            return DeductionType.BRACKET_LEVEL_THREE;
-        } else if (nti.compareTo(new BigDecimal("83332.99")) <= 0) {
-            return DeductionType.BRACKET_LEVEL_FOUR;
-        } else if (nti.compareTo(new BigDecimal("333332.99")) <= 0) {
-            return DeductionType.BRACKET_LEVEL_FIVE;
-        }
-        return DeductionType.BRACKET_LEVEL_SIX;
-    }
-
-    private BigDecimal computeSssEmployeeSharePerCutoff(BigDecimal monthlyCompensation) {
-        BigDecimal msc = resolveSssMsc(monthlyCompensation);
-        if (msc.compareTo(BigDecimal.ZERO) <= 0) {
-            return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
-        }
-        BigDecimal monthlyEmployeeShare = msc.multiply(BigDecimal.valueOf(0.05));
-        return monthlyEmployeeShare.divide(BigDecimal.valueOf(2), 2, RoundingMode.HALF_UP);
-    }
-
-    private BigDecimal resolveSssMsc(BigDecimal monthlyCompensation) {
-        BigDecimal monthly = normalizeMoney(monthlyCompensation);
-        if (monthly.compareTo(BigDecimal.ZERO) <= 0) {
-            return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
-        }
-
-        BigDecimal minMsc = BigDecimal.valueOf(5_000);
-        BigDecimal maxMsc = BigDecimal.valueOf(35_000);
-
-        BigDecimal clamped = monthly.max(minMsc).min(maxMsc);
-
-        BigDecimal roundedMsc = clamped
-                .divide(BigDecimal.valueOf(500), 0, RoundingMode.HALF_UP)
-                .multiply(BigDecimal.valueOf(500));
-
-        return roundedMsc.setScale(2, RoundingMode.HALF_UP);
-    }
-
-    private BigDecimal computePhilHealthEmployeeSharePerCutoff(BigDecimal monthlyCompensation) {
-        BigDecimal monthly = normalizeMoney(monthlyCompensation);
-        if (monthly.compareTo(BigDecimal.ZERO) <= 0) {
-            return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
-        }
-
-        BigDecimal adjustedMonthly = monthly
-                .max(BigDecimal.valueOf(10_000))
-                .min(BigDecimal.valueOf(100_000));
-        BigDecimal employeeMonthlyShare = adjustedMonthly.multiply(BigDecimal.valueOf(0.025));
-        return employeeMonthlyShare.divide(BigDecimal.valueOf(2), 2, RoundingMode.HALF_UP);
-    }
-
-    private BigDecimal computePagibigEmployeeSharePerCutoff(BigDecimal monthlyCompensation) {
-        BigDecimal monthly = normalizeMoney(monthlyCompensation);
-        if (monthly.compareTo(BigDecimal.ZERO) <= 0) {
-            return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
-        }
-
-        BigDecimal mfs = monthly.min(BigDecimal.valueOf(10_000));
-        BigDecimal rate = monthly.compareTo(BigDecimal.valueOf(1_500)) <= 0
-                ? BigDecimal.valueOf(0.01)
-                : BigDecimal.valueOf(0.02);
-
-        BigDecimal monthlyShare = mfs.multiply(rate);
-        return monthlyShare.divide(BigDecimal.valueOf(2), 2, RoundingMode.HALF_UP);
+    private EarningsLine createBaseEarningsLine(PayrollItem item, BigDecimal amount, LocalDate earningsDate) {
+        EarningsLine line = new EarningsLine();
+        line.setRate(BigDecimal.ZERO);
+        line.setHours(BigDecimal.ZERO);
+        line.setAmount(normalizeMoney(amount));
+        line.setEarningsDate(earningsDate);
+        line.setPayrollItem(item);
+        line.setOvertime(false);
+        return line;
     }
 
     private BigDecimal collectAmount(BigDecimal pool, BigDecimal due) {
