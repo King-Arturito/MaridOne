@@ -19,9 +19,10 @@ public class PayrollProperties {
     private Duration gracePeriod = Duration.of(15, ChronoUnit.MINUTES);
     private BigDecimal overtimeMultiplier = BigDecimal.valueOf(1.25);
     private BigDecimal nightDifferentialMultiplier = BigDecimal.valueOf(0.10);
-    private BigDecimal restDayWorkMultiplier = BigDecimal.valueOf(1.30);
-    private BigDecimal specialHolidayWorkMultiplier = BigDecimal.valueOf(1.30);
-    private BigDecimal regularHolidayWorkMultiplier = BigDecimal.valueOf(2.00);
+    // Premium-only increments layered on top of base earnings.
+    private BigDecimal restDayWorkMultiplier = BigDecimal.valueOf(0.30);
+    private BigDecimal specialHolidayWorkMultiplier = BigDecimal.valueOf(0.30);
+    private BigDecimal regularHolidayWorkMultiplier = BigDecimal.valueOf(1.00);
     private BigDecimal vacationLeaveHours = BigDecimal.valueOf(120);
     private BigDecimal sickLeaveHours =  BigDecimal.valueOf(120);
     private BigDecimal sssEmployeeRate = BigDecimal.valueOf(0.05);

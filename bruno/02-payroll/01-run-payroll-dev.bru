@@ -1,0 +1,26 @@
+meta {
+  name: Run Payroll (Dev Test Endpoint)
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/api/test/payroll-run
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+  Authorization: Bearer {{accessToken}}
+}
+
+body:json {
+  {
+    "periodStart": "2026-03-01",
+    "periodEnd": "2026-03-14",
+    "periodDescription": "Mar 1-14, 2026 runtime test",
+    "payrollStatus": "IN_PROGRESS",
+    "runType": "REGULAR"
+  }
+}

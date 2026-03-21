@@ -46,6 +46,8 @@ import org.example.maridone.payroll.run.PayrollRun;
 import org.example.maridone.payroll.run.PayrollRunRepository;
 import org.example.maridone.schedule.calendar.CalendarRepository;
 import org.example.maridone.schedule.calendar.CompanyCalendar;
+import org.example.maridone.schedule.shift.DailyShiftRepository;
+import org.example.maridone.schedule.shift.DailyShiftSchedule;
 import org.example.maridone.schedule.shift.TemplateShiftRepository;
 import org.example.maridone.schedule.shift.TemplateShiftSchedule;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -75,6 +77,9 @@ public class SampleRows {
 
     @Autowired
     private TemplateShiftRepository templateShiftRepository;
+
+    @Autowired
+    private DailyShiftRepository dailyShiftRepository;
 
     @Autowired
     private BankAccountRepository bankAccountRepository;
@@ -136,7 +141,8 @@ public class SampleRows {
             createAndSaveNotifications(emp, i);
             createAndSaveLeaveRequests(emp, i);
             createAndSaveLeaveBalances(emp, i);
-            createAndSaveShiftSchedules(emp, i);
+            List<TemplateShiftSchedule> templateShiftSchedules = createAndSaveShiftSchedules(emp, i);
+            createAndSaveDailyShiftSchedules(emp, i, templateShiftSchedules, payrollRun);
             createAndSaveAttendanceLogs(emp, i);
             createAndSaveOvertimeRequests(emp, i);
 
@@ -277,7 +283,7 @@ public class SampleRows {
         leaveBalanceRepository.save(leaveBalance);
     }
 
-    private void createAndSaveShiftSchedules(Employee emp, int i) {
+    private List<TemplateShiftSchedule> createAndSaveShiftSchedules(Employee emp, int i) {
         List<TemplateShiftSchedule> templateShiftSchedules = new ArrayList<>();
 
         for (int k = 1; k <= 7; k++) {
@@ -290,13 +296,88 @@ public class SampleRows {
             templateShiftSchedules.add(templateShiftSchedule);
         }
 
-        templateShiftRepository.saveAll(templateShiftSchedules);
+        return templateShiftRepository.saveAll(templateShiftSchedules);
+    }
+
+    private void createAndSaveDailyShiftSchedules(
+            Employee emp,
+            int employeeSeedIndex,
+            List<TemplateShiftSchedule> templateShiftSchedules,
+            PayrollRun payrollRun
+    ) {
+        if (templateShiftSchedules == null || templateShiftSchedules.isEmpty()) {
+            return;
+        }
+
+        Map<DayOfWeek, TemplateShiftSchedule> templateByDay = templateShiftSchedules.stream()
+                .collect(java.util.stream.Collectors.toMap(
+                        TemplateShiftSchedule::getDayOfWeek,
+                        schedule -> schedule
+                ));
+
+        List<DailyShiftSchedule> dailyShiftSchedules = new ArrayList<>();
+        List<SeedShiftRange> shiftRanges = List.of(
+                new SeedShiftRange(payrollRun.getPeriodStart(), payrollRun.getPeriodEnd()),
+                new SeedShiftRange(LocalDate.of(2026, 1, 26), LocalDate.of(2026, 2, 10)),
+                new SeedShiftRange(LocalDate.of(2026, 3, 26), LocalDate.of(2026, 4, 10)),
+                new SeedShiftRange(LocalDate.of(2026, 10, 11), LocalDate.of(2026, 10, 25))
+        );
+
+        for (SeedShiftRange range : shiftRanges) {
+            LocalDate currentDate = range.startDate();
+            while (!currentDate.isAfter(range.endDate())) {
+                TemplateShiftSchedule templateShiftSchedule = templateByDay.get(currentDate.getDayOfWeek());
+                if (templateShiftSchedule != null) {
+                    dailyShiftSchedules.add(buildDailyShift(employeeSeedIndex, templateShiftSchedule, currentDate));
+                }
+                currentDate = currentDate.plusDays(1);
+            }
+        }
+
+        if (!dailyShiftSchedules.isEmpty()) {
+            dailyShiftRepository.saveAll(dailyShiftSchedules);
+        }
+    }
+
+    private DailyShiftSchedule buildDailyShift(
+            int employeeSeedIndex,
+            TemplateShiftSchedule templateShiftSchedule,
+            LocalDate workDate
+    ) {
+        DailyShiftWindow shiftWindow = resolveDailyShiftWindow(employeeSeedIndex, workDate, templateShiftSchedule);
+        DailyShiftSchedule dailyShiftSchedule = new DailyShiftSchedule();
+        dailyShiftSchedule.setTemplateShiftSchedule(templateShiftSchedule);
+        dailyShiftSchedule.setStartDateTime(LocalDateTime.of(workDate, shiftWindow.startTime()));
+        dailyShiftSchedule.setEndDateTime(
+                LocalDateTime.of(workDate.plusDays(shiftWindow.endDayOffset()), shiftWindow.endTime())
+        );
+        return dailyShiftSchedule;
+    }
+
+    private DailyShiftWindow resolveDailyShiftWindow(
+            int employeeSeedIndex,
+            LocalDate workDate,
+            TemplateShiftSchedule templateShiftSchedule
+    ) {
+        if (employeeSeedIndex == 10
+                && workDate.equals(LocalDate.of(2026, 10, 20))) {
+            return new DailyShiftWindow(LocalTime.of(21, 0), LocalTime.of(6, 0), 1);
+        }
+
+        int endDayOffset = templateShiftSchedule.getEndTime().isBefore(templateShiftSchedule.getStartTime()) ? 1 : 0;
+        return new DailyShiftWindow(
+                templateShiftSchedule.getStartTime(),
+                templateShiftSchedule.getEndTime(),
+                endDayOffset
+        );
     }
 
     private void createAndSaveAttendanceLogs(Employee emp, int i) {
         List<AttendanceLog> attendanceLogs = new ArrayList<>();
 
-        if (i == 10) {
+        if (i == 1) {
+            seedMiddleLeaveVerificationAttendance(attendanceLogs, emp);
+        } else if (i == 10) {
             seedNonExemptRuntimeAttendance(attendanceLogs, emp);
         } else if (i == 8) {
             seedExemptRuntimeAttendance(attendanceLogs, emp);
@@ -305,6 +386,15 @@ public class SampleRows {
         if (!attendanceLogs.isEmpty()) {
             attendanceLogRepository.saveAll(attendanceLogs);
         }
+    }
+
+    private void seedMiddleLeaveVerificationAttendance(List<AttendanceLog> attendanceLogs, Employee emp) {
+        // Split logs for the March 21 middle-leave verification flow (08:00-11:00, 13:00-17:00).
+        LocalDate verificationDate = LocalDate.of(2026, 3, 21);
+        attendanceLogs.add(createAttendanceLog(emp, verificationDate, LocalTime.of(8, 0), "IN"));
+        attendanceLogs.add(createAttendanceLog(emp, verificationDate, LocalTime.of(11, 0), "OUT"));
+        attendanceLogs.add(createAttendanceLog(emp, verificationDate, LocalTime.of(13, 0), "IN"));
+        attendanceLogs.add(createAttendanceLog(emp, verificationDate, LocalTime.of(17, 0), "OUT"));
     }
 
     private void createAndSaveOvertimeRequests(Employee emp, int i) {
@@ -538,4 +628,8 @@ public class SampleRows {
             this(logIn, logOut, 0);
         }
     }
+
+    private record SeedShiftRange(LocalDate startDate, LocalDate endDate) {}
+
+    private record DailyShiftWindow(LocalTime startTime, LocalTime endTime, long endDayOffset) {}
 }

@@ -1,11 +1,12 @@
 package org.example.maridone.core.dto;
 
+import java.math.BigDecimal;
+import java.time.LocalDate;
+
 import org.example.maridone.embeddable.Address;
 import org.example.maridone.enums.EmploymentStatus;
 import org.example.maridone.enums.ExemptionStatus;
 import org.example.maridone.enums.Position;
-
-import java.time.LocalDate;
 
 public class EmployeeDetailsDto {
 
@@ -16,9 +17,14 @@ public class EmployeeDetailsDto {
     private LocalDate birthDate;
     private EmploymentStatus employmentStatus;
     private ExemptionStatus exemptionStatus;
+    private LocalDate employmentDateStart;
+    private LocalDate employmentDateEnd;
+    private BigDecimal yearlySalary;
     private String email;
     private String phoneNumber;
     private Position position;
+    private String userAccountName;
+    private Long managerId;
     private Address address;
 
     public Long getId() {
@@ -77,6 +83,14 @@ public class EmployeeDetailsDto {
         this.exemptionStatus = exemptionStatus;
     }
 
+    public LocalDate getEmploymentDateStart() {
+        return employmentDateStart;
+    }
+
+    public void setEmploymentDateStart(LocalDate employmentDateStart) {
+        this.employmentDateStart = employmentDateStart;
+    }
+
     public String getEmail() {
         return email;
     }
@@ -101,11 +115,43 @@ public class EmployeeDetailsDto {
         this.position = position;
     }
 
+    public Long getManagerId() {
+        return managerId;
+    }
+
+    public void setManagerId(Long managerId) {
+        this.managerId = managerId;
+    }
+
     public Address getAddress() {
         return address;
     }
 
     public void setAddress(Address address) {
         this.address = address;
+    }
+
+    public LocalDate getEmploymentDateEnd() {
+        return employmentDateEnd;
+    }
+
+    public void setEmploymentDateEnd(LocalDate employmentDateEnd) {
+        this.employmentDateEnd = employmentDateEnd;
+    }
+
+    public BigDecimal getYearlySalary() {
+        return yearlySalary;
+    }
+
+    public void setYearlySalary(BigDecimal yearlySalary) {
+        this.yearlySalary = yearlySalary;
+    }
+
+    public String getUserAccountName() {
+        return userAccountName;
+    }
+
+    public void setUserAccountName(String userAccountName) {
+        this.userAccountName = userAccountName;
     }
 }

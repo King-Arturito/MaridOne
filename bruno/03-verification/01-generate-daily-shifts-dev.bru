@@ -1,0 +1,14 @@
+meta {
+  name: Generate Daily Shifts (Dev)
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/api/test/shift_generate
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{accessToken}}
+}

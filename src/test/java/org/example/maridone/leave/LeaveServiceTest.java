@@ -1,9 +1,10 @@
 package org.example.maridone.leave;
 
 import java.math.BigDecimal;
-import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.Optional;
 
+import org.example.maridone.config.PayrollConfig;
 import org.example.maridone.core.employee.Employee;
 import org.example.maridone.core.employee.EmployeeRepository;
 import org.example.maridone.enums.LeaveType;
@@ -32,6 +33,7 @@ class LeaveServiceTest {
     @Mock private LeaveRequestRepository leaveRequestRepository;
     @Mock private EmployeeRepository employeeRepository;
     @Mock private LeaveMapper leaveMapper;
+    @Mock private PayrollConfig payrollConfig;
 
     @InjectMocks
     private LeaveService leaveService;
@@ -65,7 +67,9 @@ class LeaveServiceTest {
     void createLeaveRequest_ShouldSetStatusPending() {
         Long empId = 1L;
         LeaveRequestDto dto = new LeaveRequestDto();
-        dto.setLeaveDate(LocalDate.now());
+        dto.setStartDateTime(LocalDateTime.of(2026, 3, 21, 8, 0));
+        dto.setEndDateTime(LocalDateTime.of(2026, 3, 21, 17, 0));
+        dto.setApprover("hr-test");
         dto.setReason("Vacation");
 
         Employee emp = new Employee();
@@ -79,5 +83,7 @@ class LeaveServiceTest {
         Assertions.assertEquals(Status.PENDING, result.getRequestStatus());
         Assertions.assertEquals(emp, result.getEmployee());
         Assertions.assertEquals("Vacation", result.getReason());
+        Assertions.assertEquals(dto.getStartDateTime(), result.getStartDateTime());
+        Assertions.assertEquals(dto.getEndDateTime(), result.getEndDateTime());
     }
 }

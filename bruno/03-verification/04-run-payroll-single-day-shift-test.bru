@@ -1,0 +1,26 @@
+meta {
+  name: Run Payroll (Single-Day Shift Test)
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{baseUrl}}/api/test/payroll-run
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+  Authorization: Bearer {{accessToken}}
+}
+
+body:json {
+  {
+    "periodStart": "{{shiftTestDate}}",
+    "periodEnd": "{{shiftTestDate}}",
+    "periodDescription": "Single-day shift verification",
+    "payrollStatus": "IN_PROGRESS",
+    "runType": "REGULAR"
+  }
+}

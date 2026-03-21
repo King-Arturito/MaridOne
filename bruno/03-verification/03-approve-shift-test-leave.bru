@@ -1,0 +1,27 @@
+meta {
+  name: Approve Shift Test Leave
+  type: http
+  seq: 3
+}
+
+patch {
+  url: {{baseUrl}}/api/leave/update/{{leaveRequestId}}
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+  Authorization: Bearer {{accessToken}}
+}
+
+body:json {
+  {
+    "startDateTime": "{{shiftLeaveStart}}",
+    "endDateTime": "{{shiftLeaveEnd}}",
+    "approver": "hr-test",
+    "reason": "Shift split verification",
+    "requestStatus": "APPROVED",
+    "approverReason": "Approved for shift split verification"
+  }
+}

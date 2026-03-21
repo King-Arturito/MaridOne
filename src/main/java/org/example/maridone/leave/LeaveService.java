@@ -1,23 +1,29 @@
 package org.example.maridone.leave;
 
+import java.util.List;
+import java.util.Optional;
+
+import org.example.maridone.annotation.BulkNotify;
 import org.example.maridone.annotation.ExecutionTime;
 import org.example.maridone.annotation.Notify;
 import org.example.maridone.annotation.SystematicScheduling;
 import org.example.maridone.common.CommonSpecs;
-import org.example.maridone.config.PayrollProperties;
+import org.example.maridone.config.PayrollConfig;
 import org.example.maridone.core.employee.Employee;
 import org.example.maridone.core.employee.EmployeeRepository;
 import org.example.maridone.core.user.UserAccount;
 import org.example.maridone.core.user.UserAccountRepository;
 import org.example.maridone.enums.EmploymentStatus;
 import org.example.maridone.enums.LeaveType;
+import org.example.maridone.enums.Position;
 import org.example.maridone.enums.Status;
 import org.example.maridone.exception.notfound.AccountNotFoundException;
 import org.example.maridone.exception.notfound.EmployeeNotFoundException;
 import org.example.maridone.exception.notfound.LeaveNotFoundException;
 import org.example.maridone.exception.unauthorized.DuplicateLeaveException;
 import org.example.maridone.exception.unauthorized.InsufficientBalanceException;
-import org.example.maridone.leave.balance.*;
+import org.example.maridone.leave.balance.LeaveBalance;
+import org.example.maridone.leave.balance.LeaveBalanceRepository;
 import org.example.maridone.leave.dto.BalanceRequestDto;
 import org.example.maridone.leave.dto.BalanceResponseDto;
 import org.example.maridone.leave.dto.LeaveRequestDto;
@@ -31,9 +37,6 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.List;
-import java.util.Optional;
-
 @Service
 public class LeaveService {
 
@@ -42,20 +45,21 @@ public class LeaveService {
     private final EmployeeRepository employeeRepository;
     private final UserAccountRepository userAccountRepository;
     private final LeaveMapper leaveMapper;
-    private final PayrollProperties payrollProperties;
+    private final PayrollConfig payrollConfig;
 
     public LeaveService(
             LeaveBalanceRepository leaveBalanceRepository,
             LeaveRequestRepository leaveRequestRepository,
             EmployeeRepository employeeRepository,
             UserAccountRepository userAccountRepository,
-            LeaveMapper leaveMapper, PayrollProperties payrollProperties) {
+            LeaveMapper leaveMapper,
+            PayrollConfig payrollConfig) {
         this.leaveBalanceRepository = leaveBalanceRepository;
         this.leaveRequestRepository = leaveRequestRepository;
         this.employeeRepository = employeeRepository;
         this.userAccountRepository = userAccountRepository;
         this.leaveMapper = leaveMapper;
-        this.payrollProperties = payrollProperties;
+        this.payrollConfig = payrollConfig;
     }
 
     @Transactional
@@ -118,13 +122,13 @@ public class LeaveService {
         );
 
         int updateSickLeaves = leaveBalanceRepository.updateActiveEmployeeLeaveBalances(
-                payrollProperties.getSickLeaveHours(),
+                payrollConfig.getSickLeaveHours(),
                 List.of(LeaveType.SICK_LEAVE),
                 blacklistedStatuses
         );
 
         int updateVacationLeaves = leaveBalanceRepository.updateActiveEmployeeLeaveBalances(
-                payrollProperties.getVacationLeaveHours(),
+                payrollConfig.getVacationLeaveHours(),
                 List.of(LeaveType.VACATION_LEAVE),
                 blacklistedStatuses
         );
@@ -135,12 +139,14 @@ public class LeaveService {
 
     @Transactional
     @ExecutionTime
+    @BulkNotify(message = "Leave Requeest Pending", targetRole = Position.HR, importance = "HIGH")
     public LeaveRequest createLeaveRequest(LeaveRequestDto payload, Long empId) {
         Employee emp =  employeeRepository.findById(empId).orElseThrow(() -> new EmployeeNotFoundException(empId));
         LeaveRequest request = new LeaveRequest();
         request.setRequestStatus(Status.PENDING);
+        request.setStartDateTime(payload.getStartDateTime());
+        request.setEndDateTime(payload.getEndDateTime());
         request.setEmployee(emp);
-        request.setLeaveDate(payload.getLeaveDate());
         request.setReason(payload.getReason());
         leaveRequestRepository.save(request);
         return request;

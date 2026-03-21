@@ -1,0 +1,25 @@
+meta {
+  name: Create Shift Test Leave
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/api/leave/create/{{testEmpId}}
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+  Authorization: Bearer {{accessToken}}
+}
+
+body:json {
+  {
+    "startDateTime": "{{shiftLeaveStart}}",
+    "endDateTime": "{{shiftLeaveEnd}}",
+    "approver": "hr-test",
+    "reason": "Shift split verification"
+  }
+}
