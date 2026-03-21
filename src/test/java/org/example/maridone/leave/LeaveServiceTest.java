@@ -6,6 +6,8 @@ import java.util.Optional;
 
 import org.example.maridone.core.employee.Employee;
 import org.example.maridone.core.employee.EmployeeRepository;
+import org.example.maridone.core.user.UserAccountRepository;
+import org.example.maridone.config.PayrollConfig;
 import org.example.maridone.enums.LeaveType;
 import org.example.maridone.enums.Status;
 import org.example.maridone.leave.balance.LeaveBalance;
@@ -31,7 +33,9 @@ class LeaveServiceTest {
     @Mock private LeaveBalanceRepository leaveBalanceRepository;
     @Mock private LeaveRequestRepository leaveRequestRepository;
     @Mock private EmployeeRepository employeeRepository;
+    @Mock private UserAccountRepository userAccountRepository;
     @Mock private LeaveMapper leaveMapper;
+    @Mock private PayrollConfig payrollConfig;
 
     @InjectMocks
     private LeaveService leaveService;
@@ -65,7 +69,8 @@ class LeaveServiceTest {
     void createLeaveRequest_ShouldSetStatusPending() {
         Long empId = 1L;
         LeaveRequestDto dto = new LeaveRequestDto();
-        dto.setLeaveDate(LocalDate.now());
+        dto.setStartDateTime(LocalDate.now().atTime(8, 0));
+        dto.setEndDateTime(LocalDate.now().atTime(17, 0));
         dto.setReason("Vacation");
 
         Employee emp = new Employee();

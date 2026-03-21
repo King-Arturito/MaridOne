@@ -4,6 +4,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 
+import org.example.maridone.config.DefaultConfig;
 import org.example.maridone.config.PayrollConfig;
 import org.example.maridone.core.employee.Employee;
 import org.example.maridone.enums.DeductionType;
@@ -15,11 +16,10 @@ import org.example.maridone.payroll.item.component.EarningsLine;
 import org.example.maridone.payroll.item.component.EarningsRepository;
 import org.example.maridone.payroll.run.PayrollRun;
 import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
-import org.mockito.Spy;
 import static org.mockito.Mockito.verifyNoInteractions;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -31,12 +31,23 @@ class PayrollCalculatorTest {
     @Mock
     private DeductionsRepository deductionsRepository;
     @Mock
-    private PayrollConfig payrollConfig;
-    @InjectMocks
-    private PayrollCalculator payrollCalculator;
+    private DefaultConfig defaultConfig;
 
-    @Spy
-    private BracketService bracketService = new BracketService(payrollConfig);
+    private PayrollCalculator payrollCalculator;
+    private BracketService bracketService;
+
+    @BeforeEach
+    void setUp() {
+        PayrollConfig payrollConfig = new PayrollConfig();
+        bracketService = new BracketService(payrollConfig);
+        payrollCalculator = new PayrollCalculator(
+                earningsRepository,
+                deductionsRepository,
+                bracketService,
+                defaultConfig,
+                payrollConfig
+        );
+    }
 
     @Test
     void setEarnings_ShouldCreateSingleLine_ForExemptEmployee() {

@@ -5,8 +5,10 @@ import java.math.RoundingMode;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 
 import org.example.maridone.common.CommonCalculator;
@@ -22,11 +24,13 @@ import org.example.maridone.payroll.item.component.DeductionsLine;
 import org.example.maridone.payroll.item.component.DeductionsRepository;
 import org.example.maridone.payroll.item.component.EarningsLine;
 import org.example.maridone.payroll.item.component.EarningsRepository;
-import org.example.maridone.schedule.shift.TemplateShiftSchedule;
+import org.example.maridone.schedule.shift.DailyShiftSchedule;
 import org.springframework.stereotype.Component;
 
 @Component
 public class PayrollCalculator {
+
+    public record AttendanceSession(AttendanceLog inLog, AttendanceLog outLog) {}
 
     private final EarningsRepository earningsRepository;
     private final DeductionsRepository deductionsRepository;
@@ -198,14 +202,66 @@ public class PayrollCalculator {
         return BigDecimal.valueOf(time.toMinutes()).divide(BigDecimal.valueOf(60), 2, RoundingMode.HALF_UP);
     }
 
-    public BigDecimal calculateHours(List<TemplateShiftSchedule> schedules) {
+    public BigDecimal calculateHours(Instant start, Instant end) {
+        if (start == null || end == null || !end.isAfter(start)) {
+            return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+        }
+
+        Duration time = Duration.between(start, end);
+        return BigDecimal.valueOf(time.toMinutes()).divide(BigDecimal.valueOf(60), 2, RoundingMode.HALF_UP);
+    }
+
+    public BigDecimal calculateHours(List<DailyShiftSchedule> schedules) {
         if (schedules == null || schedules.isEmpty()) {
-            return BigDecimal.ZERO;
+            return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
         }
         BigDecimal hours = BigDecimal.ZERO;
-        for (TemplateShiftSchedule schedule : schedules) {
+        for (DailyShiftSchedule schedule : schedules) {
             hours = hours.add(calculateHours(schedule.getStartTime(), schedule.getEndTime()));
         }
+        return hours.setScale(2, RoundingMode.HALF_UP);
+    }
+
+    public BigDecimal calculateHoursFromAttendanceSessions(List<AttendanceSession> attendanceSessions) {
+        if (attendanceSessions == null || attendanceSessions.isEmpty()) {
+            return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+        }
+
+        BigDecimal hours = BigDecimal.ZERO;
+        for (AttendanceSession session : attendanceSessions) {
+            hours = hours.add(calculateHours(
+                    session.inLog().getTimestamp(),
+                    session.outLog().getTimestamp()
+            ));
+        }
+        return hours.setScale(2, RoundingMode.HALF_UP);
+    }
+
+    public BigDecimal calculateWorkedHoursWithinSchedules(
+            List<DailyShiftSchedule> schedules,
+            List<AttendanceSession> attendanceSessions
+    ) {
+        if (schedules == null || schedules.isEmpty() || attendanceSessions == null || attendanceSessions.isEmpty()) {
+            return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+        }
+
+        BigDecimal hours = BigDecimal.ZERO;
+        for (DailyShiftSchedule schedule : schedules) {
+            Instant scheduleStart = toInstant(schedule.getStartDateTime());
+            Instant scheduleEnd = toInstant(schedule.getEndDateTime());
+            if (scheduleStart == null || scheduleEnd == null || !scheduleEnd.isAfter(scheduleStart)) {
+                continue;
+            }
+
+            for (AttendanceSession session : attendanceSessions) {
+                Instant overlapStart = maxInstant(scheduleStart, session.inLog().getTimestamp());
+                Instant overlapEnd = minInstant(scheduleEnd, session.outLog().getTimestamp());
+                if (overlapEnd.isAfter(overlapStart)) {
+                    hours = hours.add(calculateHours(overlapStart, overlapEnd));
+                }
+            }
+        }
+
         return hours.setScale(2, RoundingMode.HALF_UP);
     }
 
@@ -224,6 +280,20 @@ public class PayrollCalculator {
                 .divide(BigDecimal.valueOf(60), 2, RoundingMode.HALF_UP);
     }
 
+    public BigDecimal calculateNightDiffHours(List<AttendanceSession> attendanceSessions) {
+        if (attendanceSessions == null || attendanceSessions.isEmpty()) {
+            return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+        }
+
+        BigDecimal hours = BigDecimal.ZERO;
+        for (AttendanceSession session : attendanceSessions) {
+            LocalTime logIn = session.inLog().getTimestamp().atZone(defaultConfig.getTimeZone()).toLocalTime();
+            LocalTime logOut = session.outLog().getTimestamp().atZone(defaultConfig.getTimeZone()).toLocalTime();
+            hours = hours.add(calculateNightDiffHours(logIn, logOut));
+        }
+        return hours.setScale(2, RoundingMode.HALF_UP);
+    }
+
     public BigDecimal deductUnpaidLunchHour(BigDecimal rawHours) {
         if (rawHours == null) {
             return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
@@ -239,8 +309,43 @@ public class PayrollCalculator {
         return adjusted.setScale(2, RoundingMode.HALF_UP);
     }
 
+    public BigDecimal calculateExpectedShiftHours(List<DailyShiftSchedule> schedules) {
+        if (schedules == null || schedules.isEmpty()) {
+            return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+        }
 
-    public long calculateLateMinutes(TemplateShiftSchedule schedule, AttendanceLog inLog, LeaveRequest leave) {
+        return deductUnpaidLunchHour(calculateHours(schedules));
+    }
+
+    public BigDecimal applyGracePeriodToMissingHours(
+            DailyShiftSchedule schedule,
+            AttendanceLog inLog,
+            LeaveRequest leave,
+            BigDecimal missingHours
+    ) {
+        if (missingHours == null || missingHours.compareTo(BigDecimal.ZERO) <= 0) {
+            return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+        }
+
+        BigDecimal missingMinutes = missingHours.multiply(BigDecimal.valueOf(60));
+        BigDecimal roundedMissingMinutes = missingMinutes.setScale(0, RoundingMode.HALF_UP);
+        long lateMinutes = calculateLateMinutes(schedule, inLog, leave);
+        long graceMinutes = Math.max(payrollConfig.getGracePeriod().toMinutes(), 0L);
+        long coveredMinutes = Math.min(
+                roundedMissingMinutes.longValue(),
+                Math.min(lateMinutes, graceMinutes)
+        );
+
+        BigDecimal chargeableMinutes = roundedMissingMinutes.subtract(BigDecimal.valueOf(coveredMinutes));
+        if (chargeableMinutes.compareTo(BigDecimal.ZERO) <= 0) {
+            return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+        }
+
+        return chargeableMinutes.divide(BigDecimal.valueOf(60), 6, RoundingMode.HALF_UP);
+    }
+
+
+    public long calculateLateMinutes(DailyShiftSchedule schedule, AttendanceLog inLog, LeaveRequest leave) {
         if (schedule == null || inLog == null) {
             return 0L;
         }
@@ -254,15 +359,17 @@ public class PayrollCalculator {
         return Duration.between(expectedStart, actualIn).toMinutes();
     }
 
-    public LocalTime resolveExpectedStartTime(TemplateShiftSchedule schedule, LeaveRequest leave) {
+    public LocalTime resolveExpectedStartTime(DailyShiftSchedule schedule, LeaveRequest leave) {
         LocalTime scheduleStart = schedule.getStartTime();
-        if (leave == null || leave.getStartTime() == null || leave.getEndTime() == null) {
+        if (leave == null || leave.getStartDateTime() == null || leave.getEndDateTime() == null) {
             return scheduleStart;
         }
 
-        boolean leaveCoversShiftStart = !leave.getStartTime().isAfter(scheduleStart)
-                && leave.getEndTime().isAfter(scheduleStart);
-        return leaveCoversShiftStart ? leave.getEndTime() : scheduleStart;
+        LocalTime leaveStart = leave.getStartDateTime().toLocalTime();
+        LocalTime leaveEnd = leave.getEndDateTime().toLocalTime();
+        boolean leaveCoversShiftStart = !leaveStart.isAfter(scheduleStart)
+                && leaveEnd.isAfter(scheduleStart);
+        return leaveCoversShiftStart ? leaveEnd : scheduleStart;
     }
 
     public boolean hasAnyAttendanceLogForDate(List<AttendanceLog> attendanceLogs, LocalDate workDate) {
@@ -271,6 +378,47 @@ public class PayrollCalculator {
                         .atZone(defaultConfig.getTimeZone())
                         .toLocalDate()
                         .equals(workDate));
+    }
+
+    public List<AttendanceSession> findAttendanceSessionsForDate(List<AttendanceLog> attendanceLogs, LocalDate workDate) {
+        if (attendanceLogs == null || attendanceLogs.isEmpty() || workDate == null) {
+            return List.of();
+        }
+
+        Instant cutoff = workDate.plusDays(1)
+                .atTime(LocalTime.of(6, 0))
+                .atZone(defaultConfig.getTimeZone())
+                .toInstant();
+
+        List<AttendanceLog> relevantLogs = attendanceLogs.stream()
+                .filter(log -> log.getTimestamp() != null)
+                .filter(log -> !log.getTimestamp().isAfter(cutoff))
+                .filter(log -> {
+                    LocalDate logDate = log.getTimestamp().atZone(defaultConfig.getTimeZone()).toLocalDate();
+                    return logDate.equals(workDate) || logDate.equals(workDate.plusDays(1));
+                })
+                .sorted(Comparator.comparing(AttendanceLog::getTimestamp))
+                .toList();
+
+        List<AttendanceSession> sessions = new ArrayList<>();
+        AttendanceLog currentIn = null;
+
+        for (AttendanceLog log : relevantLogs) {
+            if (isInLog(log)) {
+                LocalDate logDate = log.getTimestamp().atZone(defaultConfig.getTimeZone()).toLocalDate();
+                if (currentIn == null && logDate.equals(workDate)) {
+                    currentIn = log;
+                }
+                continue;
+            }
+
+            if (isOutLog(log) && currentIn != null && log.getTimestamp().isAfter(currentIn.getTimestamp())) {
+                sessions.add(new AttendanceSession(currentIn, log));
+                currentIn = null;
+            }
+        }
+
+        return sessions;
     }
 
     public AttendanceLog findOutLogAfterIn(List<AttendanceLog> attendanceLogs, AttendanceLog inLog, LocalDate workDate) {
@@ -385,7 +533,7 @@ public class PayrollCalculator {
         return computeDailyRate(yearlyCompensation);
     }
 
-    public BigDecimal resolveHolidayOrRestDayMultiplier(boolean isRestDay, boolean isHoliday, boolean isRegularHoliday) {
+    public BigDecimal resolveHolidayOrRestDayPremiumRate(boolean isRestDay, boolean isHoliday, boolean isRegularHoliday) {
         if (isRegularHoliday) {
             return payrollConfig.getRegularHolidayWorkMultiplier();
         }
@@ -395,7 +543,12 @@ public class PayrollCalculator {
         if (isRestDay) {
             return payrollConfig.getRestDayWorkMultiplier();
         }
-        return BigDecimal.ONE;
+        return BigDecimal.ZERO;
+    }
+
+    public BigDecimal resolveHolidayOrRestDayMultiplier(boolean isRestDay, boolean isHoliday, boolean isRegularHoliday) {
+        BigDecimal premiumRate = resolveHolidayOrRestDayPremiumRate(isRestDay, isHoliday, isRegularHoliday);
+        return premiumRate.add(BigDecimal.ONE);
     }
 
     private BigDecimal resolveSssMsc(BigDecimal monthlyCompensation) {
@@ -410,6 +563,21 @@ public class PayrollCalculator {
                 .multiply(payrollConfig.getSssMscStep());
 
         return roundedMsc.setScale(2, RoundingMode.HALF_UP);
+    }
+
+    private Instant toInstant(LocalDateTime value) {
+        if (value == null) {
+            return null;
+        }
+        return value.atZone(defaultConfig.getTimeZone()).toInstant();
+    }
+
+    private Instant maxInstant(Instant first, Instant second) {
+        return first.compareTo(second) >= 0 ? first : second;
+    }
+
+    private Instant minInstant(Instant first, Instant second) {
+        return first.compareTo(second) <= 0 ? first : second;
     }
 
 }

@@ -41,6 +41,8 @@ import org.example.maridone.payroll.run.PayrollRun;
 import org.example.maridone.payroll.run.PayrollRunRepository;
 import org.example.maridone.schedule.calendar.CalendarRepository;
 import org.example.maridone.schedule.calendar.CompanyCalendar;
+import org.example.maridone.schedule.shift.DailyShiftRepository;
+import org.example.maridone.schedule.shift.DailyShiftSchedule;
 import org.example.maridone.schedule.shift.TemplateShiftRepository;
 import org.example.maridone.schedule.shift.TemplateShiftSchedule;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -70,6 +72,9 @@ public class SampleRows {
 
     @Autowired
     private TemplateShiftRepository templateShiftRepository;
+
+    @Autowired
+    private DailyShiftRepository dailyShiftRepository;
 
     @Autowired
     private BankAccountRepository bankAccountRepository;
@@ -251,14 +256,27 @@ public class SampleRows {
     }
 
     private void createAndSaveLeaveRequests(Employee emp, int i) {
+        List<LeaveRequest> leaveRequests = new ArrayList<>();
+
         LeaveRequest leaveRequest = new LeaveRequest();
         leaveRequest.setEmployee(emp);
         leaveRequest.setStartDateTime(LocalDateTime.of(LocalDate.now(), LocalTime.of(23,30)));
         leaveRequest.setEndDateTime(LocalDateTime.of(LocalDate.now().plusDays(1), LocalTime.of(0,30)));
         leaveRequest.setRequestStatus(i % 2 == 0 ? Status.APPROVED : Status.PENDING);
         leaveRequest.setReason("Vacation request #" + i);
+        leaveRequests.add(leaveRequest);
 
-        leaveRequestRepository.save(leaveRequest);
+        if (i == 6) {
+            leaveRequests.add(createApprovedLeaveRequest(
+                    emp,
+                    LocalDate.of(2026, 4, 8),
+                    LocalTime.of(8, 0),
+                    LocalTime.of(17, 0),
+                    "All-around payroll scenario full-day leave"
+            ));
+        }
+
+        leaveRequestRepository.saveAll(leaveRequests);
     }
 
     private void createAndSaveLeaveBalances(Employee emp, int i) {
@@ -274,7 +292,8 @@ public class SampleRows {
     private void createAndSaveShiftSchedules(Employee emp, int i) {
         List<TemplateShiftSchedule> templateShiftSchedules = new ArrayList<>();
 
-        for (int k = 1; k <= 7; k++) {
+        int maxDay = i == 6 ? 6 : 7;
+        for (int k = 1; k <= maxDay; k++) {
             TemplateShiftSchedule templateShiftSchedule = new TemplateShiftSchedule();
             templateShiftSchedule.setEmployee(emp);
             templateShiftSchedule.setDayOfWeek(DayOfWeek.of(k));
@@ -285,12 +304,45 @@ public class SampleRows {
         }
 
         templateShiftRepository.saveAll(templateShiftSchedules);
+
+        if (i == 6) {
+            createAndSaveAllAroundDailyShifts(templateShiftSchedules);
+        }
+    }
+
+    private void createAndSaveAllAroundDailyShifts(List<TemplateShiftSchedule> templateShiftSchedules) {
+        Map<DayOfWeek, TemplateShiftSchedule> schedulesByDay = templateShiftSchedules.stream()
+                .collect(java.util.stream.Collectors.toMap(TemplateShiftSchedule::getDayOfWeek, schedule -> schedule));
+
+        List<DailyShiftSchedule> dailyShifts = new ArrayList<>();
+        LocalDate currentDate = LocalDate.of(2026, 3, 26);
+        LocalDate endDate = LocalDate.of(2026, 4, 10);
+
+        while (!currentDate.isAfter(endDate)) {
+            if (!currentDate.equals(LocalDate.of(2026, 4, 8))) {
+                TemplateShiftSchedule templateShift = schedulesByDay.get(currentDate.getDayOfWeek());
+                if (templateShift != null) {
+                    DailyShiftSchedule dailyShift = new DailyShiftSchedule();
+                    dailyShift.setTemplateShiftSchedule(templateShift);
+                    dailyShift.setStartDateTime(LocalDateTime.of(currentDate, templateShift.getStartTime()));
+                    dailyShift.setEndDateTime(LocalDateTime.of(currentDate, templateShift.getEndTime()));
+                    dailyShifts.add(dailyShift);
+                }
+            }
+            currentDate = currentDate.plusDays(1);
+        }
+
+        if (!dailyShifts.isEmpty()) {
+            dailyShiftRepository.saveAll(dailyShifts);
+        }
     }
 
     private void createAndSaveAttendanceLogs(Employee emp, int i) {
         List<AttendanceLog> attendanceLogs = new ArrayList<>();
 
-        if (i == 10) {
+        if (i == 6) {
+            seedAllAroundRuntimeAttendance(attendanceLogs, emp);
+        } else if (i == 10) {
             seedNonExemptRuntimeAttendance(attendanceLogs, emp);
         } else if (i == 8) {
             seedExemptRuntimeAttendance(attendanceLogs, emp);
@@ -303,6 +355,16 @@ public class SampleRows {
 
     private void createAndSaveOvertimeRequests(Employee emp, int i) {
         List<OvertimeRequest> overtimeRequests = new ArrayList<>();
+
+        if (i == 6) {
+            overtimeRequests.add(createApprovedOvertimeRequest(
+                    emp,
+                    LocalDate.of(2026, 4, 6),
+                    LocalTime.of(18, 0),
+                    LocalTime.of(20, 0),
+                    "All-around payroll scenario ordinary OT"
+            ));
+        }
 
         if (i == 10) {
             // Runtime-visible approved overtime for the October non-exempt case.
@@ -318,6 +380,29 @@ public class SampleRows {
         if (!overtimeRequests.isEmpty()) {
             overtimeRequestRepository.saveAll(overtimeRequests);
         }
+    }
+
+    private void seedAllAroundRuntimeAttendance(List<AttendanceLog> attendanceLogs, Employee emp) {
+        // Dedicated all-in-one runtime case for firstName6. Sundays are true rest days for this employee.
+        addAttendanceRange(
+                attendanceLogs,
+                emp,
+                LocalDate.of(2026, 3, 26),
+                LocalDate.of(2026, 4, 10),
+                Set.of(
+                        LocalDate.of(2026, 3, 30), // ordinary absence
+                        LocalDate.of(2026, 4, 3),  // regular holiday without attendance
+                        LocalDate.of(2026, 4, 5),  // rest day without attendance
+                        LocalDate.of(2026, 4, 8),  // approved leave
+                        LocalDate.of(2026, 4, 9)   // regular holiday without attendance
+                ),
+                Map.of(
+                        LocalDate.of(2026, 3, 29), new SeedAttendancePair(LocalTime.of(21, 0), LocalTime.of(6, 0), 1),
+                        LocalDate.of(2026, 4, 2), new SeedAttendancePair(LocalTime.of(8, 0), LocalTime.of(17, 0)),
+                        LocalDate.of(2026, 4, 4), new SeedAttendancePair(LocalTime.of(8, 0), LocalTime.of(17, 0)),
+                        LocalDate.of(2026, 4, 6), new SeedAttendancePair(LocalTime.of(8, 0), LocalTime.of(17, 0))
+                )
+        );
     }
 
     private void seedNonExemptRuntimeAttendance(List<AttendanceLog> attendanceLogs, Employee emp) {
@@ -452,6 +537,24 @@ public class SampleRows {
         request.setApprover("seed-admin");
         request.setApprovedAt(workDate.minusDays(1).atTime(10, 0).atZone(SEED_TIME_ZONE).toInstant());
         request.setApproveReason("Seeded approved overtime");
+        return request;
+    }
+
+    private LeaveRequest createApprovedLeaveRequest(
+            Employee emp,
+            LocalDate workDate,
+            LocalTime startTime,
+            LocalTime endTime,
+            String reason
+    ) {
+        LeaveRequest request = new LeaveRequest();
+        request.setEmployee(emp);
+        request.setStartDateTime(workDate.atTime(startTime));
+        request.setEndDateTime(workDate.atTime(endTime));
+        request.setRequestStatus(Status.APPROVED);
+        request.setReason(reason);
+        request.setApprover("seed-admin");
+        request.setApproverReason("Seeded approved leave");
         return request;
     }
 

@@ -18,6 +18,7 @@ public class EmployeeDetailsDto {
     private EmploymentStatus employmentStatus;
     private ExemptionStatus exemptionStatus;
     private LocalDate employmentDateStart;
+    private LocalDate employmentDateEnd;
     private BigDecimal yearlySalary;
     private String email;
     private String phoneNumber;
@@ -130,12 +131,12 @@ public class EmployeeDetailsDto {
         this.address = address;
     }
 
-    public LocalDate getEmploymentDateStart() {
-        return employmentDateStart;
+    public LocalDate getEmploymentDateEnd() {
+        return employmentDateEnd;
     }
 
-    public void setEmploymentDateStart(LocalDate employmentDateStart) {
-        this.employmentDateStart = employmentDateStart;
+    public void setEmploymentDateEnd(LocalDate employmentDateEnd) {
+        this.employmentDateEnd = employmentDateEnd;
     }
 
     public BigDecimal getYearlySalary() {

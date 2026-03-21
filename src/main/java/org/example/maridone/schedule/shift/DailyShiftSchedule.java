@@ -1,7 +1,9 @@
 package org.example.maridone.schedule.shift;
 
 import jakarta.persistence.*;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 
 @Entity
 @Table(name = "daily_shift_schedule")
@@ -46,5 +48,25 @@ public class DailyShiftSchedule {
 
     public void setEndDateTime(LocalDateTime endDateTime) {
         this.endDateTime = endDateTime;
+    }
+
+    @Transient
+    public Long getEmployeeId() {
+        return templateShiftSchedule == null ? null : templateShiftSchedule.getEmployeeId();
+    }
+
+    @Transient
+    public LocalDate getWorkDate() {
+        return startDateTime == null ? null : startDateTime.toLocalDate();
+    }
+
+    @Transient
+    public LocalTime getStartTime() {
+        return startDateTime == null ? null : startDateTime.toLocalTime();
+    }
+
+    @Transient
+    public LocalTime getEndTime() {
+        return endDateTime == null ? null : endDateTime.toLocalTime();
     }
 }
