@@ -246,16 +246,19 @@ public class PayrollService {
                 .toList();
     }
 
+    //for nonexempt
     @Transactional
     public void processPayrollNonExempt(PayrollRun run, List<PayrollItem> items, List<Employee> employees) {
 
         List<Long> employeeIds = employees.stream()
                 .map(Employee::getEmployeeId)
                 .toList();
+        // skip the whole non-exempt path if this run has no non-exempt employees.
         if (employeeIds.isEmpty()) {
             return;
         }
 
+        // keep overnight outs up to 6am attached to the work date so nd and overnight attendance still pair correctly.
         Instant attendanceWindowStart = run.getPeriodStart()
                 .atStartOfDay(defaultConfig.getTimeZone())
                 .toInstant();
@@ -270,6 +273,7 @@ public class PayrollService {
                         run.getPeriodEnd().atTime(LocalTime.MAX).plusHours(6).atZone(defaultConfig.getTimeZone()).toInstant(),
                         sorting);
 
+        // only approved overtime inside the payroll window contributes extra pay.
         Specification<OvertimeRequest> overtimeSpecs = Specification.allOf(
                 OvertimeSpecs.hasStatus(Status.APPROVED),
                 OvertimeSpecs.hasEmployeeIds(employeeIds),
@@ -297,6 +301,7 @@ public class PayrollService {
         Set<LocalDate> holidayDates = holidayLookup.holidayDates();
         Set<LocalDate> regularHolidayDates = holidayLookup.regularHolidayDates();
 
+        // group shared data up front so the inner employee/day loop only does simple lookups.
         Map<Long, List<AttendanceLog>> attendanceMap = allLogs.stream()
                 .collect(Collectors.groupingBy(AttendanceLog::getEmployeeId));
 
@@ -310,6 +315,7 @@ public class PayrollService {
                 .collect(Collectors.groupingBy(leave -> leave.getEmployee().getEmployeeId()));
 
         for (Employee emp :  employees) {
+            // non-exempt payroll starts from cutoff basic pay, then layers in variable earnings and attendance deductions.
             List<OvertimeRequest> requests = overtimeMap.getOrDefault(emp.getEmployeeId(), List.of());
             List<DailyShiftSchedule> schedules = scheduleMap.getOrDefault(emp.getEmployeeId(), List.of());
             List<AttendanceLog> attendanceLogs = attendanceMap.getOrDefault(emp.getEmployeeId(), List.of());
@@ -328,11 +334,13 @@ public class PayrollService {
             while (!currentDate.isAfter(run.getPeriodEnd())) {
                 LocalDate loopDate = currentDate;
 
+                // build all in-out sessions for the work date instead of relying on only the first pair.
                 List<PayrollCalculator.AttendanceSession> attendanceSessions =
                         payrollCalculator.findAttendanceSessionsForDate(attendanceLogs, loopDate);
                 boolean hasCompleteAttendancePair = !attendanceSessions.isEmpty();
                 AttendanceLog dayInLog = hasCompleteAttendancePair ? attendanceSessions.get(0).inLog() : null;
 
+                // resolve everything for this date together so shifts, leave, attendance, and ot stay in sync.
                 LeaveRequest todaysLeave = findLeaveForDate(leaves, loopDate);
                 List<DailyShiftSchedule> todaysSchedules = schedulesByDate.getOrDefault(loopDate, List.of());
                 DailyShiftSchedule primarySchedule = findEarliestSchedule(todaysSchedules);
@@ -341,6 +349,7 @@ public class PayrollService {
                         .filter(ot -> ot.getWorkDate().equals(loopDate))
                         .toList();
 
+                // non-exempt attendance is driven by the generated daily shifts for the date.
                 boolean isRestDay = todaysSchedules.isEmpty() && todaysLeave == null;
                 boolean isHoliday = holidayDates.contains(loopDate);
                 boolean isRegularHoliday = regularHolidayDates.contains(loopDate);
@@ -358,12 +367,14 @@ public class PayrollService {
                         .map(ot -> payrollCalculator.calculateHours(ot.getStartTime().toLocalTime(), ot.getEndTime().toLocalTime()))
                         .reduce(BigDecimal.ZERO, BigDecimal::add);
 
+                // worked rest-day and holiday hours earn premium lines instead of ordinary attendance deductions.
                 if (isRestDay || isHoliday) {
                     if (hasCompleteAttendancePair) {
                         BigDecimal hoursWorked = payrollCalculator.deductUnpaidLunchHour(
                                 payrollCalculator.calculateHoursFromAttendanceSessions(attendanceSessions)
                         );
 
+                        // base pay already covers ordinary hours, so this line only adds the premium increment.
                         BigDecimal premiumHours = hoursWorked.subtract(overtimeHours).max(BigDecimal.ZERO);
                         BigDecimal premiumMultiplier = dayWorkPremiumRate;
 
@@ -379,11 +390,15 @@ public class PayrollService {
                         }
                     }
                 } else {
+                    // ordinary workdays compare all attendance sessions against the split daily-shift segments.
                     BigDecimal expectedHours = payrollCalculator.calculateExpectedShiftHours(todaysSchedules);
                     if (expectedHours.compareTo(BigDecimal.ZERO) <= 0) {
+                        // leave this day alone if the generated schedules carry no payable hours.
                     } else if (!hasCompleteAttendancePair) {
+                        // missing the whole scheduled day counts as ordinary absence.
                         absentDeductAmount = absentDeductAmount.add(expectedHours.multiply(hourlyRate));
                     } else {
+                        // only count overlap inside the scheduled segments so split-leave days stay accurate.
                         BigDecimal actualHours = payrollCalculator.deductUnpaidLunchHour(
                                 payrollCalculator.calculateWorkedHoursWithinSchedules(
                                         todaysSchedules,
@@ -391,6 +406,7 @@ public class PayrollService {
                                 )
                         );
                         if (actualHours.compareTo(expectedHours) < 0) {
+                            // grace only softens the late-start portion, not every kind of missing hour.
                             BigDecimal missingHours = expectedHours.subtract(actualHours);
                             BigDecimal chargeableMissingHours = payrollCalculator.applyGracePeriodToMissingHours(
                                     primarySchedule,
@@ -404,6 +420,7 @@ public class PayrollService {
                 }
 
                 if (hasCompleteAttendancePair) {
+                    // night diff scales with the full day multiplier, so holiday/rest-day night work gets the correct uplift.
                     BigDecimal nsdHours = payrollCalculator.calculateNightDiffHours(attendanceSessions);
                     if (nsdHours.compareTo(BigDecimal.ZERO) > 0) {
                         EarningsLine nsdLine = new EarningsLine();
@@ -419,6 +436,7 @@ public class PayrollService {
                     }
                 }
 
+                // ot remains a separate earnings line on top of the worked-day and nd calculations.
                 for (OvertimeRequest ot : todaysOT) {
                     EarningsLine otLine = new EarningsLine();
                     otLine.setEarningsDate(loopDate);
@@ -434,6 +452,7 @@ public class PayrollService {
                 currentDate = currentDate.plusDays(1);
             }
 
+            // keep attendance deductions from eating more than the cutoff basic pay.
             AttendanceDeductionTotals cappedDeductions = applyAttendanceDeductionCap(
                     absentDeductAmount,
                     lateDeductAmount,
@@ -446,6 +465,7 @@ public class PayrollService {
             item.setEmployee(emp);
             item.setPayrollRun(run);
             item.setDisputes(new ArrayList<>());
+            // gross starts at basic cutoff pay and the calculated earnings lines add the variable pieces.
             item.setGrossPay(basicPayPerPeriod);
 
             List<EarningsLine> calculatedEarnings = payrollCalculator.setEarnings(emp, item, earningsLines);
