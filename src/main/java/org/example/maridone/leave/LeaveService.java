@@ -1,29 +1,26 @@
 package org.example.maridone.leave;
 
-import java.util.List;
-import java.util.Optional;
-
 import org.example.maridone.annotation.BulkNotify;
 import org.example.maridone.annotation.ExecutionTime;
 import org.example.maridone.annotation.Notify;
 import org.example.maridone.annotation.SystematicScheduling;
 import org.example.maridone.common.CommonSpecs;
 import org.example.maridone.config.PayrollConfig;
+import org.example.maridone.enums.Position;
+import org.example.maridone.payroll.BracketService;
 import org.example.maridone.core.employee.Employee;
 import org.example.maridone.core.employee.EmployeeRepository;
 import org.example.maridone.core.user.UserAccount;
 import org.example.maridone.core.user.UserAccountRepository;
 import org.example.maridone.enums.EmploymentStatus;
 import org.example.maridone.enums.LeaveType;
-import org.example.maridone.enums.Position;
 import org.example.maridone.enums.Status;
 import org.example.maridone.exception.notfound.AccountNotFoundException;
 import org.example.maridone.exception.notfound.EmployeeNotFoundException;
 import org.example.maridone.exception.notfound.LeaveNotFoundException;
 import org.example.maridone.exception.unauthorized.DuplicateLeaveException;
 import org.example.maridone.exception.unauthorized.InsufficientBalanceException;
-import org.example.maridone.leave.balance.LeaveBalance;
-import org.example.maridone.leave.balance.LeaveBalanceRepository;
+import org.example.maridone.leave.balance.*;
 import org.example.maridone.leave.dto.BalanceRequestDto;
 import org.example.maridone.leave.dto.BalanceResponseDto;
 import org.example.maridone.leave.dto.LeaveRequestDto;
@@ -36,6 +33,9 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.util.List;
+import java.util.Optional;
 
 @Service
 public class LeaveService {

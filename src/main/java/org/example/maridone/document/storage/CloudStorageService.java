@@ -2,7 +2,7 @@ package org.example.maridone.document.storage;
 
 import org.example.maridone.annotation.AuditLog;
 import org.example.maridone.annotation.ExecutionTime;
-import org.example.maridone.config.CloudProperties;
+import org.example.maridone.config.CloudConfig;
 import org.example.maridone.exception.unauthorized.CloudReadException;
 import org.example.maridone.exception.unauthorized.CloudWriteException;
 import org.springframework.context.annotation.Profile;
@@ -25,10 +25,10 @@ import java.util.UUID;
 public class CloudStorageService implements StorageService {
 
     private final S3Client s3Client;
-    private final CloudProperties cloudProperties;
-    public CloudStorageService(S3Client s3Client, CloudProperties cloudProperties) {
+    private final CloudConfig cloudConfig;
+    public CloudStorageService(S3Client s3Client, CloudConfig cloudConfig) {
         this.s3Client = s3Client;
-        this.cloudProperties = cloudProperties;
+        this.cloudConfig = cloudConfig;
     }
 
     @Override
@@ -42,7 +42,7 @@ public class CloudStorageService implements StorageService {
             String uniqueFileName = username + "/" + UUID.randomUUID() + "_" + cleanedName;
 
             PutObjectRequest putObjectRequest = PutObjectRequest.builder()
-                    .bucket(cloudProperties.getBucketName())
+                    .bucket(cloudConfig.getBucketName())
                     .key(uniqueFileName)
                     .contentType(file.getContentType())
                     .build();
@@ -64,7 +64,7 @@ public class CloudStorageService implements StorageService {
     public Resource load(String filePath) {
         try {
             GetObjectRequest getObjectRequest = GetObjectRequest.builder()
-                    .bucket(cloudProperties.getBucketName())
+                    .bucket(cloudConfig.getBucketName())
                     .key(filePath)
                     .build();
 
@@ -81,7 +81,7 @@ public class CloudStorageService implements StorageService {
     public void delete(String filePath) {
         try {
             DeleteObjectRequest deleteObjectRequest = DeleteObjectRequest.builder()
-                    .bucket(cloudProperties.getBucketName())
+                    .bucket(cloudConfig.getBucketName())
                     .key(filePath)
                     .build();
 

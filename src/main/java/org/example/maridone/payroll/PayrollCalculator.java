@@ -309,6 +309,41 @@ public class PayrollCalculator {
         return adjusted.setScale(2, RoundingMode.HALF_UP);
     }
 
+    public BigDecimal calculateExpectedShiftHours(List<DailyShiftSchedule> schedules) {
+        if (schedules == null || schedules.isEmpty()) {
+            return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+        }
+
+        return deductUnpaidLunchHour(calculateHours(schedules));
+    }
+
+    public BigDecimal applyGracePeriodToMissingHours(
+            DailyShiftSchedule schedule,
+            AttendanceLog inLog,
+            LeaveRequest leave,
+            BigDecimal missingHours
+    ) {
+        if (missingHours == null || missingHours.compareTo(BigDecimal.ZERO) <= 0) {
+            return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+        }
+
+        BigDecimal missingMinutes = missingHours.multiply(BigDecimal.valueOf(60));
+        BigDecimal roundedMissingMinutes = missingMinutes.setScale(0, RoundingMode.HALF_UP);
+        long lateMinutes = calculateLateMinutes(schedule, inLog, leave);
+        long graceMinutes = Math.max(payrollConfig.getGracePeriod().toMinutes(), 0L);
+        long coveredMinutes = Math.min(
+                roundedMissingMinutes.longValue(),
+                Math.min(lateMinutes, graceMinutes)
+        );
+
+        BigDecimal chargeableMinutes = roundedMissingMinutes.subtract(BigDecimal.valueOf(coveredMinutes));
+        if (chargeableMinutes.compareTo(BigDecimal.ZERO) <= 0) {
+            return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+        }
+
+        return chargeableMinutes.divide(BigDecimal.valueOf(60), 6, RoundingMode.HALF_UP);
+    }
+
 
     public long calculateLateMinutes(DailyShiftSchedule schedule, AttendanceLog inLog, LeaveRequest leave) {
         if (schedule == null || inLog == null) {

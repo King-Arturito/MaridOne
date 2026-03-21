@@ -1,7 +1,7 @@
 package org.example.maridone.holiday;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.example.maridone.config.HolidayProperties;
+import org.example.maridone.config.HolidayConfig;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -33,7 +33,7 @@ class CalendarificHolidayServiceTest {
                 """;
         Files.writeString(overrideFile, overridesJson);
 
-        HolidayProperties properties = new HolidayProperties();
+        HolidayConfig properties = new HolidayConfig();
         properties.setEnabled(false);
         properties.setCountry("PH");
         properties.setCacheDir(cacheDir.toString());
@@ -80,7 +80,7 @@ class CalendarificHolidayServiceTest {
                 """;
         Files.writeString(overrideFile, overridesJson);
 
-        HolidayProperties properties = new HolidayProperties();
+        HolidayConfig properties = new HolidayConfig();
         properties.setEnabled(false);
         properties.setCountry("PH");
         properties.setCacheDir(cacheDir.toString());
@@ -115,7 +115,7 @@ class CalendarificHolidayServiceTest {
                 """.formatted(Instant.now().minus(Duration.ofDays(10)).toString());
         Files.writeString(cacheDir.resolve("PH-2026.json"), cachedYearJson);
 
-        HolidayProperties properties = new HolidayProperties();
+        HolidayConfig properties = new HolidayConfig();
         properties.setEnabled(true);
         properties.setApiKey("dummy");
         properties.setCountry("PH");
@@ -138,7 +138,7 @@ class CalendarificHolidayServiceTest {
         Path cacheDir = tempDir.resolve("cache-api-fail-no-cache");
         Path overrideFile = tempDir.resolve("override-api-fail-no-cache.json");
 
-        HolidayProperties properties = new HolidayProperties();
+        HolidayConfig properties = new HolidayConfig();
         properties.setEnabled(true);
         properties.setApiKey("dummy");
         properties.setCountry("PH");
@@ -186,7 +186,7 @@ class CalendarificHolidayServiceTest {
                 """.formatted(Instant.now().toString());
         Files.writeString(cacheDir.resolve("PH-2027.json"), year2027Json);
 
-        HolidayProperties properties = new HolidayProperties();
+        HolidayConfig properties = new HolidayConfig();
         properties.setEnabled(false);
         properties.setCountry("PH");
         properties.setCacheDir(cacheDir.toString());
@@ -221,7 +221,7 @@ class CalendarificHolidayServiceTest {
                 """.formatted(Instant.now().toString());
         Files.writeString(cacheDir.resolve("PH-2026.json"), cachedYearJson);
 
-        HolidayProperties properties = new HolidayProperties();
+        HolidayConfig properties = new HolidayConfig();
         properties.setEnabled(false);
         properties.setCountry("PH");
         properties.setCacheDir(cacheDir.toString());
@@ -255,7 +255,7 @@ class CalendarificHolidayServiceTest {
                 """.formatted(Instant.now().minus(Duration.ofDays(30)).toString());
         Files.writeString(cacheDir.resolve("PH-2026.json"), cachedYearJson);
 
-        HolidayProperties properties = new HolidayProperties();
+        HolidayConfig properties = new HolidayConfig();
         properties.setEnabled(true);
         properties.setApiKey("  ");
         properties.setCountry("PH");

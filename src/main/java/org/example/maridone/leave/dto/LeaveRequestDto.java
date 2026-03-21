@@ -1,16 +1,20 @@
 package org.example.maridone.leave.dto;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
+import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.NotNull;
 import org.example.maridone.enums.Status;
 import org.example.maridone.marker.OnUpdate;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 
 public class LeaveRequestDto {
 
     @NotNull
-    private LocalDate leaveDate;
+    private LocalDateTime startDateTime;
+    @NotNull
+    private LocalDateTime endDateTime;
     @NotNull
     private String approver;
     @NotNull
@@ -21,12 +25,30 @@ public class LeaveRequestDto {
     @NotNull(groups = OnUpdate.class)
     private String approverReason;
 
-    public LocalDate getLeaveDate() {
-        return leaveDate;
+
+    @AssertTrue(message = "End date and time must be strictly after the start date and time")
+    public boolean isEndDateAfterStartDate() {
+        if (startDateTime == null || endDateTime == null) {
+            return true;
+        }
+
+        return endDateTime.isAfter(startDateTime);
     }
 
-    public void setLeaveDate(LocalDate leaveDate) {
-        this.leaveDate = leaveDate;
+    public LocalDateTime getStartDateTime() {
+        return startDateTime;
+    }
+
+    public void setStartDateTime(LocalDateTime startDateTime) {
+        this.startDateTime = startDateTime;
+    }
+
+    public LocalDateTime getEndDateTime() {
+        return endDateTime;
+    }
+
+    public void setEndDateTime(LocalDateTime endDateTime) {
+        this.endDateTime = endDateTime;
     }
 
     public String getApprover() {

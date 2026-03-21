@@ -3,7 +3,6 @@ package org.example.maridone.core.spec;
 import jakarta.persistence.criteria.Predicate;
 import org.example.maridone.core.employee.Employee;
 import org.example.maridone.core.filter.EmployeeFilter;
-import org.example.maridone.enums.EmploymentStatus;
 import org.springframework.data.jpa.domain.Specification;
 
 import java.util.ArrayList;

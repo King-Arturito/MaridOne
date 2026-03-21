@@ -41,8 +41,6 @@ import org.example.maridone.payroll.run.PayrollRun;
 import org.example.maridone.payroll.run.PayrollRunRepository;
 import org.example.maridone.schedule.shift.DailyShiftRepository;
 import org.example.maridone.schedule.shift.DailyShiftSchedule;
-import org.example.maridone.schedule.shift.DailyShiftRepository;
-import org.example.maridone.schedule.shift.DailyShiftSchedule;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
@@ -326,7 +324,7 @@ public class PayrollService {
             BigDecimal lateDeductAmount = BigDecimal.ZERO;
             List<EarningsLine> earningsLines = new ArrayList<>();
 
-                LocalDate currentDate = run.getPeriodStart();
+            LocalDate currentDate = run.getPeriodStart();
             while (!currentDate.isAfter(run.getPeriodEnd())) {
                 LocalDate loopDate = currentDate;
 
@@ -381,7 +379,7 @@ public class PayrollService {
                         }
                     }
                 } else {
-                    BigDecimal expectedHours = calculateExpectedShiftHours(todaysSchedules);
+                    BigDecimal expectedHours = payrollCalculator.calculateExpectedShiftHours(todaysSchedules);
                     if (expectedHours.compareTo(BigDecimal.ZERO) <= 0) {
                     } else if (!hasCompleteAttendancePair) {
                         absentDeductAmount = absentDeductAmount.add(expectedHours.multiply(hourlyRate));
@@ -394,7 +392,7 @@ public class PayrollService {
                         );
                         if (actualHours.compareTo(expectedHours) < 0) {
                             BigDecimal missingHours = expectedHours.subtract(actualHours);
-                            BigDecimal chargeableMissingHours = applyGracePeriodToMissingHours(
+                            BigDecimal chargeableMissingHours = payrollCalculator.applyGracePeriodToMissingHours(
                                     primarySchedule,
                                     dayInLog,
                                     todaysLeave,
@@ -493,14 +491,6 @@ public class PayrollService {
         }
     }
 
-    private BigDecimal calculateExpectedShiftHours(List<DailyShiftSchedule> schedules) {
-        if (schedules == null || schedules.isEmpty()) {
-            return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
-        }
-
-        return payrollCalculator.deductUnpaidLunchHour(payrollCalculator.calculateHours(schedules));
-    }
-
     private AttendanceDeductionTotals calculateExemptAttendanceDeductions(
             PayrollRun run,
             List<AttendanceLog> attendanceLogs,
@@ -558,33 +548,6 @@ public class PayrollService {
                 absent.setScale(2, RoundingMode.HALF_UP),
                 late.setScale(2, RoundingMode.HALF_UP)
         );
-    }
-
-    private BigDecimal applyGracePeriodToMissingHours(
-            DailyShiftSchedule schedule,
-            AttendanceLog inLog,
-            LeaveRequest leave,
-            BigDecimal missingHours
-    ) {
-        if (missingHours == null || missingHours.compareTo(BigDecimal.ZERO) <= 0) {
-            return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
-        }
-
-        BigDecimal missingMinutes = missingHours.multiply(BigDecimal.valueOf(60));
-        BigDecimal roundedMissingMinutes = missingMinutes.setScale(0, RoundingMode.HALF_UP);
-        long lateMinutes = payrollCalculator.calculateLateMinutes(schedule, inLog, leave);
-        long graceMinutes = Math.max(payrollConfig.getGracePeriod().toMinutes(), 0L);
-        long coveredMinutes = Math.min(
-                roundedMissingMinutes.longValue(),
-                Math.min(lateMinutes, graceMinutes)
-        );
-
-        BigDecimal chargeableMinutes = roundedMissingMinutes.subtract(BigDecimal.valueOf(coveredMinutes));
-        if (chargeableMinutes.compareTo(BigDecimal.ZERO) <= 0) {
-            return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
-        }
-
-        return chargeableMinutes.divide(BigDecimal.valueOf(60), 6, RoundingMode.HALF_UP);
     }
 
     private DailyShiftSchedule findEarliestSchedule(List<DailyShiftSchedule> schedules) {

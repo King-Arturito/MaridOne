@@ -17,7 +17,7 @@ import java.net.URI;
 @Configuration
 @ConfigurationProperties("cloud")
 @Profile("prod")
-public class CloudProperties {
+public class CloudConfig {
 
     @NotEmpty(message = "Cloud endpoint not provided.")
     //sgp1.digitaloceanspaces.com

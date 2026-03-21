@@ -14,7 +14,7 @@ public class BankAccount {
     private Long bankId;
 
     @JsonIgnore
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "emp_id", nullable = false)
     private Employee employee;
 

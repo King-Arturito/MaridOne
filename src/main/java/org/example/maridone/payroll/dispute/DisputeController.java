@@ -3,6 +3,7 @@ package org.example.maridone.payroll.dispute;
 import jakarta.validation.Valid;
 import org.example.maridone.annotation.AuditLog;
 import org.example.maridone.enums.Status;
+import org.example.maridone.marker.OnUpdate;
 import org.example.maridone.payroll.dto.DisputeActionDto;
 import org.example.maridone.payroll.dto.DisputeRequestDto;
 import org.example.maridone.payroll.dto.DisputeResponseDto;
@@ -12,6 +13,7 @@ import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -53,8 +55,8 @@ public class DisputeController {
     @PatchMapping("/update/{disputeId}")
     @PreAuthorize("hasRole('HR')")
     @AuditLog
-    public ResponseEntity<?> updateDisputeRequest(@PathVariable Long disputeId, @RequestBody @Valid DisputeActionDto payload) {
-        disputeService.updateDisputeStatus(disputeId, payload);
-        return ResponseEntity.ok().build();
+    public ResponseEntity<?> updateDisputeRequest(@PathVariable Long disputeId, @RequestBody @Validated(OnUpdate.class) DisputeActionDto payload) {
+        DisputeResponseDto response = disputeService.updateDisputeStatus(disputeId, payload);
+        return ResponseEntity.ok(response);
     }
 }

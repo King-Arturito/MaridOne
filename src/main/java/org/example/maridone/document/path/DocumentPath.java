@@ -21,7 +21,7 @@ public class DocumentPath {
     @Column(name = "file_type", nullable = false)
     private String fileType;
 
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "username", nullable = false)
     private UserAccount username;
 
