@@ -1,9 +1,12 @@
 package org.example.maridone.leave;
 
+import org.example.maridone.annotation.BulkNotify;
 import org.example.maridone.annotation.ExecutionTime;
 import org.example.maridone.annotation.Notify;
 import org.example.maridone.annotation.SystematicScheduling;
 import org.example.maridone.common.CommonSpecs;
+import org.example.maridone.config.PayrollConfig;
+import org.example.maridone.enums.Position;
 import org.example.maridone.payroll.BracketService;
 import org.example.maridone.core.employee.Employee;
 import org.example.maridone.core.employee.EmployeeRepository;
@@ -42,20 +45,21 @@ public class LeaveService {
     private final EmployeeRepository employeeRepository;
     private final UserAccountRepository userAccountRepository;
     private final LeaveMapper leaveMapper;
-    private final BracketService bracketService;
+    private final PayrollConfig payrollConfig;
 
     public LeaveService(
             LeaveBalanceRepository leaveBalanceRepository,
             LeaveRequestRepository leaveRequestRepository,
             EmployeeRepository employeeRepository,
             UserAccountRepository userAccountRepository,
-            LeaveMapper leaveMapper, BracketService bracketService) {
+            LeaveMapper leaveMapper,
+            PayrollConfig payrollConfig) {
         this.leaveBalanceRepository = leaveBalanceRepository;
         this.leaveRequestRepository = leaveRequestRepository;
         this.employeeRepository = employeeRepository;
         this.userAccountRepository = userAccountRepository;
         this.leaveMapper = leaveMapper;
-        this.bracketService = bracketService;
+        this.payrollConfig = payrollConfig;
     }
 
     @Transactional
@@ -118,13 +122,13 @@ public class LeaveService {
         );
 
         int updateSickLeaves = leaveBalanceRepository.updateActiveEmployeeLeaveBalances(
-                bracketService.getSickLeaveHours(),
+                payrollConfig.getSickLeaveHours(),
                 List.of(LeaveType.SICK_LEAVE),
                 blacklistedStatuses
         );
 
         int updateVacationLeaves = leaveBalanceRepository.updateActiveEmployeeLeaveBalances(
-                bracketService.getVacationLeaveHours(),
+                payrollConfig.getVacationLeaveHours(),
                 List.of(LeaveType.VACATION_LEAVE),
                 blacklistedStatuses
         );
@@ -135,7 +139,7 @@ public class LeaveService {
 
     @Transactional
     @ExecutionTime
-    //todo: bulknotify annotation
+    @BulkNotify(message = "Leave Requeest Pending", targetRole = Position.HR, importance = "HIGH")
     public LeaveRequest createLeaveRequest(LeaveRequestDto payload, Long empId) {
         Employee emp =  employeeRepository.findById(empId).orElseThrow(() -> new EmployeeNotFoundException(empId));
         LeaveRequest request = new LeaveRequest();

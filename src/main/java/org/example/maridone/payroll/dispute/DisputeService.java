@@ -1,7 +1,11 @@
 package org.example.maridone.payroll.dispute;
 
+import org.example.maridone.annotation.BulkNotify;
 import org.example.maridone.annotation.ExecutionTime;
+import org.example.maridone.annotation.Notify;
 import org.example.maridone.common.CommonSpecs;
+import org.example.maridone.core.employee.Employee;
+import org.example.maridone.enums.Position;
 import org.example.maridone.enums.Status;
 import org.example.maridone.exception.unauthorized.DuplicateDisputeException;
 import org.example.maridone.exception.unauthorized.InvalidActionException;
@@ -38,6 +42,7 @@ public class DisputeService {
 
     @Transactional
     @ExecutionTime
+    @BulkNotify(message = "Dispute Requested", targetRole = Position.HR, importance = "HIGH")
     public DisputeRequest createDisputeRequest(Long itemId, DisputeRequestDto payload) {
         PayrollItem item =  payrollItemRepository.findById(itemId).orElse(null);
         if (item == null) {
@@ -46,7 +51,7 @@ public class DisputeService {
 
         DisputeRequest checkRecent = disputeRepository.findTopByPayrollItem_ItemIdOrderByDisputeIdDesc(itemId);
         if (checkRecent != null && checkRecent.getStatus().equals(Status.PENDING)) {
-            throw new DuplicateDisputeException(itemId, "Your dispute is still pending. Please for an update from the HR.");
+            throw new DuplicateDisputeException(itemId, "Your dispute is still pending. Please ask for an update from the HR.");
         }
 
         DisputeRequest disputeRequest = new DisputeRequest();
@@ -60,17 +65,21 @@ public class DisputeService {
 
     @Transactional
     @ExecutionTime
-    public void updateDisputeStatus(Long disputeId, DisputeActionDto payload) {
-        DisputeRequest disputeRequest = disputeRepository.findById(disputeId).orElse(null);
-        if (disputeRequest == null) {
-            throw new RequestNotFoundException(disputeId);
-        } else if (disputeRequest.getStatus().equals(Status.APPROVED)) {
-            throw new InvalidActionException("Dispute ID: " + disputeId + "has been approved already.");
+    @Notify(message = "Your Dispute Request has been  #{#result.status}", targetEmployee = "#result.employeeId",importance = "HIGH")
+    public DisputeResponseDto updateDisputeStatus(Long disputeId, DisputeActionDto payload) {
+        DisputeRequest disputeRequest = disputeRepository.findByIdWithEmployee(disputeId)
+                .orElseThrow(() -> new RequestNotFoundException(disputeId));
+        if (disputeRequest.getStatus().equals(Status.APPROVED)) {
+            throw new InvalidActionException("Dispute ID: " + disputeId + " has been approved already.");
         }
         disputeRequest.setStatus(payload.getStatus());
         disputeRequest.setStatusReason(payload.getStatusReason());
         disputeRequest.setUpdatedAt(Instant.now());
         disputeRepository.save(disputeRequest);
+        DisputeResponseDto responseDto = payrollMapper.toResponseDto(disputeRequest);
+
+        responseDto.setEmployeeId(disputeRequest.getPayrollItem().getEmployee().getEmployeeId());
+        return responseDto;
     }
 
 

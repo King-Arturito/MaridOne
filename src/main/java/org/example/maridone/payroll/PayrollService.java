@@ -38,6 +38,8 @@ import org.example.maridone.payroll.mapper.PayrollMapper;
 import org.example.maridone.payroll.run.PayrollItemRepository;
 import org.example.maridone.payroll.run.PayrollRun;
 import org.example.maridone.payroll.run.PayrollRunRepository;
+import org.example.maridone.schedule.shift.DailyShiftRepository;
+import org.example.maridone.schedule.shift.DailyShiftSchedule;
 import org.example.maridone.schedule.shift.TemplateShiftRepository;
 import org.example.maridone.schedule.shift.TemplateShiftSchedule;
 import org.springframework.data.domain.Sort;
@@ -54,6 +56,7 @@ public class PayrollService {
     private final EmployeeRepository employeeRepository;
     private final AttendanceLogRepository attendanceLogRepository;
     private final TemplateShiftRepository templateShiftRepository;
+    private final DailyShiftRepository dailyShiftRepository;
     private final OvertimeRequestRepository overtimeRequestRepository;
     private final LeaveRequestRepository leaveRequestRepository;
     private final HolidayService holidayService;
@@ -69,6 +72,7 @@ public class PayrollService {
             EmployeeRepository employeeRepository,
             AttendanceLogRepository attendanceLogRepository,
             TemplateShiftRepository templateShiftRepository,
+            DailyShiftRepository dailyShiftRepository,
             OvertimeRequestRepository overtimeRequestRepository,
             LeaveRequestRepository leaveRequestRepository,
             HolidayService holidayService,
@@ -84,6 +88,7 @@ public class PayrollService {
         this.employeeRepository = employeeRepository;
         this.attendanceLogRepository = attendanceLogRepository;
         this.templateShiftRepository = templateShiftRepository;
+        this.dailyShiftRepository = dailyShiftRepository;
         this.overtimeRequestRepository = overtimeRequestRepository;
         this.leaveRequestRepository = leaveRequestRepository;
         this.holidayService = holidayService;
@@ -172,7 +177,7 @@ public class PayrollService {
         );
 
         //get all schedules of employees in employeeIds
-        List<TemplateShiftSchedule> allSchedules = templateShiftRepository.findByEmployee_EmployeeIdIn(employeeIds);
+        List<DailyShiftSchedule> allSchedules = templateShiftRepository.findByEmployee_EmployeeIdIn(employeeIds);
         //get all APPROVED leaves of employees in employeeIds for payroll period
         List<LeaveRequest> allLeaves = leaveRequestRepository.findApprovedLeavesForPeriod(
                 employeeIds, run.getPeriodStart().atStartOfDay(), run.getPeriodEnd().plusDays(1).atStartOfDay()

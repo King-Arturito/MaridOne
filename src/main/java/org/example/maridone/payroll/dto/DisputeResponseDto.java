@@ -1,6 +1,8 @@
 package org.example.maridone.payroll.dto;
 
+import jakarta.validation.constraints.NotNull;
 import org.example.maridone.enums.Status;
+import org.example.maridone.marker.OnUpdate;
 
 import java.time.Instant;
 
@@ -14,6 +16,8 @@ public class DisputeResponseDto {
     private Instant updatedAt;
     private String statusReason;
     private Long itemId;
+    @NotNull(groups = OnUpdate.class)
+    private Long employeeId;
 
     public Long getId() {
         return id;
@@ -77,6 +81,14 @@ public class DisputeResponseDto {
 
     public void setItemId(Long itemId) {
         this.itemId = itemId;
+    }
+
+    public Long getEmployeeId() {
+        return employeeId;
+    }
+
+    public void setEmployeeId(Long employeeId) {
+        this.employeeId = employeeId;
     }
 }
 

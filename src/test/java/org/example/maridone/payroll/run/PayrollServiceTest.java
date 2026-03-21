@@ -31,6 +31,7 @@ import org.example.maridone.payroll.item.component.DeductionsRepository;
 import org.example.maridone.payroll.item.component.EarningsLine;
 import org.example.maridone.payroll.item.component.EarningsRepository;
 import org.example.maridone.payroll.mapper.PayrollMapper;
+import org.example.maridone.schedule.shift.DailyShiftRepository;
 import org.example.maridone.schedule.shift.TemplateShiftRepository;
 import org.example.maridone.schedule.shift.TemplateShiftSchedule;
 import org.junit.jupiter.api.Assertions;
@@ -55,6 +56,7 @@ class PayrollServiceTest {
     @Mock private EmployeeRepository employeeRepository;
     @Mock private AttendanceLogRepository attendanceLogRepository;
     @Mock private TemplateShiftRepository templateShiftRepository;
+    @Mock private DailyShiftRepository dailyShiftRepository;
     @Mock private OvertimeRequestRepository overtimeRequestRepository;
     @Mock private LeaveRequestRepository leaveRequestRepository;
     @Mock private HolidayService holidayService;
@@ -77,6 +79,7 @@ class PayrollServiceTest {
                 employeeRepository,
                 attendanceLogRepository,
                 templateShiftRepository,
+                dailyShiftRepository,
                 overtimeRequestRepository,
                 leaveRequestRepository,
                 holidayService,
