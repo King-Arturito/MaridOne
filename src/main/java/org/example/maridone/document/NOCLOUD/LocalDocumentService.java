@@ -1,5 +1,6 @@
 package org.example.maridone.document.NOCLOUD;
 
+import org.example.maridone.annotation.AuditLog;
 import org.example.maridone.annotation.ExecutionTime;
 import org.example.maridone.core.user.UserAccount;
 import org.example.maridone.core.user.UserAccountRepository;
@@ -45,6 +46,7 @@ public class LocalDocumentService {
 
     @ExecutionTime
     @Transactional
+    @AuditLog
     public DocumentResponseDto upload(MultipartFile file, String username) {
         UserAccount user = userAccountRepository.findByUsername(username)
                 .orElseThrow(() -> new AccountNotFoundException("User not found"));
@@ -64,6 +66,7 @@ public class LocalDocumentService {
 
     @ExecutionTime
     @Transactional
+    @AuditLog
     public DocumentResponseDto replace(Long pathId, MultipartFile file, String username) {
         DocumentPath document = documentPathRepository.findById(pathId)
                 .orElseThrow(() -> new RuntimeException("Document not found"));
@@ -82,6 +85,8 @@ public class LocalDocumentService {
     }
 
     @ExecutionTime
+    @AuditLog
+    @Transactional
     public void delete(Long pathId) {
         DocumentPath document = documentPathRepository.findById(pathId)
                 .orElseThrow(() -> new RuntimeException("Document not found"));
