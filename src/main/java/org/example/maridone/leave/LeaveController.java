@@ -34,13 +34,6 @@ public class LeaveController {
         return leaveService.getBalance(empId);
     }
 
-    /*
-        create balance
-        payload:
-            Long empId;
-            BigDecimal balanceHours;
-            private LeaveType leaveType;
-     */
     @PostMapping("/balance/{empId}")
     @PreAuthorize("hasRole('HR')")
     @AuditLog
@@ -67,7 +60,7 @@ public class LeaveController {
     public ResponseEntity<Void> updateBalance(
             @PathVariable Long empId,
             @RequestBody @Valid UpdateBalanceDto payload) {
-        leaveService.updateYearlyBalance(empId, payload);
+        leaveService.updateLeaveBalance(empId, payload);
 
         return ResponseEntity.noContent().build();
     }
