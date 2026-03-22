@@ -84,7 +84,7 @@ public class LeaveService {
 
 
     @Transactional
-    public void updateYearlyBalance(Long empId, UpdateBalanceDto payload) {
+    public void updateLeaveBalance(Long empId, UpdateBalanceDto payload) {
         Specification<LeaveBalance> spec = Specification.allOf(
                 LeaveSpecs.hasEmployeeId(empId),
                 CommonSpecs.fieldEquals("leaveType",  payload.getLeaveType())
@@ -138,7 +138,7 @@ public class LeaveService {
 
     @Transactional
     @ExecutionTime
-    @BulkNotify(message = "Leave Requeest Pending", targetRole = Position.HR, importance = "HIGH")
+    @BulkNotify(message = "Leave Request Pending", targetRole = Position.HR, importance = "HIGH")
     public LeaveRequest createLeaveRequest(LeaveRequestDto payload, Long empId) {
         Employee emp =  employeeRepository.findById(empId).orElseThrow(() -> new EmployeeNotFoundException(empId));
         LeaveRequest request = new LeaveRequest();
