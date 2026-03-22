@@ -16,8 +16,11 @@ import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
+import software.amazon.awssdk.services.s3.presigner.S3Presigner;
+import software.amazon.awssdk.services.s3.presigner.model.GetObjectPresignRequest;
 
 import java.io.IOException;
+import java.time.Duration;
 import java.util.UUID;
 
 @Service
@@ -25,9 +28,13 @@ import java.util.UUID;
 public class CloudStorageService implements StorageService {
 
     private final S3Client s3Client;
+    private final S3Presigner s3Presigner;
     private final CloudConfig cloudConfig;
-    public CloudStorageService(S3Client s3Client, CloudConfig cloudConfig) {
+
+    // Inject all three dependencies
+    public CloudStorageService(S3Client s3Client, S3Presigner s3Presigner, CloudConfig cloudConfig) {
         this.s3Client = s3Client;
+        this.s3Presigner = s3Presigner;
         this.cloudConfig = cloudConfig;
     }
 
@@ -89,6 +96,27 @@ public class CloudStorageService implements StorageService {
 
         } catch (Exception e) {
             throw new CloudReadException("Failed to delete file from DigitalOcean Spaces: " + filePath, e);
+        }
+    }
+
+    @Override
+    @ExecutionTime
+    public String generateDownloadUrl(String filePath) {
+        try {
+            GetObjectRequest getObjectRequest = GetObjectRequest.builder()
+                    .bucket(cloudConfig.getBucketName())
+                    .key(filePath)
+                    .build();
+
+            GetObjectPresignRequest presignRequest = GetObjectPresignRequest.builder()
+                    .signatureDuration(Duration.ofMinutes(15))
+                    .getObjectRequest(getObjectRequest)
+                    .build();
+
+            return s3Presigner.presignGetObject(presignRequest).url().toString();
+
+        } catch (Exception e) {
+            throw new CloudReadException("Failed to generate secure download link for: " + filePath, e);
         }
     }
 }

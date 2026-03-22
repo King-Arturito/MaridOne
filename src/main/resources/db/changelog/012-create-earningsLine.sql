@@ -6,8 +6,8 @@ CREATE TABLE earnings_line (
     rate            NUMERIC(38, 2),
     is_overtime     BOOLEAN         NOT NULL,
     item_id         BIGINT          NOT NULL,
-    earnings_line   BIGINT          UNIQUE,
+    overtime_id   BIGINT          UNIQUE,
 
     CONSTRAINT fk_earnings_line_payroll_item     FOREIGN KEY (item_id)       REFERENCES payroll_item     (item_id),
-    CONSTRAINT fk_earnings_line_overtime_request FOREIGN KEY (earnings_line) REFERENCES overtime_request (overtime_id)
+    CONSTRAINT fk_earnings_line_overtime_request FOREIGN KEY (overtime_id) REFERENCES overtime_request (overtime_id)
 );

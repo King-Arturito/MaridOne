@@ -16,7 +16,10 @@ public class CleanupTask {
         this.dataRetentionConfig = dataRetentionConfig;
     }
 
-    @Scheduled(cron = "0 0 0 * * *")
+
+    //Scheduled at 00:00 daily
+    //deletes old low priority notifications (60 days)
+    @Scheduled(cron = "0 0 0 * * *", zone = "Asia/Manila")
     public void cleanNotification(){
         notificationService.bulkClean(dataRetentionConfig.getNotificationMaxAge());
     }

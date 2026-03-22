@@ -62,7 +62,6 @@ public class PayrollService {
     private final PayrollMapper payrollMapper;
     private final DefaultConfig defaultConfig;
     private final PayrollConfig payrollConfig;
-    private final BracketService bracketService;
 
     public PayrollService(
             PayrollRunRepository payrollRunRepository,
@@ -76,8 +75,7 @@ public class PayrollService {
             PayrollCalculator payrollCalculator,
             PayrollMapper payrollMapper,
             DefaultConfig defaultConfig,
-            PayrollConfig payrollConfig,
-            BracketService bracketService
+            PayrollConfig payrollConfig
     )
     {
         this.payrollRunRepository = payrollRunRepository;
@@ -92,7 +90,6 @@ public class PayrollService {
         this.payrollMapper = payrollMapper;
         this.defaultConfig = defaultConfig;
         this.payrollConfig = payrollConfig;
-        this.bracketService = bracketService;
     }
 
 

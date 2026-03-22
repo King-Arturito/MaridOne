@@ -11,6 +11,6 @@ import java.util.Optional;
 @Repository
 public interface DocumentPathRepository extends JpaRepository<DocumentPath, Long> {
 
-    @Query("select dp.username from DocumentPath dp where dp.pathId = :pathId")
+    @Query("select dp.username.username from DocumentPath dp where dp.pathId = :pathId")
     Optional<String> findUsernameByPathId(@Param("pathId") Long pathId);
 }

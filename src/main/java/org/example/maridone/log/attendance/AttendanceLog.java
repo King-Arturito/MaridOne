@@ -1,13 +1,10 @@
 package org.example.maridone.log.attendance;
 
-import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
-import org.example.maridone.core.employee.Employee;
-
 import java.time.Instant;
-import java.time.LocalDateTime;
 
 @Entity
+@Table(name = "attendance_log")
 public class AttendanceLog {
 
     @Id

@@ -92,8 +92,7 @@ class PayrollServiceTest {
                 payrollCalculator,
                 payrollMapper,
                 defaultConfig,
-                payrollConfig,
-                bracketService
+                payrollConfig
         );
     }
 
