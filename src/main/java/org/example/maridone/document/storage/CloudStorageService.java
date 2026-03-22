@@ -2,7 +2,7 @@ package org.example.maridone.document.storage;
 
 import org.example.maridone.annotation.AuditLog;
 import org.example.maridone.annotation.ExecutionTime;
-import org.example.maridone.config.CloudProperties;
+import org.example.maridone.config.CloudConfig;
 import org.example.maridone.exception.unauthorized.CloudReadException;
 import org.example.maridone.exception.unauthorized.CloudWriteException;
 import org.springframework.context.annotation.Profile;
@@ -16,8 +16,11 @@ import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
+import software.amazon.awssdk.services.s3.presigner.S3Presigner;
+import software.amazon.awssdk.services.s3.presigner.model.GetObjectPresignRequest;
 
 import java.io.IOException;
+import java.time.Duration;
 import java.util.UUID;
 
 @Service
@@ -25,10 +28,14 @@ import java.util.UUID;
 public class CloudStorageService implements StorageService {
 
     private final S3Client s3Client;
-    private final CloudProperties cloudProperties;
-    public CloudStorageService(S3Client s3Client, CloudProperties cloudProperties) {
+    private final S3Presigner s3Presigner;
+    private final CloudConfig cloudConfig;
+
+    // Inject all three dependencies
+    public CloudStorageService(S3Client s3Client, S3Presigner s3Presigner, CloudConfig cloudConfig) {
         this.s3Client = s3Client;
-        this.cloudProperties = cloudProperties;
+        this.s3Presigner = s3Presigner;
+        this.cloudConfig = cloudConfig;
     }
 
     @Override
@@ -42,7 +49,7 @@ public class CloudStorageService implements StorageService {
             String uniqueFileName = username + "/" + UUID.randomUUID() + "_" + cleanedName;
 
             PutObjectRequest putObjectRequest = PutObjectRequest.builder()
-                    .bucket(cloudProperties.getBucketName())
+                    .bucket(cloudConfig.getBucketName())
                     .key(uniqueFileName)
                     .contentType(file.getContentType())
                     .build();
@@ -64,7 +71,7 @@ public class CloudStorageService implements StorageService {
     public Resource load(String filePath) {
         try {
             GetObjectRequest getObjectRequest = GetObjectRequest.builder()
-                    .bucket(cloudProperties.getBucketName())
+                    .bucket(cloudConfig.getBucketName())
                     .key(filePath)
                     .build();
 
@@ -81,7 +88,7 @@ public class CloudStorageService implements StorageService {
     public void delete(String filePath) {
         try {
             DeleteObjectRequest deleteObjectRequest = DeleteObjectRequest.builder()
-                    .bucket(cloudProperties.getBucketName())
+                    .bucket(cloudConfig.getBucketName())
                     .key(filePath)
                     .build();
 
@@ -89,6 +96,27 @@ public class CloudStorageService implements StorageService {
 
         } catch (Exception e) {
             throw new CloudReadException("Failed to delete file from DigitalOcean Spaces: " + filePath, e);
+        }
+    }
+
+    @Override
+    @ExecutionTime
+    public String generateDownloadUrl(String filePath) {
+        try {
+            GetObjectRequest getObjectRequest = GetObjectRequest.builder()
+                    .bucket(cloudConfig.getBucketName())
+                    .key(filePath)
+                    .build();
+
+            GetObjectPresignRequest presignRequest = GetObjectPresignRequest.builder()
+                    .signatureDuration(Duration.ofMinutes(15))
+                    .getObjectRequest(getObjectRequest)
+                    .build();
+
+            return s3Presigner.presignGetObject(presignRequest).url().toString();
+
+        } catch (Exception e) {
+            throw new CloudReadException("Failed to generate secure download link for: " + filePath, e);
         }
     }
 }

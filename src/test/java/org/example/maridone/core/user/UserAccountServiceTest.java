@@ -5,6 +5,7 @@ import java.util.Optional;
 import org.example.maridone.core.dto.CreateUserAccountDto;
 import org.example.maridone.core.employee.Employee;
 import org.example.maridone.core.employee.EmployeeRepository;
+import org.example.maridone.core.mapper.CoreMapper;
 import org.example.maridone.enums.AccountStatus;
 import org.example.maridone.exception.notfound.AccountNotFoundException;
 import org.junit.jupiter.api.Assertions;
@@ -24,6 +25,7 @@ class UserAccountServiceTest {
     @Mock private UserAccountRepository userAccountRepository;
     @Mock private EmployeeRepository employeeRepository;
     @Mock private PasswordEncoder passwordEncoder;
+    @Mock private CoreMapper coreMapper;
 
     @InjectMocks
     private UserAccountService userAccountService;

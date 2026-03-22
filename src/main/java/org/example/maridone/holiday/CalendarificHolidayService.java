@@ -22,7 +22,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
-import org.example.maridone.config.HolidayProperties;
+import org.example.maridone.config.HolidayConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -66,17 +66,17 @@ public class CalendarificHolidayService implements HolidayService {
             "edsa people power revolution anniversary"
     );
 
-    private final HolidayProperties holidayProperties;
+    private final HolidayConfig holidayConfig;
     private final ObjectMapper objectMapper;
     private final HttpClient httpClient;
     private final ConcurrentHashMap<YearCacheKey, YearCacheEntry> memoryCache = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<YearCacheKey, Object> keyLocks = new ConcurrentHashMap<>();
 
-    public CalendarificHolidayService(HolidayProperties holidayProperties, ObjectMapper objectMapper) {
-        this.holidayProperties = holidayProperties;
+    public CalendarificHolidayService(HolidayConfig holidayConfig, ObjectMapper objectMapper) {
+        this.holidayConfig = holidayConfig;
         this.objectMapper = objectMapper;
         this.httpClient = HttpClient.newBuilder()
-                .connectTimeout(holidayProperties.getConnectTimeout())
+                .connectTimeout(holidayConfig.getConnectTimeout())
                 .build();
     }
 
@@ -86,9 +86,9 @@ public class CalendarificHolidayService implements HolidayService {
             return HolidayLookup.empty();
         }
 
-        String country = holidayProperties.getCountry() == null
+        String country = holidayConfig.getCountry() == null
                 ? "PH"
-                : holidayProperties.getCountry().trim().toUpperCase(Locale.ROOT);
+                : holidayConfig.getCountry().trim().toUpperCase(Locale.ROOT);
         Map<LocalDate, HolidayType> merged = new HashMap<>();
 
         for (int year = startDate.getYear(); year <= endDate.getYear(); year++) {
@@ -160,7 +160,7 @@ public class CalendarificHolidayService implements HolidayService {
     private Map<LocalDate, HolidayType> fetchFromCalendarific(String country, int year) throws IOException, InterruptedException {
         String url = buildUrl(country, year);
         HttpRequest request = HttpRequest.newBuilder(URI.create(url))
-                .timeout(holidayProperties.getRequestTimeout())
+                .timeout(holidayConfig.getRequestTimeout())
                 .GET()
                 .build();
 
@@ -239,7 +239,7 @@ public class CalendarificHolidayService implements HolidayService {
     }
 
     private void applyOverrides(Map<LocalDate, HolidayType> merged, LocalDate startDate, LocalDate endDate) {
-        String overrideFilePath = holidayProperties.getOverrideFile();
+        String overrideFilePath = holidayConfig.getOverrideFile();
         if (overrideFilePath == null || overrideFilePath.isBlank()) {
             return;
         }
@@ -279,20 +279,20 @@ public class CalendarificHolidayService implements HolidayService {
     }
 
     private boolean isApiEnabled() {
-        return holidayProperties.isEnabled()
-                && holidayProperties.getApiKey() != null
-                && !holidayProperties.getApiKey().isBlank();
+        return holidayConfig.isEnabled()
+                && holidayConfig.getApiKey() != null
+                && !holidayConfig.getApiKey().isBlank();
     }
 
     private boolean isFresh(YearCacheEntry entry, Instant now) {
         if (entry == null) {
             return false;
         }
-        return entry.fetchedAt.plus(holidayProperties.getRefreshAfter()).isAfter(now);
+        return entry.fetchedAt.plus(holidayConfig.getRefreshAfter()).isAfter(now);
     }
 
     private Path cacheFilePath(String country, int year) {
-        return Paths.get(holidayProperties.getCacheDir(), country + "-" + year + ".json");
+        return Paths.get(holidayConfig.getCacheDir(), country + "-" + year + ".json");
     }
 
     private YearCacheEntry readCacheFile(Path path) {
@@ -369,11 +369,11 @@ public class CalendarificHolidayService implements HolidayService {
     }
 
     private String buildUrl(String country, int year) {
-        String query = "api_key=" + encode(holidayProperties.getApiKey())
+        String query = "api_key=" + encode(holidayConfig.getApiKey())
                 + "&country=" + encode(country)
                 + "&year=" + year;
 
-        String baseUrl = holidayProperties.getBaseUrl();
+        String baseUrl = holidayConfig.getBaseUrl();
         if (baseUrl.contains("?")) {
             return baseUrl + "&" + query;
         }

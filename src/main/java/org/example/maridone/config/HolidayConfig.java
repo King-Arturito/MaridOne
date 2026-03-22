@@ -7,7 +7,7 @@ import org.springframework.stereotype.Component;
 
 @Component
 @ConfigurationProperties("holiday")
-public class HolidayProperties {
+public class HolidayConfig {
 
     private boolean enabled = false;
     private String apiKey = "";

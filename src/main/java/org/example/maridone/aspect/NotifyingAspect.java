@@ -70,6 +70,7 @@ public class NotifyingAspect {
             notifications.add(notification);
         }
         notificationRepository.saveAll(notifications);
+        logger.info("Notified: {}", notify.targetRole());
     }
 
     @Around("notifyUser()")

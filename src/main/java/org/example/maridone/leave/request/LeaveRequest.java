@@ -6,11 +6,12 @@ import org.example.maridone.core.employee.Employee;
 import org.example.maridone.enums.Status;
 import org.hibernate.annotations.Check;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "leave_request")
-@Check(constraints = "start_date < end_date")
+@Check(constraints = "start_date_time < end_date_time")
 public class LeaveRequest {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -22,10 +23,10 @@ public class LeaveRequest {
     @JoinColumn(name = "emp_id", nullable = false)
     private Employee employee;
 
-    @Column(name = "start_date", nullable = false)
+    @Column(name = "start_date_time", nullable = false)
     private LocalDateTime startDateTime;
 
-    @Column(name = "end_date", nullable = false)
+    @Column(name = "end_date_time", nullable = false)
     private LocalDateTime endDateTime;
 
     @Column(name = "approver", nullable = true)
@@ -100,4 +101,20 @@ public class LeaveRequest {
     public void setApproverReason(String approverReason) {
         this.approverReason = approverReason;
     }
+
+
+
+    public boolean coversDate(LocalDate targetDate) {
+        if (targetDate == null || startDateTime == null || endDateTime == null) {
+            return false;
+        }
+
+        LocalDate startDate = startDateTime.toLocalDate();
+        LocalDate endDate = endDateTime.toLocalDate();
+
+        return !targetDate.isBefore(startDate) && !targetDate.isAfter(endDate);
+    }
+
+
+
 }

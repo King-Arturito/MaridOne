@@ -1,6 +1,7 @@
 package org.example.maridone.notification;
 
 import org.example.maridone.annotation.ExecutionTime;
+import org.example.maridone.annotation.AutoScheduled;
 import org.example.maridone.common.CommonSpecs;
 import org.example.maridone.notification.spec.NotificationSpecs;
 import org.springframework.data.domain.Page;
@@ -9,7 +10,8 @@ import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.List;
+import java.time.Duration;
+import java.time.Instant;
 
 @Service
 public class NotificationService {
@@ -39,5 +41,16 @@ public class NotificationService {
             notif.setReadStatus(true);
             notificationRepository.save(notif);
         }
+    }
+
+    @Transactional
+    @AutoScheduled
+    public void bulkClean(Duration days){
+        Specification<Notification> spec = Specification.allOf(
+                CommonSpecs.fieldEquals("readStatus", true),
+                CommonSpecs.fieldLessThanOrEqual("createdAt", Instant.now().minus(days)),
+                CommonSpecs.fieldEquals("importance", "LOW")
+        );
+        notificationRepository.delete(spec);
     }
 }

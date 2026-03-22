@@ -1,5 +1,6 @@
 package org.example.maridone.document;
 
+import org.example.maridone.document.dto.DocumentResponseDto;
 import org.example.maridone.document.path.DocumentPath;
 import org.springframework.context.annotation.Profile;
 import org.springframework.core.io.Resource;
@@ -34,14 +35,14 @@ public class DocumentController {
 
     @PostMapping("/upload")
     @PreAuthorize("isAuthenticated()")
-    public ResponseEntity<DocumentPath> upload(@RequestParam("file") MultipartFile file,
-                                               Authentication authentication) {
+    public ResponseEntity<DocumentResponseDto> upload(@RequestParam("file") MultipartFile file,
+                                                      Authentication authentication) {
         return ResponseEntity.ok(documentService.upload(file, authentication.getName()));
     }
 
     @PutMapping("/{id}/replace")
     @PreAuthorize("@documentOwnerCheck.isSelf(#pathId, authentication.name)")
-    public ResponseEntity<DocumentPath> replace(@PathVariable("id") Long pathId,
+    public ResponseEntity<DocumentResponseDto> replace(@PathVariable("id") Long pathId,
                                                 @RequestParam("file") MultipartFile file,
                                                 Authentication authentication) {
         return ResponseEntity.ok(documentService.replace(pathId, file, authentication.getName()));

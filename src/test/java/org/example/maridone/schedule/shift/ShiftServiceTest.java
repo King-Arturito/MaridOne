@@ -6,9 +6,10 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 
+import org.example.maridone.config.DefaultConfig;
 import org.example.maridone.core.employee.Employee;
 import org.example.maridone.core.employee.EmployeeRepository;
-import org.example.maridone.enums.EarningsType;
+import org.example.maridone.leave.request.LeaveRequestRepository;
 import org.example.maridone.schedule.dto.ShiftRequestDto;
 import org.example.maridone.schedule.dto.ShiftResponseDto;
 import org.example.maridone.schedule.mapper.ScheduleMapper;
@@ -28,8 +29,11 @@ import org.springframework.test.util.ReflectionTestUtils;
 class ShiftServiceTest {
 
     @Mock private TemplateShiftRepository templateShiftRepository;
+    @Mock private DailyShiftRepository dailyShiftRepository;
     @Mock private EmployeeRepository employeeRepository;
+    @Mock private LeaveRequestRepository leaveRequestRepository;
     @Mock private ScheduleMapper scheduleMapper;
+    @Mock private DefaultConfig defaultConfig;
 
     @InjectMocks
     private ShiftService shiftService;

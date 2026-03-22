@@ -3,7 +3,7 @@ package org.example.maridone.auth;
 import org.example.maridone.annotation.ExecutionTime;
 import org.example.maridone.auth.token.RefreshToken;
 import org.example.maridone.auth.token.RefreshTokenRepository;
-import org.example.maridone.config.JwtProperties;
+import org.example.maridone.config.JwtConfig;
 import org.example.maridone.core.user.UserAccount;
 import org.example.maridone.core.user.UserAccountRepository;
 import org.example.maridone.core.user.UserLoginService;
@@ -28,20 +28,20 @@ public class AuthService {
     private final UserLoginService userLoginService;
     private final RefreshTokenRepository refreshTokenRepository;
     private final UserAccountRepository userAccountRepository;
-    private final JwtProperties jwtProperties;
+    private final JwtConfig jwtConfig;
 
     public AuthService(JwtService jwtService,
                        AuthenticationManager authenticationManager,
                        UserLoginService userLoginService,
                        RefreshTokenRepository refreshTokenRepository,
                        UserAccountRepository userAccountRepository,
-                       JwtProperties jwtProperties) {
+                       JwtConfig jwtConfig) {
         this.jwtService = jwtService;
         this.authenticationManager = authenticationManager;
         this.userLoginService = userLoginService;
         this.refreshTokenRepository = refreshTokenRepository;
         this.userAccountRepository = userAccountRepository;
-        this.jwtProperties = jwtProperties;
+        this.jwtConfig = jwtConfig;
     }
 
     @ExecutionTime
@@ -63,7 +63,7 @@ public class AuthService {
             refreshTokenEntity.setRefreshToken(refreshTokenString);
             refreshTokenEntity.setUserAccount(userAccount);
 
-            long milliseconds = loginRequest.isRememberMe() ? jwtProperties.getRememberMeExpiration() : jwtProperties.getRefreshTokenExpiration();
+            long milliseconds = loginRequest.isRememberMe() ? jwtConfig.getRememberMeExpiration() : jwtConfig.getRefreshTokenExpiration();
             refreshTokenEntity.setExpiryDate(Instant.now().plus(milliseconds, ChronoUnit.MILLIS));
 
             refreshTokenRepository.save(refreshTokenEntity);

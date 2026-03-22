@@ -10,7 +10,7 @@ import java.time.ZoneId;
 @Component
 @ConfigurationProperties(prefix = "default")
 @Validated
-public class DefaultProperties {
+public class DefaultConfig {
     private ZoneId timeZone = ZoneId.of("Asia/Manila");
     @NotEmpty(message = "No provided URL.")
     private String url;

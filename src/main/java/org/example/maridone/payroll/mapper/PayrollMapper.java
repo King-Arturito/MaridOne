@@ -36,6 +36,7 @@ public interface PayrollMapper {
 
     @Mapping(source = "disputeId", target = "id")
     @Mapping(source = "payrollItem.itemId", target = "itemId")
+    @Mapping(target = "employeeId", ignore = true)
     DisputeResponseDto toResponseDto(DisputeRequest disputeRequest);
 
     List<DisputeResponseDto> toResponseDtos(List<DisputeRequest> disputeRequests);

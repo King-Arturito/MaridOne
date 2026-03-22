@@ -26,12 +26,12 @@ import java.util.List;
 @EnableWebSecurity
 @EnableMethodSecurity
 public class SecurityConfig {
-    private final DefaultProperties defaultProperties;
+    private final DefaultConfig defaultConfig;
     private final JwtService jwtService;
     private final UserLoginService userLoginService;
 
-    public SecurityConfig(DefaultProperties defaultProperties, JwtService jwtService, UserLoginService userLoginService) {
-        this.defaultProperties = defaultProperties;
+    public SecurityConfig(DefaultConfig defaultConfig, JwtService jwtService, UserLoginService userLoginService) {
+        this.defaultConfig = defaultConfig;
         this.jwtService = jwtService;
         this.userLoginService = userLoginService;
     }
@@ -53,7 +53,7 @@ public class SecurityConfig {
                                 .requestMatchers("/api/**").authenticated()
                 )
                 .formLogin(AbstractHttpConfigurer::disable)
-                .logout(logout -> logout.logoutSuccessUrl(defaultProperties.getUrl()))
+                .logout(logout -> logout.logoutSuccessUrl(defaultConfig.getUrl()))
                 .addFilterBefore(jwtFilter(), UsernamePasswordAuthenticationFilter.class)
                 .build();
     }
@@ -71,7 +71,7 @@ public class SecurityConfig {
         CorsConfiguration configuration = new CorsConfiguration();
         configuration.setAllowedHeaders(List.of("*"));
         configuration.setAllowCredentials(true);
-        configuration.setAllowedOrigins(List.of(defaultProperties.getUrl()));
+        configuration.setAllowedOrigins(List.of(defaultConfig.getUrl()));
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "PATCH"));
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();

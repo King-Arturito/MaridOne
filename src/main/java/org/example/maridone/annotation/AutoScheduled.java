@@ -8,5 +8,5 @@ import java.lang.annotation.Target;
 //only use for @Scheduled Services
 @Target(ElementType.METHOD)
 @Retention(RetentionPolicy.RUNTIME)
-public @interface SystematicScheduling {
+public @interface AutoScheduled {
 }

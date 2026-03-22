@@ -8,7 +8,7 @@ import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.stream.Collectors;
 
-import org.example.maridone.config.HolidayProperties;
+import org.example.maridone.config.HolidayConfig;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
@@ -27,7 +27,7 @@ class CalendarificLiveSmokeTest {
         Assumptions.assumeTrue("true".equalsIgnoreCase(liveFlag),
                 "Skipping live test: set CALENDARIFIC_LIVE_TEST=true to run");
 
-        HolidayProperties properties = new HolidayProperties();
+        HolidayConfig properties = new HolidayConfig();
         properties.setEnabled(true);
         properties.setApiKey(apiKey);
         properties.setCountry("PH");
