@@ -348,6 +348,24 @@ public class PayrollService {
                 List<OvertimeRequest> todaysOT = requests.stream()
                         .filter(ot -> ot.getWorkDate().equals(loopDate))
                         .toList();
+                List<PayableOvertimeBreakdown> payableTodaysOT = hasCompleteAttendancePair
+                        ? todaysOT.stream()
+                                .map(ot -> new PayableOvertimeBreakdown(
+                                        ot,
+                                        payrollCalculator.calculateWorkedHoursWithinWindow(
+                                                attendanceSessions,
+                                                ot.getStartTime(),
+                                                ot.getEndTime()
+                                        ),
+                                        payrollCalculator.calculateNightDiffHoursWithinWindow(
+                                                attendanceSessions,
+                                                ot.getStartTime(),
+                                                ot.getEndTime()
+                                        )
+                                ))
+                                .filter(ot -> ot.payableHours().compareTo(BigDecimal.ZERO) > 0)
+                                .toList()
+                        : List.of();
 
                 // non-exempt attendance is driven by the generated daily shifts for the date.
                 boolean isRestDay = todaysSchedules.isEmpty() && todaysLeave == null;
@@ -363,8 +381,11 @@ public class PayrollService {
                         isHoliday,
                         isRegularHoliday
                 );
-                BigDecimal overtimeHours = todaysOT.stream()
-                        .map(ot -> payrollCalculator.calculateHours(ot.getStartTime().toLocalTime(), ot.getEndTime().toLocalTime()))
+                BigDecimal payableOvertimeHours = payableTodaysOT.stream()
+                        .map(PayableOvertimeBreakdown::payableHours)
+                        .reduce(BigDecimal.ZERO, BigDecimal::add);
+                BigDecimal payableNightOvertimeHours = payableTodaysOT.stream()
+                        .map(PayableOvertimeBreakdown::nightHours)
                         .reduce(BigDecimal.ZERO, BigDecimal::add);
 
                 // worked rest-day and holiday hours earn premium lines instead of ordinary attendance deductions.
@@ -375,7 +396,7 @@ public class PayrollService {
                         );
 
                         // base pay already covers ordinary hours, so this line only adds the premium increment.
-                        BigDecimal premiumHours = hoursWorked.subtract(overtimeHours).max(BigDecimal.ZERO);
+                        BigDecimal premiumHours = hoursWorked.subtract(payableOvertimeHours).max(BigDecimal.ZERO);
                         BigDecimal premiumMultiplier = dayWorkPremiumRate;
 
                         if (premiumHours.compareTo(BigDecimal.ZERO) > 0
@@ -420,32 +441,46 @@ public class PayrollService {
                 }
 
                 if (hasCompleteAttendancePair) {
-                    // night diff scales with the full day multiplier, so holiday/rest-day night work gets the correct uplift.
-                    BigDecimal nsdHours = payrollCalculator.calculateNightDiffHours(attendanceSessions);
-                    if (nsdHours.compareTo(BigDecimal.ZERO) > 0) {
+                    // Split regular night work from OT-backed night work so OT night diff compounds on the OT rate.
+                    BigDecimal totalNightHours = payrollCalculator.calculateNightDiffHours(attendanceSessions);
+                    BigDecimal regularNightHours = totalNightHours.subtract(payableNightOvertimeHours).max(BigDecimal.ZERO);
+                    if (regularNightHours.compareTo(BigDecimal.ZERO) > 0) {
                         EarningsLine nsdLine = new EarningsLine();
                         nsdLine.setEarningsDate(loopDate);
-                        nsdLine.setHours(nsdHours);
+                        nsdLine.setHours(regularNightHours);
                         BigDecimal nsdRateMultiplier = dayWorkMultiplier.multiply(
                                 payrollConfig.getNightDifferentialMultiplier()
                         );
                         nsdLine.setRate(hourlyRate.multiply(nsdRateMultiplier));
-                        nsdLine.setAmount(nsdHours.multiply(nsdLine.getRate()));
+                        nsdLine.setAmount(regularNightHours.multiply(nsdLine.getRate()));
                         nsdLine.setOvertime(false);
                         earningsLines.add(nsdLine);
                     }
+
+                    if (payableNightOvertimeHours.compareTo(BigDecimal.ZERO) > 0) {
+                        EarningsLine overtimeNsdLine = new EarningsLine();
+                        overtimeNsdLine.setEarningsDate(loopDate);
+                        overtimeNsdLine.setHours(payableNightOvertimeHours);
+                        BigDecimal overtimeNsdRateMultiplier = dayWorkMultiplier
+                                .multiply(payrollConfig.getOvertimeMultiplier())
+                                .multiply(payrollConfig.getNightDifferentialMultiplier());
+                        overtimeNsdLine.setRate(hourlyRate.multiply(overtimeNsdRateMultiplier));
+                        overtimeNsdLine.setAmount(payableNightOvertimeHours.multiply(overtimeNsdLine.getRate()));
+                        overtimeNsdLine.setOvertime(false);
+                        earningsLines.add(overtimeNsdLine);
+                    }
                 }
 
-                // ot remains a separate earnings line on top of the worked-day and nd calculations.
-                for (OvertimeRequest ot : todaysOT) {
+                // OT earnings are limited to approved hours that also overlap actual attendance.
+                for (PayableOvertimeBreakdown payableOt : payableTodaysOT) {
                     EarningsLine otLine = new EarningsLine();
                     otLine.setEarningsDate(loopDate);
-                    otLine.setHours(payrollCalculator.calculateHours(ot.getStartTime().toLocalTime(), ot.getEndTime().toLocalTime()));
+                    otLine.setHours(payableOt.payableHours());
                     BigDecimal overtimeRateMultiplier = dayWorkMultiplier.multiply(payrollConfig.getOvertimeMultiplier());
                     otLine.setRate(hourlyRate.multiply(overtimeRateMultiplier));
                     otLine.setAmount(otLine.getHours().multiply(otLine.getRate()));
                     otLine.setOvertime(true);
-                    otLine.setOvertimeRequest(ot);
+                    otLine.setOvertimeRequest(payableOt.request());
                     earningsLines.add(otLine);
                 }
 
@@ -615,6 +650,12 @@ public class PayrollService {
     }
 
     private record AttendanceDeductionTotals(BigDecimal absentDeduction, BigDecimal lateDeduction) {}
+
+    private record PayableOvertimeBreakdown(
+            OvertimeRequest request,
+            BigDecimal payableHours,
+            BigDecimal nightHours
+    ) {}
 
 
 }

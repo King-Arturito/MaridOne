@@ -324,8 +324,13 @@ public class SampleRows {
                 if (templateShift != null) {
                     DailyShiftSchedule dailyShift = new DailyShiftSchedule();
                     dailyShift.setTemplateShiftSchedule(templateShift);
-                    dailyShift.setStartDateTime(LocalDateTime.of(currentDate, templateShift.getStartTime()));
-                    dailyShift.setEndDateTime(LocalDateTime.of(currentDate, templateShift.getEndTime()));
+                    if (currentDate.equals(LocalDate.of(2026, 4, 7))) {
+                        dailyShift.setStartDateTime(LocalDateTime.of(currentDate, LocalTime.of(14, 0)));
+                        dailyShift.setEndDateTime(LocalDateTime.of(currentDate, LocalTime.of(22, 0)));
+                    } else {
+                        dailyShift.setStartDateTime(LocalDateTime.of(currentDate, templateShift.getStartTime()));
+                        dailyShift.setEndDateTime(LocalDateTime.of(currentDate, templateShift.getEndTime()));
+                    }
                     dailyShifts.add(dailyShift);
                 }
             }
@@ -364,6 +369,13 @@ public class SampleRows {
                     LocalTime.of(20, 0),
                     "All-around payroll scenario ordinary OT"
             ));
+            overtimeRequests.add(createApprovedOvertimeRequest(
+                    emp,
+                    LocalDate.of(2026, 4, 7),
+                    LocalTime.of(22, 0),
+                    LocalTime.of(0, 0),
+                    "All-around payroll scenario night OT compounding"
+            ));
         }
 
         if (i == 10) {
@@ -400,7 +412,8 @@ public class SampleRows {
                         LocalDate.of(2026, 3, 29), new SeedAttendancePair(LocalTime.of(21, 0), LocalTime.of(6, 0), 1),
                         LocalDate.of(2026, 4, 2), new SeedAttendancePair(LocalTime.of(8, 0), LocalTime.of(17, 0)),
                         LocalDate.of(2026, 4, 4), new SeedAttendancePair(LocalTime.of(8, 0), LocalTime.of(17, 0)),
-                        LocalDate.of(2026, 4, 6), new SeedAttendancePair(LocalTime.of(8, 0), LocalTime.of(17, 0))
+                        LocalDate.of(2026, 4, 6), new SeedAttendancePair(LocalTime.of(8, 0), LocalTime.of(17, 0)),
+                        LocalDate.of(2026, 4, 7), new SeedAttendancePair(LocalTime.of(14, 0), LocalTime.of(0, 0), 1)
                 )
         );
     }
@@ -525,13 +538,19 @@ public class SampleRows {
             LocalTime endTime,
             String reason
     ) {
+        LocalDateTime overtimeStart = workDate.atTime(startTime);
+        LocalDateTime overtimeEnd = workDate.atTime(endTime);
+        if (!overtimeEnd.isAfter(overtimeStart)) {
+            overtimeEnd = overtimeEnd.plusDays(1);
+        }
+
         OvertimeRequest request = new OvertimeRequest();
         request.setEmployee(emp);
         request.setRequestStatus(Status.APPROVED);
         request.setRequestAt(workDate.minusDays(1).atTime(9, 0).atZone(SEED_TIME_ZONE).toInstant());
         request.setWorkDate(workDate);
-        request.setStartTime(workDate.atTime(startTime));
-        request.setEndTime(workDate.atTime(endTime));
+        request.setStartTime(overtimeStart);
+        request.setEndTime(overtimeEnd);
         request.setOvertimeType(EarningsType.OVERTIME);
         request.setReason(reason);
         request.setApprover("seed-admin");

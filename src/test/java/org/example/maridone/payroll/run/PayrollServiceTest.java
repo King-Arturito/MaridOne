@@ -22,11 +22,13 @@ import org.example.maridone.leave.request.LeaveRequest;
 import org.example.maridone.leave.request.LeaveRequestRepository;
 import org.example.maridone.log.AttendanceLogRepository;
 import org.example.maridone.log.attendance.AttendanceLog;
+import org.example.maridone.overtime.OvertimeRequest;
 import org.example.maridone.overtime.OvertimeRequestRepository;
 import org.example.maridone.payroll.BracketService;
 import org.example.maridone.payroll.PayrollCalculator;
 import org.example.maridone.payroll.PayrollService;
 import org.example.maridone.payroll.item.PayrollItem;
+import org.example.maridone.payroll.item.component.EarningsLine;
 import org.example.maridone.payroll.item.component.DeductionsRepository;
 import org.example.maridone.payroll.item.component.EarningsRepository;
 import org.example.maridone.payroll.mapper.PayrollMapper;
@@ -234,6 +236,96 @@ class PayrollServiceTest {
                 .noneMatch(line -> line.getDeductionType() == DeductionType.ABSENT_DEDUCTION));
     }
 
+    @Test
+    void processPayrollNonExempt_ApprovedOvertimeWithoutAttendanceOverlap_ShouldNotCreateOvertimeEarnings() {
+        LocalDate workDate = LocalDate.of(2026, 3, 22);
+        PayrollRun run = buildSingleDayRun(workDate);
+        Employee employee = buildEmployee(9L, ExemptionStatus.NON_EXEMPT, "624000.00");
+        DailyShiftSchedule dailyShift = buildDailyShift(employee, workDate, LocalTime.of(8, 0), LocalTime.of(17, 0));
+        OvertimeRequest overtimeRequest = buildOvertimeRequest(
+                employee,
+                workDate,
+                workDate.atTime(17, 0),
+                workDate.atTime(19, 0)
+        );
+        List<AttendanceLog> attendanceLogs = List.of(
+                buildAttendanceLog(employee, workDate, LocalTime.of(8, 0), "IN"),
+                buildAttendanceLog(employee, workDate, LocalTime.of(17, 0), "OUT")
+        );
+
+        when(defaultConfig.getTimeZone()).thenReturn(ZONE);
+        when(attendanceLogRepository.findByEmployeeIdInAndTimestampBetween(anyList(), any(Instant.class), any(Instant.class), any()))
+                .thenReturn(attendanceLogs);
+        when(overtimeRequestRepository.findAll(any(Specification.class)))
+                .thenReturn(List.of(overtimeRequest));
+        when(dailyShiftRepository.findAllByEmployeeIdsAndPeriod(anyList(), any(LocalDateTime.class), any(LocalDateTime.class)))
+                .thenReturn(List.of(dailyShift));
+        when(leaveRequestRepository.findApprovedLeavesForPeriod(anyList(), any(LocalDateTime.class), any(LocalDateTime.class)))
+                .thenReturn(List.of());
+        when(holidayService.getHolidayLookup(any(LocalDate.class), any(LocalDate.class)))
+                .thenReturn(HolidayLookup.empty());
+
+        List<PayrollItem> items = new ArrayList<>();
+        payrollService.processPayrollNonExempt(run, items, List.of(employee));
+
+        Assertions.assertEquals(1, items.size());
+        PayrollItem item = items.get(0);
+        Assertions.assertTrue(item.getEarnings().stream().noneMatch(line -> Boolean.TRUE.equals(line.getOvertime())));
+        assertBigDecimalEquals("26000.00", item.getGrossPay());
+    }
+
+    @Test
+    void processPayrollNonExempt_NightOvertimeShouldCompoundNightDifferentialRate() {
+        LocalDate workDate = LocalDate.of(2026, 3, 23);
+        PayrollRun run = buildSingleDayRun(workDate);
+        Employee employee = buildEmployee(10L, ExemptionStatus.NON_EXEMPT, "624000.00");
+        DailyShiftSchedule dailyShift = buildDailyShift(employee, workDate, LocalTime.of(14, 0), LocalTime.of(22, 0));
+        OvertimeRequest overtimeRequest = buildOvertimeRequest(
+                employee,
+                workDate,
+                workDate.atTime(22, 0),
+                workDate.plusDays(1).atTime(0, 0)
+        );
+        List<AttendanceLog> attendanceLogs = List.of(
+                buildAttendanceLog(employee, workDate, LocalTime.of(14, 0), "IN"),
+                buildAttendanceLog(employee, workDate.plusDays(1), LocalTime.of(0, 0), "OUT")
+        );
+
+        when(defaultConfig.getTimeZone()).thenReturn(ZONE);
+        when(attendanceLogRepository.findByEmployeeIdInAndTimestampBetween(anyList(), any(Instant.class), any(Instant.class), any()))
+                .thenReturn(attendanceLogs);
+        when(overtimeRequestRepository.findAll(any(Specification.class)))
+                .thenReturn(List.of(overtimeRequest));
+        when(dailyShiftRepository.findAllByEmployeeIdsAndPeriod(anyList(), any(LocalDateTime.class), any(LocalDateTime.class)))
+                .thenReturn(List.of(dailyShift));
+        when(leaveRequestRepository.findApprovedLeavesForPeriod(anyList(), any(LocalDateTime.class), any(LocalDateTime.class)))
+                .thenReturn(List.of());
+        when(holidayService.getHolidayLookup(any(LocalDate.class), any(LocalDate.class)))
+                .thenReturn(HolidayLookup.empty());
+
+        List<PayrollItem> items = new ArrayList<>();
+        payrollService.processPayrollNonExempt(run, items, List.of(employee));
+
+        Assertions.assertEquals(1, items.size());
+        PayrollItem item = items.get(0);
+
+        EarningsLine overtimeLine = item.getEarnings().stream()
+                .filter(line -> Boolean.TRUE.equals(line.getOvertime()))
+                .findFirst()
+                .orElseThrow();
+        assertBigDecimalEquals("2.00", overtimeLine.getHours());
+        assertBigDecimalEquals("625.00", overtimeLine.getAmount());
+
+        EarningsLine overtimeNightDiffLine = item.getEarnings().stream()
+                .filter(line -> !Boolean.TRUE.equals(line.getOvertime()))
+                .filter(line -> line.getHours() != null && line.getHours().compareTo(BigDecimal.ZERO) > 0)
+                .findFirst()
+                .orElseThrow();
+        assertBigDecimalEquals("2.00", overtimeNightDiffLine.getHours());
+        assertBigDecimalEquals("62.50", overtimeNightDiffLine.getAmount());
+        assertBigDecimalEquals("26687.50", item.getGrossPay());
+    }
+
     private PayrollRun buildSingleDayRun(LocalDate date) {
         PayrollRun run = new PayrollRun();
         run.setPeriodStart(date);
@@ -276,11 +368,32 @@ class PayrollServiceTest {
         return leaveRequest;
     }
 
+    private OvertimeRequest buildOvertimeRequest(
+            Employee employee,
+            LocalDate workDate,
+            LocalDateTime startDateTime,
+            LocalDateTime endDateTime
+    ) {
+        OvertimeRequest overtimeRequest = new OvertimeRequest();
+        overtimeRequest.setEmployee(employee);
+        overtimeRequest.setWorkDate(workDate);
+        overtimeRequest.setStartTime(startDateTime);
+        overtimeRequest.setEndTime(endDateTime);
+        overtimeRequest.setRequestStatus(Status.APPROVED);
+        overtimeRequest.setReason("Test overtime");
+        ReflectionTestUtils.setField(overtimeRequest, "employeeId", employee.getEmployeeId());
+        return overtimeRequest;
+    }
+
     private AttendanceLog buildAttendanceLog(Employee employee, LocalDate workDate, LocalTime time, String direction) {
         AttendanceLog attendanceLog = new AttendanceLog();
         attendanceLog.setEmployeeId(employee.getEmployeeId());
         attendanceLog.setTimestamp(workDate.atTime(time).atZone(ZONE).toInstant());
         attendanceLog.setDirection(direction);
         return attendanceLog;
+    }
+
+    private void assertBigDecimalEquals(String expected, BigDecimal actual) {
+        Assertions.assertEquals(0, new BigDecimal(expected).compareTo(actual));
     }
 }

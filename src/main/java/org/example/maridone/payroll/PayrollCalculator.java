@@ -265,6 +265,33 @@ public class PayrollCalculator {
         return hours.setScale(2, RoundingMode.HALF_UP);
     }
 
+    public BigDecimal calculateWorkedHoursWithinWindow(
+            List<AttendanceSession> attendanceSessions,
+            LocalDateTime windowStart,
+            LocalDateTime windowEnd
+    ) {
+        Instant start = toInstant(windowStart);
+        Instant end = toInstant(windowEnd);
+        if (attendanceSessions == null
+                || attendanceSessions.isEmpty()
+                || start == null
+                || end == null
+                || !end.isAfter(start)) {
+            return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+        }
+
+        BigDecimal hours = BigDecimal.ZERO;
+        for (AttendanceSession session : attendanceSessions) {
+            Instant overlapStart = maxInstant(start, session.inLog().getTimestamp());
+            Instant overlapEnd = minInstant(end, session.outLog().getTimestamp());
+            if (overlapEnd.isAfter(overlapStart)) {
+                hours = hours.add(calculateHours(overlapStart, overlapEnd));
+            }
+        }
+
+        return hours.setScale(2, RoundingMode.HALF_UP);
+    }
+
     public BigDecimal calculateNightDiffHours(LocalTime logIn, LocalTime logOut) {
         int inMinutes = logIn.getHour() * 60 + logIn.getMinute();
         int outMinutes = logOut.getHour() * 60 + logOut.getMinute();
@@ -280,6 +307,33 @@ public class PayrollCalculator {
                 .divide(BigDecimal.valueOf(60), 2, RoundingMode.HALF_UP);
     }
 
+    public BigDecimal calculateNightDiffHours(Instant start, Instant end) {
+        if (start == null || end == null || !end.isAfter(start)) {
+            return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+        }
+
+        BigDecimal hours = BigDecimal.ZERO;
+        LocalDate startDate = start.atZone(defaultConfig.getTimeZone()).toLocalDate().minusDays(1);
+        LocalDate endDate = end.atZone(defaultConfig.getTimeZone()).toLocalDate();
+
+        for (LocalDate currentDate = startDate; !currentDate.isAfter(endDate); currentDate = currentDate.plusDays(1)) {
+            Instant nightWindowStart = currentDate.atTime(22, 0)
+                    .atZone(defaultConfig.getTimeZone())
+                    .toInstant();
+            Instant nightWindowEnd = currentDate.plusDays(1).atTime(6, 0)
+                    .atZone(defaultConfig.getTimeZone())
+                    .toInstant();
+
+            Instant overlapStart = maxInstant(start, nightWindowStart);
+            Instant overlapEnd = minInstant(end, nightWindowEnd);
+            if (overlapEnd.isAfter(overlapStart)) {
+                hours = hours.add(calculateHours(overlapStart, overlapEnd));
+            }
+        }
+
+        return hours.setScale(2, RoundingMode.HALF_UP);
+    }
+
     public BigDecimal calculateNightDiffHours(List<AttendanceSession> attendanceSessions) {
         if (attendanceSessions == null || attendanceSessions.isEmpty()) {
             return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
@@ -287,10 +341,38 @@ public class PayrollCalculator {
 
         BigDecimal hours = BigDecimal.ZERO;
         for (AttendanceSession session : attendanceSessions) {
-            LocalTime logIn = session.inLog().getTimestamp().atZone(defaultConfig.getTimeZone()).toLocalTime();
-            LocalTime logOut = session.outLog().getTimestamp().atZone(defaultConfig.getTimeZone()).toLocalTime();
-            hours = hours.add(calculateNightDiffHours(logIn, logOut));
+            hours = hours.add(calculateNightDiffHours(
+                    session.inLog().getTimestamp(),
+                    session.outLog().getTimestamp()
+            ));
         }
+        return hours.setScale(2, RoundingMode.HALF_UP);
+    }
+
+    public BigDecimal calculateNightDiffHoursWithinWindow(
+            List<AttendanceSession> attendanceSessions,
+            LocalDateTime windowStart,
+            LocalDateTime windowEnd
+    ) {
+        Instant start = toInstant(windowStart);
+        Instant end = toInstant(windowEnd);
+        if (attendanceSessions == null
+                || attendanceSessions.isEmpty()
+                || start == null
+                || end == null
+                || !end.isAfter(start)) {
+            return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+        }
+
+        BigDecimal hours = BigDecimal.ZERO;
+        for (AttendanceSession session : attendanceSessions) {
+            Instant overlapStart = maxInstant(start, session.inLog().getTimestamp());
+            Instant overlapEnd = minInstant(end, session.outLog().getTimestamp());
+            if (overlapEnd.isAfter(overlapStart)) {
+                hours = hours.add(calculateNightDiffHours(overlapStart, overlapEnd));
+            }
+        }
+
         return hours.setScale(2, RoundingMode.HALF_UP);
     }
 
