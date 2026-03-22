@@ -11,4 +11,8 @@ public class CommonCalculator {
         }
         return value.setScale(2, RoundingMode.HALF_UP);
     }
+
+    public static BigDecimal calculateHours() {
+        return BigDecimal.valueOf(0);
+    }
 }

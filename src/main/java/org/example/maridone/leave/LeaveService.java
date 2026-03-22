@@ -78,6 +78,7 @@ public class LeaveService {
         return create;
     }
 
+    @ExecutionTime
     public List<BalanceResponseDto> getBalance(Long empId) {
         return leaveMapper.toBalanceResponsesDto(leaveBalanceRepository.findByEmployee_EmployeeId(empId));
     }
