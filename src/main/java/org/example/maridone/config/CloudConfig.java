@@ -10,6 +10,7 @@ import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 
 import java.net.URI;
 
@@ -70,6 +71,15 @@ public class CloudConfig {
                 .endpointOverride(URI.create(endpoint))
                 //ignored since we use Digital Ocean, but server is Singapore here (sgp1 for DO)
                 //if cloud provider is changed, no need to do anything
+                .region(Region.AP_SOUTHEAST_1)
+                .credentialsProvider(StaticCredentialsProvider.create(
+                        AwsBasicCredentials.create(accessKey, secretKey)))
+                .build();
+    }
+    @Bean
+    public S3Presigner s3Presigner() {
+        return S3Presigner.builder()
+                .endpointOverride(URI.create(endpoint))
                 .region(Region.AP_SOUTHEAST_1)
                 .credentialsProvider(StaticCredentialsProvider.create(
                         AwsBasicCredentials.create(accessKey, secretKey)))

@@ -14,6 +14,7 @@ public class ShiftGeneratorTask {
         this.shiftService = shiftService;
     }
 
+    //Scheduled at 00:00 everyday
     @Scheduled(cron = "0 0 0 * * *", zone = "Asia/Manila")
     @Transactional
     public void generateDailyShifts() {

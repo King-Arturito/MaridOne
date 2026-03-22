@@ -9,4 +9,6 @@ public interface StorageService {
     Resource load(String filePath);
 
     void delete(String filePath);
+
+    String generateDownloadUrl(String filePath);
 }

@@ -12,7 +12,9 @@ public class BalanceUpdaterTask {
         this.leaveService = leaveService;
     }
 
-    @Scheduled(cron = "0 0 0 1 1 *")
+    //Scheduled at January 1 of every year
+    //scheduled date according to Handbook
+    @Scheduled(cron = "0 0 0 1 1 *", zone = "Asia/Manila")
     public void addLeaveBalance() {
         leaveService.updateYearlyBalance();
     }
