@@ -3,11 +3,10 @@ package org.example.maridone.leave;
 import org.example.maridone.annotation.BulkNotify;
 import org.example.maridone.annotation.ExecutionTime;
 import org.example.maridone.annotation.Notify;
-import org.example.maridone.annotation.SystematicScheduling;
+import org.example.maridone.annotation.AutoScheduled;
 import org.example.maridone.common.CommonSpecs;
 import org.example.maridone.config.PayrollConfig;
 import org.example.maridone.enums.Position;
-import org.example.maridone.payroll.BracketService;
 import org.example.maridone.core.employee.Employee;
 import org.example.maridone.core.employee.EmployeeRepository;
 import org.example.maridone.core.user.UserAccount;
@@ -114,7 +113,7 @@ public class LeaveService {
 
     //used by BalanceUpdaterTask
     @Transactional
-    @SystematicScheduling
+    @AutoScheduled
     public void updateYearlyBalance() {
         List<EmploymentStatus> blacklistedStatuses = List.of(
                 EmploymentStatus.TERMINATED,

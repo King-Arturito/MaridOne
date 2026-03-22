@@ -2,7 +2,7 @@ package org.example.maridone.schedule.shift;
 
 
 import org.example.maridone.annotation.ExecutionTime;
-import org.example.maridone.annotation.SystematicScheduling;
+import org.example.maridone.annotation.AutoScheduled;
 import org.example.maridone.common.CommonSpecs;
 import org.example.maridone.config.DefaultConfig;
 import org.example.maridone.core.employee.Employee;
@@ -112,7 +112,7 @@ public class ShiftService {
     */
 
     @Transactional
-    @SystematicScheduling
+    @AutoScheduled
     public void setDailyShifts() {
         LocalDate today = LocalDate.now(defaultConfig.getTimeZone());
         DayOfWeek targetDay = today.getDayOfWeek();

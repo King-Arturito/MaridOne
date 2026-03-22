@@ -1,7 +1,7 @@
 package org.example.maridone.notification;
 
 import org.example.maridone.annotation.ExecutionTime;
-import org.example.maridone.annotation.SystematicScheduling;
+import org.example.maridone.annotation.AutoScheduled;
 import org.example.maridone.common.CommonSpecs;
 import org.example.maridone.notification.spec.NotificationSpecs;
 import org.springframework.data.domain.Page;
@@ -12,7 +12,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
 import java.time.Instant;
-import java.util.List;
 
 @Service
 public class NotificationService {
@@ -45,7 +44,7 @@ public class NotificationService {
     }
 
     @Transactional
-    @SystematicScheduling
+    @AutoScheduled
     public void bulkClean(Duration days){
         Specification<Notification> spec = Specification.allOf(
                 CommonSpecs.fieldEquals("readStatus", true),

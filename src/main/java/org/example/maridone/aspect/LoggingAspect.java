@@ -32,7 +32,7 @@ public class LoggingAspect {
     @Pointcut("@annotation(org.example.maridone.annotation.AuditLog)")
     public void auditLog() {}
 
-    @Pointcut("@annotation(org.example.maridone.annotation.SystematicScheduling)")
+    @Pointcut("@annotation(org.example.maridone.annotation.AutoScheduled)")
     public void auditScheduling() {}
 
     @AfterReturning("auditLog()")
