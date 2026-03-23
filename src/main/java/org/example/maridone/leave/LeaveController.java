@@ -69,16 +69,11 @@ public class LeaveController {
     //create leave request
     @PostMapping("/create/{empId}")
     @PreAuthorize("isAuthenticated()")
-    public ResponseEntity<LeaveRequest> createLeaveRequest(
+    public ResponseEntity<List<LeaveRequest>> createLeaveRequest(
             @Valid @RequestBody LeaveRequestDto payload,
             @PathVariable Long empId) {
-        LeaveRequest request = leaveService.createLeaveRequest(payload, empId);
-        URI location = ServletUriComponentsBuilder
-                .fromCurrentRequest()
-                .path("/{requestId}")
-                .buildAndExpand(request.getRequestId())
-                .toUri();
-        return ResponseEntity.created(location).body(request);
+        List<LeaveRequest> requests = leaveService.createLeaveRequest(payload, empId);
+        return ResponseEntity.ok(requests);
     }
 
     @PatchMapping("/update/{requestId}")

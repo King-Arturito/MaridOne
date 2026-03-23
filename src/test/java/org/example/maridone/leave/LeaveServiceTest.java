@@ -2,6 +2,7 @@ package org.example.maridone.leave;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Optional;
 
 import org.example.maridone.core.employee.Employee;
@@ -79,10 +80,12 @@ class LeaveServiceTest {
         when(employeeRepository.findById(empId)).thenReturn(Optional.of(emp));
         when(leaveRequestRepository.save(any(LeaveRequest.class))).thenAnswer(i -> i.getArgument(0));
 
-        LeaveRequest result = leaveService.createLeaveRequest(dto, empId);
-
-        Assertions.assertEquals(Status.PENDING, result.getRequestStatus());
-        Assertions.assertEquals(emp, result.getEmployee());
-        Assertions.assertEquals("Vacation", result.getReason());
+        List<LeaveRequest> results = leaveService.createLeaveRequest(dto, empId);
+        Assertions.assertNotNull(results);
+        results.forEach(result -> {
+            Assertions.assertEquals(Status.PENDING, result.getRequestStatus());
+            Assertions.assertEquals(emp, result.getEmployee());
+            Assertions.assertEquals("Vacation", result.getReason());
+        });
     }
 }
