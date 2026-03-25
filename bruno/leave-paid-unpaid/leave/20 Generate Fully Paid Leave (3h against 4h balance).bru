@@ -1,0 +1,28 @@
+meta {
+  name: 20 Generate Fully Paid Leave (3h against 4h balance)
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{baseUrl}}/api/leave/create/{{employeeId}}
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{employeeToken}}
+}
+
+headers {
+  content-type: application/json
+}
+
+body:json {
+  {
+    "startDateTime": "2026-05-04T09:00:00",
+    "endDateTime": "2026-05-04T12:00:00",
+    "reason": "BRUNO Leave Generation - Fully Paid - 3h against 4h balance",
+    "leaveType": "{{leaveType}}"
+  }
+}

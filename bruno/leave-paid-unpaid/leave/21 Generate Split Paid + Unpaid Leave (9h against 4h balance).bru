@@ -1,0 +1,28 @@
+meta {
+  name: 21 Generate Split Paid + Unpaid Leave (9h against 4h balance)
+  type: http
+  seq: 6
+}
+
+post {
+  url: {{baseUrl}}/api/leave/create/{{employeeId}}
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{employeeToken}}
+}
+
+headers {
+  content-type: application/json
+}
+
+body:json {
+  {
+    "startDateTime": "2026-05-05T08:00:00",
+    "endDateTime": "2026-05-05T17:00:00",
+    "reason": "BRUNO Leave Generation - Split Paid Unpaid - 9h against 4h balance",
+    "leaveType": "{{leaveType}}"
+  }
+}

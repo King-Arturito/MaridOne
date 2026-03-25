@@ -37,6 +37,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.DayOfWeek;
+import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
@@ -164,32 +165,37 @@ public class LeaveService {
                 .orElseThrow(() -> new BalanceNotFoundException("Balance of Type:  " + payload.getLeaveType() +  " for Employee ID: " + empId + " not found."))
                 .getBalanceHours();
 
-        //calculate hours
-        BigDecimal requestHoursTotal = calculateRequestHours(payload, empId);
+        List<LeaveWindow> leaveWindows = resolveLeaveWindows(payload, empId);
+        BigDecimal requestHoursTotal = calculateRequestHours(leaveWindows);
 
         boolean hasEnoughBalance = requestHoursTotal.compareTo(remainingHours) <= 0;
         if (hasEnoughBalance) {
             LeaveRequest request = createLeave(payload, emp, hasEnoughBalance);
             requests.add(request);
         } else {
-            //todo: change logic haha, the rest works
-            //PAID BLOCK
-            LocalDateTime origEndDate = payload.getEndDateTime();
-            LocalDateTime origStartDate = payload.getStartDateTime();
-            long cutoffMinutes = requestHoursTotal.subtract(remainingHours)
-                    .multiply(BigDecimal.valueOf(60))
-                    .setScale(0, RoundingMode.HALF_UP)
-                    .longValue();
-            LocalDateTime trimmedEndDate = origEndDate.minusMinutes(cutoffMinutes);
-            payload.setEndDateTime(trimmedEndDate);
-            LeaveRequest paidRequest = createLeave(payload, emp, true);
-            requests.add(paidRequest);
+            LocalDateTime splitPoint = resolvePaidCoverageEnd(payload, leaveWindows, remainingHours);
 
-            //UNPAID BLOCK
-            payload.setEndDateTime(origEndDate);
-            payload.setStartDateTime(trimmedEndDate);
-            LeaveRequest unpaidRequest = createLeave(payload, emp, false);
-            requests.add(unpaidRequest);
+            if (payload.getStartDateTime().isBefore(splitPoint)) {
+                LeaveRequest paidRequest = createLeave(
+                        payload.getStartDateTime(),
+                        splitPoint,
+                        emp,
+                        payload.getReason(),
+                        true
+                );
+                requests.add(paidRequest);
+            }
+
+            if (splitPoint.isBefore(payload.getEndDateTime())) {
+                LeaveRequest unpaidRequest = createLeave(
+                        splitPoint,
+                        payload.getEndDateTime(),
+                        emp,
+                        payload.getReason(),
+                        false
+                );
+                requests.add(unpaidRequest);
+            }
         }
 
         return requests;
@@ -215,6 +221,37 @@ public class LeaveService {
 
 
     public BigDecimal calculateRequestHours(LeaveRequestDto payload, Long empId) {
+        return calculateRequestHours(resolveLeaveWindows(payload, empId));
+    }
+
+    public LeaveRequest createLeave(LeaveRequestDto payload, Employee emp, boolean isPaid) {
+        return createLeave(
+                payload.getStartDateTime(),
+                payload.getEndDateTime(),
+                emp,
+                payload.getReason(),
+                isPaid
+        );
+    }
+
+    private LeaveRequest createLeave(
+            LocalDateTime startDateTime,
+            LocalDateTime endDateTime,
+            Employee emp,
+            String reason,
+            boolean isPaid
+    ) {
+        LeaveRequest request = new LeaveRequest();
+        request.setRequestStatus(Status.PENDING);
+        request.setStartDateTime(startDateTime);
+        request.setEndDateTime(endDateTime);
+        request.setEmployee(emp);
+        request.setReason(reason);
+        request.setPaid(isPaid);
+        return request;
+    }
+
+    private List<LeaveWindow> resolveLeaveWindows(LeaveRequestDto payload, Long empId) {
         List<TemplateShiftSchedule> shiftSchedules = templateShiftRepository.findAllByEmployeeId(empId);
         if (shiftSchedules.isEmpty()) {
             throw new ShiftsNotFoundException("No Shift Schedule for Employee ID: " + empId);
@@ -223,11 +260,9 @@ public class LeaveService {
         Map<DayOfWeek, TemplateShiftSchedule> scheduleMap = shiftSchedules.stream()
                 .collect(Collectors.toMap(TemplateShiftSchedule::getDayOfWeek, s -> s));
 
-        BigDecimal hours = BigDecimal.ZERO;
-
+        List<LeaveWindow> windows = new ArrayList<>();
         LocalDate current = payload.getStartDateTime().toLocalDate();
         LocalDate endDate = payload.getEndDateTime().toLocalDate();
-
         LocalDateTime payloadStart = payload.getStartDateTime();
         LocalDateTime payloadEnd = payload.getEndDateTime();
 
@@ -238,40 +273,61 @@ public class LeaveService {
                 LocalDateTime shiftStart = LocalDateTime.of(current, schedule.getStartTime());
                 LocalDateTime shiftEnd = LocalDateTime.of(current, schedule.getEndTime());
 
-                // night diff shifts
                 if (!shiftEnd.isAfter(shiftStart)) {
                     shiftEnd = shiftEnd.plusDays(1);
                 }
 
-                // if the shift begins before the payload starts, move shift start forawrd
-                if (shiftStart.isBefore(payloadStart)) {
-                    shiftStart = payloadStart;
-                }
+                LocalDateTime overlapStart = shiftStart.isBefore(payloadStart) ? payloadStart : shiftStart;
+                LocalDateTime overlapEnd = shiftEnd.isAfter(payloadEnd) ? payloadEnd : shiftEnd;
 
-                // if the shift ends after the payload ends, move shift end backward
-                if (shiftEnd.isAfter(payloadEnd)) {
-                    shiftEnd = payloadEnd;
-                }
-
-                // add hours if valid  range
-                if (shiftStart.isBefore(shiftEnd)) {
-                    hours = hours.add(CommonCalculator.calculateHours(shiftStart, shiftEnd));
+                if (overlapStart.isBefore(overlapEnd)) {
+                    windows.add(new LeaveWindow(overlapStart, overlapEnd));
                 }
             }
+
             current = current.plusDays(1);
         }
 
+        return windows;
+    }
+
+    private BigDecimal calculateRequestHours(List<LeaveWindow> leaveWindows) {
+        BigDecimal hours = BigDecimal.ZERO;
+        for (LeaveWindow window : leaveWindows) {
+            hours = hours.add(CommonCalculator.calculateHours(window.startDateTime(), window.endDateTime()));
+        }
         return hours;
     }
 
-    public LeaveRequest createLeave(LeaveRequestDto payload, Employee emp, boolean isPaid) {
-        LeaveRequest request = new LeaveRequest();
-        request.setRequestStatus(Status.PENDING);
-        request.setStartDateTime(payload.getStartDateTime());
-        request.setEndDateTime(payload.getEndDateTime());
-        request.setEmployee(emp);
-        request.setReason(payload.getReason());
-        request.setPaid(isPaid);
-        return request;
+    private LocalDateTime resolvePaidCoverageEnd(
+            LeaveRequestDto payload,
+            List<LeaveWindow> leaveWindows,
+            BigDecimal remainingHours
+    ) {
+        if (remainingHours == null || remainingHours.compareTo(BigDecimal.ZERO) <= 0) {
+            return payload.getStartDateTime();
+        }
+
+        long remainingMinutes = remainingHours
+                .multiply(BigDecimal.valueOf(60))
+                .setScale(0, RoundingMode.HALF_UP)
+                .longValue();
+
+        for (LeaveWindow window : leaveWindows) {
+            long windowMinutes = Duration.between(window.startDateTime(), window.endDateTime()).toMinutes();
+            if (remainingMinutes >= windowMinutes) {
+                remainingMinutes -= windowMinutes;
+                if (remainingMinutes == 0) {
+                    return window.endDateTime();
+                }
+                continue;
+            }
+
+            return window.startDateTime().plusMinutes(remainingMinutes);
+        }
+
+        return payload.getEndDateTime();
     }
+
+    private record LeaveWindow(LocalDateTime startDateTime, LocalDateTime endDateTime) {}
 }
