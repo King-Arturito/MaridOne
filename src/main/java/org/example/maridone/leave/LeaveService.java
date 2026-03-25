@@ -1,9 +1,6 @@
 package org.example.maridone.leave;
 
-import org.example.maridone.annotation.BulkNotify;
-import org.example.maridone.annotation.ExecutionTime;
-import org.example.maridone.annotation.Notify;
-import org.example.maridone.annotation.AutoScheduled;
+import org.example.maridone.annotation.*;
 import org.example.maridone.common.CommonCalculator;
 import org.example.maridone.common.CommonSpecs;
 import org.example.maridone.config.PayrollConfig;
@@ -19,15 +16,14 @@ import org.example.maridone.exception.notfound.*;
 import org.example.maridone.exception.unauthorized.DuplicateLeaveException;
 import org.example.maridone.exception.unauthorized.InsufficientBalanceException;
 import org.example.maridone.leave.balance.*;
-import org.example.maridone.leave.dto.BalanceRequestDto;
-import org.example.maridone.leave.dto.BalanceResponseDto;
-import org.example.maridone.leave.dto.LeaveRequestDto;
-import org.example.maridone.leave.dto.UpdateBalanceDto;
+import org.example.maridone.leave.dto.*;
 import org.example.maridone.leave.request.LeaveRequest;
 import org.example.maridone.leave.request.LeaveRequestRepository;
 import org.example.maridone.leave.spec.LeaveSpecs;
 import org.example.maridone.schedule.shift.TemplateShiftRepository;
 import org.example.maridone.schedule.shift.TemplateShiftSchedule;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -96,6 +92,36 @@ public class LeaveService {
     @ExecutionTime
     public List<BalanceResponseDto> getBalance(Long empId) {
         return leaveMapper.toBalanceResponsesDto(leaveBalanceRepository.findByEmployee_EmployeeId(empId));
+    }
+
+    @ExecutionTime
+    public Page<LeaveResponseDto> getLeaveRequests(LeaveFilter filter, Pageable pageable) {
+        Specification<LeaveRequest> spec = Specification.allOf(
+                LeaveSpecs.hasFilters(filter),
+                CommonSpecs.fieldEquals("requestId", filter.requestId())
+        );
+
+        Page<LeaveRequest> entityPage = leaveRequestRepository.findAll(spec, pageable);
+        return entityPage.map(leaveMapper::toLeaveResponseDto);
+    }
+
+    @ExecutionTime
+    @Transactional
+    @AuditLog
+    @BulkNotify(message = "Leave Request has been cancelled", targetRole = Position.HR)
+    public void cancelRequest(Long requestId) {
+        LeaveRequest request = leaveRequestRepository.findById(requestId).orElseThrow(() -> new RequestNotFoundException("Leave Request", requestId));
+        if (request.getRequestStatus().equals(Status.APPROVED)) {
+            throw new IllegalStateException("Cannot cancel. Dispute Request has been approved already.");
+        }
+        request.setRequestStatus(Status.CANCELLED);
+        leaveRequestRepository.save(request);
+    }
+
+    @ExecutionTime
+    public Page<LeaveResponseDto> getMyLeaveRequests(Long empId, Pageable pageable) {
+        Page<LeaveRequest> leaveRequests = leaveRequestRepository.findByEmployee_EmployeeId(empId,pageable);
+        return leaveRequests.map(leaveMapper::toLeaveResponseDto);
     }
 
 
@@ -328,6 +354,8 @@ public class LeaveService {
 
         return payload.getEndDateTime();
     }
+
+
 
     private record LeaveWindow(LocalDateTime startDateTime, LocalDateTime endDateTime) {}
 }

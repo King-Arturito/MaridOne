@@ -73,5 +73,14 @@ public class OvertimeController {
             @PageableDefault(sort = "requestAt", direction = Sort.Direction.ASC) Pageable pageable) {
         return overtimeService.getMyOvertimeRequests(empId, pageable);
     }
+
+    @PatchMapping("/cancel/{overtimeId}")
+    @PreAuthorize("@overtimeOwnerCheck.isSelf(#overtimeId, authentication.getName())")
+    @AuditLog
+    public ResponseEntity<Void> cancelRequest(@PathVariable Long overtimeId) {
+        overtimeService.cancelRequest(overtimeId);
+        return ResponseEntity.noContent().build();
+    }
+
     //overrule previous overtime update for errors
 }

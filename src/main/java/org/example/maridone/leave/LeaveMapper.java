@@ -6,6 +6,8 @@ import org.example.maridone.leave.dto.BalanceResponseDto;
 import org.example.maridone.leave.balance.LeaveBalance;
 import java.util.List;
 
+import org.example.maridone.leave.dto.LeaveResponseDto;
+import org.example.maridone.leave.request.LeaveRequest;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 
@@ -16,6 +18,10 @@ public interface LeaveMapper {
     @Mapping(source = "employee", target = "employee")
     LeaveBalance toEntity(BalanceRequestDto balanceRequestDto, Employee employee);
 
+    @Mapping(target = "empId", source  = "employee.employeeId")
+    LeaveResponseDto toLeaveResponseDto(LeaveRequest leaveRequest);
+
+    List<LeaveResponseDto> toLeaveResponseDtos(List<LeaveRequest> leaveRequests);
 
     BalanceResponseDto toBalanceResponseDto(LeaveBalance leaveBalance);
 

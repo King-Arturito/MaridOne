@@ -2,13 +2,14 @@ package org.example.maridone.leave;
 
 import jakarta.validation.Valid;
 import org.example.maridone.annotation.AuditLog;
-import org.example.maridone.leave.dto.BalanceRequestDto;
-import org.example.maridone.leave.dto.BalanceResponseDto;
+import org.example.maridone.leave.dto.*;
 import org.example.maridone.leave.balance.LeaveBalance;
-import org.example.maridone.leave.dto.LeaveRequestDto;
-import org.example.maridone.leave.dto.UpdateBalanceDto;
 import org.example.maridone.leave.request.LeaveRequest;
 import org.example.maridone.marker.OnUpdate;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
@@ -32,6 +33,27 @@ public class LeaveController {
     @PreAuthorize("@userCheck.isSelf(#empId, authentication.getName())")
     public List<BalanceResponseDto> getBalance(@PathVariable Long empId){
         return leaveService.getBalance(empId);
+    }
+
+    @GetMapping("/request")
+    @PreAuthorize("hasRole('HR')")
+    public Page<LeaveResponseDto> getLeaveRequests(LeaveFilter filter,
+                                                   @PageableDefault(sort = "requestId", direction = Sort.Direction.ASC, size = 20) Pageable pageable) {
+        return leaveService.getLeaveRequests(filter, pageable);
+    }
+
+    @GetMapping("/request/{empId}")
+    @PreAuthorize("@userCheck.isSelf(#empId, authentication.getName())")
+    public Page<LeaveResponseDto> getMyLeaveRequests(Long empId,
+                                                     @PageableDefault(sort = "requestId", direction = Sort.Direction.ASC, size = 10) Pageable pageable) {
+        return leaveService.getMyLeaveRequests(empId, pageable);
+    }
+
+    @PatchMapping("/request/cancel/{requestId}")
+    @PreAuthorize("@leaveOwnerCheck.isSelf(#requestId, authentication.getName())")
+    public ResponseEntity<Void> cancelRequest(@PathVariable Long requestId) {
+        leaveService.cancelRequest(requestId);
+        return ResponseEntity.noContent().build();
     }
 
     @PostMapping("/balance/{empId}")

@@ -15,17 +15,23 @@ public class LeaveRequestDto {
 
     @NotNull
     private LocalDateTime startDateTime;
+
     @NotNull
     private LocalDateTime endDateTime;
+
     @NotNull(groups = OnUpdate.class)
     private String approver;
+
     @NotNull
     private String reason;
+
     @NotNull
     private LeaveType leaveType;
+
     @Enumerated(EnumType.STRING)
     @NotNull(groups =  OnUpdate.class)
     private Status requestStatus;
+
     @NotNull(groups = OnUpdate.class)
     private String approverReason;
 

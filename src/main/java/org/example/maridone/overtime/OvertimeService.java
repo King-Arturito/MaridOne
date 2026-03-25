@@ -1,5 +1,6 @@
 package org.example.maridone.overtime;
 
+import org.example.maridone.annotation.AuditLog;
 import org.example.maridone.annotation.BulkNotify;
 import org.example.maridone.annotation.ExecutionTime;
 import org.example.maridone.annotation.Notify;
@@ -102,5 +103,18 @@ public class OvertimeService {
         );
         Page<OvertimeRequest> myRequests = overtimeRequestRepository.findAll(specs, pageable);
         return myRequests.map(overtimeMapper::toOvertimeResponseDto);
+    }
+
+    @Transactional
+    @ExecutionTime
+    @BulkNotify(message = "Overtime Request Cancelled.", targetRole = Position.HR)
+    public void cancelRequest(Long overtimeId) {
+        OvertimeRequest overtimeRequest =  overtimeRequestRepository.findById(overtimeId).orElseThrow(() -> new OvertimeException("Overtime Not Found"));
+        if (overtimeRequest.getRequestStatus().equals(Status.APPROVED)) {
+            throw new IllegalStateException("Cannot cancel. Overtime Request has been approved already.");
+        }
+        overtimeRequest.setRequestStatus(Status.CANCELLED);
+        overtimeRequestRepository.save(overtimeRequest);
+
     }
 }

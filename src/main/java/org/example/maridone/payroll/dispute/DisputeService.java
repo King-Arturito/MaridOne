@@ -68,7 +68,7 @@ public class DisputeService {
     @Notify(message = "Your Dispute Request has been  #{#result.status}", targetEmployee = "#result.employeeId",importance = "HIGH")
     public DisputeResponseDto updateDisputeStatus(Long disputeId, DisputeActionDto payload) {
         DisputeRequest disputeRequest = disputeRepository.findByIdWithEmployee(disputeId)
-                .orElseThrow(() -> new RequestNotFoundException(disputeId));
+                .orElseThrow(() -> new RequestNotFoundException("Dispute Request",disputeId));
         if (disputeRequest.getStatus().equals(Status.APPROVED)) {
             throw new InvalidActionException("Dispute ID: " + disputeId + " has been approved already.");
         }
@@ -99,5 +99,17 @@ public class DisputeService {
                 );
         Page<DisputeRequest> entityPage = disputeRepository.findAll(spec, pageable);
         return entityPage.map(payrollMapper::toResponseDto);
+    }
+
+    @ExecutionTime
+    @Transactional
+    @BulkNotify(message = "Dispute Request Cancelled.", targetRole = Position.HR)
+    public void cancelRequest(Long disputeId) {
+        DisputeRequest disputeRequest = disputeRepository.findById(disputeId).orElseThrow(() -> new RequestNotFoundException("Dispute Request",disputeId));
+        if (disputeRequest.getStatus().equals(Status.APPROVED)) {
+            throw new IllegalStateException("Cannot cancel. Dispute Request has been approved already.");
+        }
+        disputeRequest.setStatus(Status.CANCELLED);
+        disputeRepository.save(disputeRequest);
     }
 }

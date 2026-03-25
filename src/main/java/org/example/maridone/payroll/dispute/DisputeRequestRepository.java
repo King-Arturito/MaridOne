@@ -31,4 +31,12 @@ public interface DisputeRequestRepository extends JpaRepository<DisputeRequest, 
     Page<DisputeRequest> findByPayrollItem_ItemId(Long itemId, Pageable pageable);
 
     DisputeRequest findTopByPayrollItem_ItemIdOrderByDisputeIdDesc(Long itemId);
+
+    @Query("""
+        select count(d) > 0 from DisputeRequest d, UserAccount u
+        where d.disputeId = :disputeId
+        and u.username = :username
+        and d.payrollItem.employee.employeeId = u.employee.employeeId
+""")
+    boolean isDisputeOwnedByUser(@Param("disputeId") Long disputeId, @Param("username")  String username);
 }
