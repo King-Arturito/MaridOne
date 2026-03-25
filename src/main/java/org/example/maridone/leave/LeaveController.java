@@ -2,13 +2,14 @@ package org.example.maridone.leave;
 
 import jakarta.validation.Valid;
 import org.example.maridone.annotation.AuditLog;
-import org.example.maridone.leave.dto.BalanceRequestDto;
-import org.example.maridone.leave.dto.BalanceResponseDto;
+import org.example.maridone.leave.dto.*;
 import org.example.maridone.leave.balance.LeaveBalance;
-import org.example.maridone.leave.dto.LeaveRequestDto;
-import org.example.maridone.leave.dto.UpdateBalanceDto;
 import org.example.maridone.leave.request.LeaveRequest;
 import org.example.maridone.marker.OnUpdate;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
@@ -34,13 +35,27 @@ public class LeaveController {
         return leaveService.getBalance(empId);
     }
 
-    /*
-        create balance
-        payload:
-            Long empId;
-            BigDecimal balanceHours;
-            private LeaveType leaveType;
-     */
+    @GetMapping("/request")
+    @PreAuthorize("hasRole('HR')")
+    public Page<LeaveResponseDto> getLeaveRequests(LeaveFilter filter,
+                                                   @PageableDefault(sort = "requestId", direction = Sort.Direction.ASC, size = 20) Pageable pageable) {
+        return leaveService.getLeaveRequests(filter, pageable);
+    }
+
+    @GetMapping("/request/{empId}")
+    @PreAuthorize("@userCheck.isSelf(#empId, authentication.getName())")
+    public Page<LeaveResponseDto> getMyLeaveRequests(Long empId,
+                                                     @PageableDefault(sort = "requestId", direction = Sort.Direction.ASC, size = 10) Pageable pageable) {
+        return leaveService.getMyLeaveRequests(empId, pageable);
+    }
+
+    @PatchMapping("/request/cancel/{requestId}")
+    @PreAuthorize("@leaveOwnerCheck.isSelf(#requestId, authentication.getName())")
+    public ResponseEntity<Void> cancelRequest(@PathVariable Long requestId) {
+        leaveService.cancelRequest(requestId);
+        return ResponseEntity.noContent().build();
+    }
+
     @PostMapping("/balance/{empId}")
     @PreAuthorize("hasRole('HR')")
     @AuditLog
@@ -67,7 +82,7 @@ public class LeaveController {
     public ResponseEntity<Void> updateBalance(
             @PathVariable Long empId,
             @RequestBody @Valid UpdateBalanceDto payload) {
-        leaveService.updateYearlyBalance(empId, payload);
+        leaveService.updateLeaveBalance(empId, payload);
 
         return ResponseEntity.noContent().build();
     }
@@ -76,16 +91,11 @@ public class LeaveController {
     //create leave request
     @PostMapping("/create/{empId}")
     @PreAuthorize("isAuthenticated()")
-    public ResponseEntity<LeaveRequest> createLeaveRequest(
+    public ResponseEntity<List<LeaveRequest>> createLeaveRequest(
             @Valid @RequestBody LeaveRequestDto payload,
             @PathVariable Long empId) {
-        LeaveRequest request = leaveService.createLeaveRequest(payload, empId);
-        URI location = ServletUriComponentsBuilder
-                .fromCurrentRequest()
-                .path("/{requestId}")
-                .buildAndExpand(request.getRequestId())
-                .toUri();
-        return ResponseEntity.created(location).body(request);
+        List<LeaveRequest> requests = leaveService.createLeaveRequest(payload, empId);
+        return ResponseEntity.ok(requests);
     }
 
     @PatchMapping("/update/{requestId}")

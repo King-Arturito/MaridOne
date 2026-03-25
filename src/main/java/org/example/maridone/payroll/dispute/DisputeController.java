@@ -59,4 +59,12 @@ public class DisputeController {
         DisputeResponseDto response = disputeService.updateDisputeStatus(disputeId, payload);
         return ResponseEntity.ok(response);
     }
+
+    @PatchMapping("/cancel/{disputeId}")
+    @AuditLog
+    @PreAuthorize("@disputeOwnerCheck.isSelf(#disputeId, authentication.getName())")
+    public ResponseEntity<Void> cancelRequest(@PathVariable Long disputeId) {
+        disputeService.cancelRequest(disputeId);
+        return ResponseEntity.noContent().build();
+    }
 }

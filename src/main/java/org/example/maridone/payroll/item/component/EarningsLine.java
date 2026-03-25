@@ -40,7 +40,7 @@ public class EarningsLine {
     private Boolean isOvertime;
 
     @OneToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "earningsLine", nullable = true)
+    @JoinColumn(name = "overtime_id", nullable = true)
     @JsonIgnore
     private OvertimeRequest overtimeRequest;
 

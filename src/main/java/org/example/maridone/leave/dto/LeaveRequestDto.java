@@ -3,7 +3,9 @@ import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.NotNull;
+import org.example.maridone.enums.LeaveType;
 import org.example.maridone.enums.Status;
+import org.example.maridone.marker.OnCreate;
 import org.example.maridone.marker.OnUpdate;
 
 import java.time.LocalDate;
@@ -13,15 +15,23 @@ public class LeaveRequestDto {
 
     @NotNull
     private LocalDateTime startDateTime;
+
     @NotNull
     private LocalDateTime endDateTime;
-    @NotNull
+
+    @NotNull(groups = OnUpdate.class)
     private String approver;
+
     @NotNull
     private String reason;
+
+    @NotNull
+    private LeaveType leaveType;
+
     @Enumerated(EnumType.STRING)
     @NotNull(groups =  OnUpdate.class)
     private Status requestStatus;
+
     @NotNull(groups = OnUpdate.class)
     private String approverReason;
 
@@ -65,6 +75,14 @@ public class LeaveRequestDto {
 
     public void setRequestStatus(Status requestStatus) {
         this.requestStatus = requestStatus;
+    }
+
+    public LeaveType getLeaveType() {
+        return leaveType;
+    }
+
+    public void setLeaveType(LeaveType leaveType) {
+        this.leaveType = leaveType;
     }
 
     public String getReason() {

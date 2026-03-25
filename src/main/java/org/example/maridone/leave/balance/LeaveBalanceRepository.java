@@ -11,6 +11,7 @@ import org.springframework.stereotype.Repository;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Optional;
 
 @Repository
 public interface LeaveBalanceRepository extends JpaRepository<LeaveBalance,Long>, JpaSpecificationExecutor<LeaveBalance> {
@@ -26,4 +27,7 @@ public interface LeaveBalanceRepository extends JpaRepository<LeaveBalance,Long>
             @Param("leaveTypes") List<LeaveType> leaveTypes,
             @Param("status") List<EmploymentStatus> status
     );
+
+
+    Optional<LeaveBalance> findByLeaveTypeAndEmployee_EmployeeId(LeaveType leaveType, Long empId);
 }

@@ -42,6 +42,9 @@ public class LeaveRequest {
     @Column(name = "approver_reason", nullable = true)
     private String approverReason;
 
+    @Column(name = "is_paid",  nullable = false)
+    private Boolean isPaid = true;
+
     public Long getRequestId() {
         return requestId;
     }
@@ -102,7 +105,13 @@ public class LeaveRequest {
         this.approverReason = approverReason;
     }
 
+    public Boolean getPaid() {
+        return isPaid;
+    }
 
+    public void setPaid(Boolean paid) {
+        isPaid = paid;
+    }
 
     public boolean coversDate(LocalDate targetDate) {
         if (targetDate == null || startDateTime == null || endDateTime == null) {

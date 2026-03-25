@@ -7,6 +7,7 @@ CREATE TABLE leave_request (
     approver        VARCHAR(255),
     approver_reason VARCHAR(255),
     emp_id          BIGINT                              NOT NULL,
+    is_paid         BOOLEAN                             NOT NULL DEFAULT true,
 
     CONSTRAINT chk_valid_dates CHECK (end_date_time > start_date_time),
     CONSTRAINT leave_request_request_status_check CHECK (request_status IN ('PENDING', 'APPROVED', 'REJECTED', 'CANCELLED')),
