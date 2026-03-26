@@ -84,7 +84,7 @@ public class LogService {
                 AttendanceLogSpecs.filtered(filter)
         );
         if (!handledIds.isEmpty()) {
-            spec.and(AttendanceLogSpecs.handledEmployees(handledIds));
+            spec = spec.and(AttendanceLogSpecs.handledEmployees(handledIds));
         }
 
         return attendanceLogRepository.findAll(spec, pageable);

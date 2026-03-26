@@ -58,6 +58,13 @@ public class PayrollController {
         return ResponseEntity.created(location).body(run);
     }
 
+    @PatchMapping("/run/{payId}/post")
+    @PreAuthorize("hasRole('HR')")
+    @AuditLog
+    public ResponseEntity<PayrollRun> postRun(@PathVariable Long payId) {
+        return ResponseEntity.ok(payrollService.postRun(payId));
+    }
+
     /*
        Will probably not be used also since creation of items are automatic when launching payroll
     */

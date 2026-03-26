@@ -21,7 +21,9 @@ import org.example.maridone.core.employee.Employee;
 import org.example.maridone.core.employee.EmployeeRepository;
 import org.example.maridone.enums.EmploymentStatus;
 import org.example.maridone.enums.ExemptionStatus;
+import org.example.maridone.enums.PayrollStatus;
 import org.example.maridone.enums.Status;
+import org.example.maridone.exception.notfound.RunNotFoundException;
 import org.example.maridone.holiday.HolidayLookup;
 import org.example.maridone.holiday.HolidayService;
 import org.example.maridone.leave.request.LeaveRequest;
@@ -105,6 +107,15 @@ public class PayrollService {
         run.setPeriodStart(payload.getPeriodStart());
         payrollRunRepository.save(run);
         return run;
+    }
+
+    @Transactional
+    @ExecutionTime
+    public PayrollRun postRun(Long payId) {
+        PayrollRun run = payrollRunRepository.findById(payId)
+                .orElseThrow(() -> new RunNotFoundException("Payroll Run ID:" + payId + " not found."));
+        run.setPayrollStatus(PayrollStatus.POSTED);
+        return payrollRunRepository.save(run);
     }
 
 
