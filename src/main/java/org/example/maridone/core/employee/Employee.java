@@ -8,6 +8,7 @@ import jakarta.validation.constraints.Size;
 import org.example.maridone.enums.ExemptionStatus;
 import org.example.maridone.core.user.UserAccount;
 import org.example.maridone.enums.EmploymentStatus;
+import org.example.maridone.enums.ManagerTitle;
 import org.example.maridone.enums.Position;
 import org.example.maridone.embeddable.Address;
 
@@ -77,7 +78,24 @@ public class Employee {
     @OneToOne(mappedBy = "employee", cascade = CascadeType.ALL)
     private UserAccount userAccount;
 
+    /*
+        Position.MANAGER
+            Head of People Operations
+            Head of Procurement
+            Production Supervisor
+            Product Development Engineer
+                they are the managers of empIds
+        Position.MANAGEMENT
+        Managing Director
+            holds empIds of the titles above:
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "emp_title", nullable = true)
+    private ManagerTitle empTitle;
+
     //who is this employee's manager(if any)
+    //not necessarily manager; can be team lead, company CEO, etc.
+    //as long as you're under this manager_id, it is your boss
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "manager_id", nullable = true)
     private Employee manager;
@@ -218,4 +236,11 @@ public class Employee {
         this.userAccount = userAccount;
     }
 
+    public ManagerTitle getEmpTitle() {
+        return empTitle;
+    }
+
+    public void setEmpTitle(ManagerTitle empTitle) {
+        this.empTitle = empTitle;
+    }
 }

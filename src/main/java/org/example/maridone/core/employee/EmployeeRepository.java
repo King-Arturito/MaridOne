@@ -22,4 +22,8 @@ public interface EmployeeRepository extends JpaRepository<Employee, Long>, JpaSp
 """)
     List<Long> findEmployeeIdsByPosition(@Param("position") Position position,
                                          @Param("employmentStatus") EmploymentStatus employmentStatus);
+
+
+    @Query("SELECT e.employeeId FROM Employee e WHERE e.manager.employeeId = :managerId")
+    List<Long> findHandledEmployeeIds(@Param("managerId") Long managerId);
 }

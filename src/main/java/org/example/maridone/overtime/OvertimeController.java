@@ -61,9 +61,10 @@ public class OvertimeController {
     @PreAuthorize("hasRole('HR')")
     @AuditLog
     public Page<OvertimeResponseDto> getAllOvertimeRequest(
+            OvertimeFilter overtimeFilter,
             @PageableDefault(sort = "requestAt", direction = Sort.Direction.ASC) Pageable pageable
     ) {
-        return overtimeService.getAllOvertimeRequest(pageable);
+        return overtimeService.getAllOvertimeRequest(overtimeFilter, pageable);
     }
     //get all pending overtimes for Employee
     @GetMapping("/all/{empId}")
@@ -82,5 +83,4 @@ public class OvertimeController {
         return ResponseEntity.noContent().build();
     }
 
-    //overrule previous overtime update for errors
 }

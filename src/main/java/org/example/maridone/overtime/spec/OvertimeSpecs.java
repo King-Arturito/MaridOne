@@ -1,16 +1,50 @@
 package org.example.maridone.overtime.spec;
 
 import jakarta.persistence.criteria.JoinType;
+import jakarta.persistence.criteria.Predicate;
 import org.example.maridone.enums.ExemptionStatus;
 import org.example.maridone.enums.Status;
 import org.example.maridone.exception.unauthorized.InvalidRangeException;
+import org.example.maridone.overtime.OvertimeFilter;
 import org.example.maridone.overtime.OvertimeRequest;
 import org.springframework.data.jpa.domain.Specification;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 
 public class OvertimeSpecs {
+    public static Specification<OvertimeRequest> filtered(OvertimeFilter overtimeFilter) {
+        return (root, query, cb) -> {
+            List<Predicate> predicates = new ArrayList<>();
+
+            if (overtimeFilter.overtimeId() != null) {
+                predicates.add(cb.equal(root.get("overtimeId"), overtimeFilter.overtimeId()));
+            }
+
+            if (overtimeFilter.employeeId() != null) {
+                predicates.add(cb.equal(root.get("employee").get("employeeId"), overtimeFilter.employeeId()));
+            }
+
+            if (overtimeFilter.workDate() != null) {
+                predicates.add(cb.equal(root.get("workDate"), overtimeFilter.workDate()));
+            }
+
+            if (overtimeFilter.requestStatus() != null) {
+                predicates.add(cb.equal(root.get("requestStatus"), overtimeFilter.requestStatus()));
+            }
+
+            if (overtimeFilter.requestAt() != null) {
+                predicates.add(cb.greaterThanOrEqualTo(root.get("requestAt"), overtimeFilter.requestAt()));
+            }
+
+            if (overtimeFilter.overtimeType() != null) {
+                predicates.add(cb.equal(root.get("overtimeType"), overtimeFilter.overtimeType()));
+            }
+
+            return cb.and(predicates.toArray(new Predicate[0]));
+        };
+    }
     public static Specification<OvertimeRequest> hasEmployeeId(Long empId) {
         return (root, query, cb) -> {
             if (empId == null) {

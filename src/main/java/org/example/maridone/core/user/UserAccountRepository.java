@@ -1,6 +1,5 @@
 package org.example.maridone.core.user;
 
-import org.example.maridone.core.employee.Employee;
 import org.example.maridone.enums.Position;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -20,4 +19,6 @@ public interface UserAccountRepository extends JpaRepository<UserAccount,Long> {
 
     @Query("select u.employee.position from UserAccount u where u.username = :username")
     Optional<Position> findPositionByUsername(@Param("username") String username);
+
+    Long findEmployeeIdByUsername(String username);
 }

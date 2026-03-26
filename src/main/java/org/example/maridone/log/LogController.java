@@ -3,12 +3,14 @@ package org.example.maridone.log;
 import org.example.maridone.log.activity.ActivityLog;
 import org.example.maridone.log.attendance.AttendanceLog;
 import org.example.maridone.log.dto.ActivityRequestDto;
+import org.example.maridone.log.filter.AttendanceLogFilter;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -42,6 +44,16 @@ public class LogController {
             @RequestParam(required = false) Long empId,
             @PageableDefault(size = 25, sort = "timestamp", direction = Sort.Direction.DESC) Pageable pageable) {
         return logService.getAttendance(empId, pageable);
+    }
+
+    @GetMapping("/attendance/team")
+    @PreAuthorize("hasRole('MANAGER')")
+    public Page<AttendanceLog> getAttendanceTeam(
+            Authentication authentication,
+            AttendanceLogFilter filter,
+            @PageableDefault(size = 25, sort = "timestamp", direction = Sort.Direction.DESC) Pageable pageable) {
+
+        return logService.getAttendanceTeam(filter, authentication.getName(), pageable);
     }
 
     @GetMapping("/attendance/self/{empId}")

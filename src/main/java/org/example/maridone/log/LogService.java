@@ -3,10 +3,13 @@ package org.example.maridone.log;
 import org.example.maridone.annotation.ExecutionTime;
 import org.example.maridone.common.CommonSpecs;
 import org.example.maridone.core.employee.EmployeeRepository;
+import org.example.maridone.core.user.UserAccountRepository;
 import org.example.maridone.exception.notfound.EmployeeNotFoundException;
 import org.example.maridone.log.activity.ActivityLog;
 import org.example.maridone.log.attendance.AttendanceLog;
 import org.example.maridone.log.dto.ActivityRequestDto;
+import org.example.maridone.log.filter.AttendanceLogFilter;
+import org.example.maridone.log.spec.AttendanceLogSpecs;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
@@ -15,6 +18,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.util.List;
 
 @Service
 public class LogService {
@@ -22,14 +26,17 @@ public class LogService {
     private final ActivityLogRepository activityLogRepository;
     private final AttendanceLogRepository attendanceLogRepository;
     private final EmployeeRepository employeeRepository;
+    private final UserAccountRepository userAccountRepository;
 
     public LogService(ActivityLogRepository activityLogRepository,
                       AttendanceLogRepository attendanceLogRepository,
-                      EmployeeRepository employeeRepository)
+                      EmployeeRepository employeeRepository,
+                      UserAccountRepository userAccountRepository)
     {
         this.activityLogRepository = activityLogRepository;
         this.attendanceLogRepository = attendanceLogRepository;
         this.employeeRepository = employeeRepository;
+        this.userAccountRepository = userAccountRepository;
     }
 
 
@@ -66,6 +73,20 @@ public class LogService {
         Specification<AttendanceLog> spec = Specification.allOf(
                 CommonSpecs.fieldEquals("employeeId", empId)
         );
+        return attendanceLogRepository.findAll(spec, pageable);
+    }
+
+    @ExecutionTime
+    public Page<AttendanceLog> getAttendanceTeam(AttendanceLogFilter filter, String username, Pageable pageable) {
+        //get all handledIds by username(who was logged in)
+        List<Long> handledIds = employeeRepository.findHandledEmployeeIds(userAccountRepository.findEmployeeIdByUsername(username));
+        Specification<AttendanceLog> spec = Specification.allOf(
+                AttendanceLogSpecs.filtered(filter)
+        );
+        if (!handledIds.isEmpty()) {
+            spec.and(AttendanceLogSpecs.handledEmployees(handledIds));
+        }
+
         return attendanceLogRepository.findAll(spec, pageable);
     }
 

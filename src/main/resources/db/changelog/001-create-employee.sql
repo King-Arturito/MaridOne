@@ -18,6 +18,7 @@ CREATE TABLE employee (
     state                 VARCHAR(255),
     country               VARCHAR(255),
     zip_code              VARCHAR(255),
+    emp_title             VARCHAR(255),
     manager_id            BIGINT
 
     CONSTRAINT employee_employment_status_check CHECK (employment_status IN ('REGULAR', 'NEW_HIRE', 'PART_TIME', 'TERMINATED', 'SUSPENDED')),

@@ -10,6 +10,7 @@ import org.example.maridone.core.employee.EmployeeRepository;
 import org.example.maridone.core.spec.EmployeeSpecs;
 import org.example.maridone.enums.Position;
 import org.example.maridone.enums.Status;
+import org.example.maridone.exception.conflict.OverlappingDatesException;
 import org.example.maridone.exception.notfound.AccountNotFoundException;
 import org.example.maridone.exception.unauthorized.InvalidRangeException;
 import org.example.maridone.exception.unauthorized.OvertimeException;
@@ -55,7 +56,7 @@ public class OvertimeService {
                 OvertimeSpecs.checkOverlaps(requestDto.getStartTime(), requestDto.getEndTime())
         );
         if (overtimeRequestRepository.count(checkConflicts) > 0) {
-            throw new InvalidRangeException("Conflicting Schedules found.");
+            throw new OverlappingDatesException("Conflicting Schedules found.");
         }
         OvertimeRequest request = overtimeMapper.toOvertimeRequest(requestDto);
         request.setEmployee(emp);
@@ -87,9 +88,9 @@ public class OvertimeService {
     }
 
     @ExecutionTime
-    public Page<OvertimeResponseDto> getAllOvertimeRequest(Pageable pageable) {
+    public Page<OvertimeResponseDto> getAllOvertimeRequest(OvertimeFilter filter, Pageable pageable) {
         Specification<OvertimeRequest> specs =  Specification.allOf(
-                OvertimeSpecs.hasStatus(Status.PENDING)
+                OvertimeSpecs.filtered(filter)
         );
         Page<OvertimeRequest> requests = overtimeRequestRepository.findAll(specs, pageable);
         return requests.map(overtimeMapper::toOvertimeResponseDto);
