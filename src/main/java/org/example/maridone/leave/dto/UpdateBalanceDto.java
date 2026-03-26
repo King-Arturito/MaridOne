@@ -17,6 +17,12 @@ public class UpdateBalanceDto {
     @NotBlank(message = "type must be add/subtract")
     private String type;
 
+    public UpdateBalanceDto(BigDecimal balanceHours, LeaveType leaveType, String type) {
+        this.balanceHours = balanceHours;
+        this.leaveType = leaveType;
+        this.type = type;
+    }
+
     public BigDecimal getBalanceHours() {
         return balanceHours;
     }

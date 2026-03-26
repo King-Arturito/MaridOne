@@ -12,6 +12,7 @@ import org.example.maridone.core.user.UserAccountRepository;
 import org.example.maridone.enums.EmploymentStatus;
 import org.example.maridone.enums.LeaveType;
 import org.example.maridone.enums.Status;
+import org.example.maridone.exception.conflict.OverlappingDatesException;
 import org.example.maridone.exception.notfound.*;
 import org.example.maridone.exception.unauthorized.DuplicateLeaveException;
 import org.example.maridone.exception.unauthorized.InsufficientBalanceException;
@@ -191,6 +192,20 @@ public class LeaveService {
                 .orElseThrow(() -> new BalanceNotFoundException("Balance of Type:  " + payload.getLeaveType() +  " for Employee ID: " + empId + " not found."))
                 .getBalanceHours();
 
+        //throw error if there is a pending/approved leave for your new specified leave request,
+        //REGARDLESS of leave type
+        Specification<LeaveRequest> spec = Specification.allOf(
+          CommonSpecs.fieldGreaterThanOrEqual("endDateTime", payload.getStartDateTime()),
+          CommonSpecs.fieldLessThanOrEqual("startDateTime", payload.getEndDateTime()),
+          CommonSpecs.fieldEquals("employee", emp),
+          CommonSpecs.fieldNotEquals("requestStatus", Status.CANCELLED),
+          CommonSpecs.fieldNotEquals("requestStatus", Status.REJECTED)
+
+        );
+        if (leaveRequestRepository.exists(spec)) {
+            throw new OverlappingDatesException("unable to process your request. There is an overlapping pending/approved request");
+        }
+
         List<LeaveWindow> leaveWindows = resolveLeaveWindows(payload, empId);
         BigDecimal requestHoursTotal = calculateRequestHours(leaveWindows);
 
@@ -224,10 +239,10 @@ public class LeaveService {
             }
         }
 
+        leaveRequestRepository.saveAll(requests);
         return requests;
     }
 
-    //todo: UPDATE
     @Transactional
     @ExecutionTime
     @Notify(message = "Your Leave Request has been #{#result.requestStatus}", importance = "HIGH", targetEmployee = "#result.employee")
@@ -238,6 +253,27 @@ public class LeaveService {
 
         LeaveRequest request = leaveRequestRepository.findById(requestId).orElseThrow(
                 () -> new LeaveNotFoundException("Leave Request of Id: " + requestId + " is not found."));
+
+        Long requestEmpId  = leaveRequestRepository.findEmployeeIdByRequestId(requestId).orElse(null);
+        if (requestEmpId == null) {
+            throw new IllegalStateException("Employee ID connected to request not found.");
+        }
+
+        if (request.getRequestStatus() != Status.PENDING)  {
+            throw new IllegalStateException("This Request has been processed already.");
+        }
+
+        //update leave balance:
+        if (request.getPaid() && payload.getRequestStatus().equals(Status.APPROVED)) {
+            updateLeaveBalance(requestEmpId,
+                    new UpdateBalanceDto(
+                            calculateRequestHours(request.getStartDateTime(),
+                                    request.getEndDateTime(),
+                                    user.getEmployeeId()),
+                            payload.getLeaveType(),
+                            "subtract"));
+        }
+
         request.setApproverReason(payload.getApproverReason());
         request.setRequestStatus(payload.getRequestStatus());
         request.setApprover(user.getEmployee().getLastName() + ", " + user.getEmployee().getFirstName());
@@ -246,8 +282,15 @@ public class LeaveService {
     }
 
 
+
+
+    //HELPER METHODS
     public BigDecimal calculateRequestHours(LeaveRequestDto payload, Long empId) {
         return calculateRequestHours(resolveLeaveWindows(payload, empId));
+    }
+
+    public BigDecimal calculateRequestHours(LocalDateTime start, LocalDateTime end, Long empId) {
+        return calculateRequestHours(new LeaveRequestDto(start,end), empId);
     }
 
     public LeaveRequest createLeave(LeaveRequestDto payload, Employee emp, boolean isPaid) {

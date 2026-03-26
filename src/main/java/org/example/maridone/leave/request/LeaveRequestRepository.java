@@ -2,6 +2,7 @@ package org.example.maridone.leave.request;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -46,4 +47,7 @@ public interface LeaveRequestRepository extends JpaRepository<LeaveRequest,Long>
     boolean isLeaveOwnedByUser(@Param("leaveRequestId") Long leaveRequestId, @Param("username") String username);
 
     Page<LeaveRequest> findByEmployee_EmployeeId(Long empId, Pageable pageable);
+
+    @Query("select lr.employee.employeeId from LeaveRequest lr where lr.requestId = :requestId")
+    Optional<Long> findEmployeeIdByRequestId(@Param("requestId") Long requestId);
 }

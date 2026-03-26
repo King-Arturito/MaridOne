@@ -19,13 +19,13 @@ public class LeaveRequestDto {
     @NotNull
     private LocalDateTime endDateTime;
 
-    @NotNull(groups = OnUpdate.class)
     private String approver;
 
     @NotNull
     private String reason;
 
     @NotNull
+    @NotNull(groups =  OnUpdate.class)
     private LeaveType leaveType;
 
     @Enumerated(EnumType.STRING)
@@ -34,6 +34,13 @@ public class LeaveRequestDto {
 
     @NotNull(groups = OnUpdate.class)
     private String approverReason;
+
+    public LeaveRequestDto() {}
+
+    public LeaveRequestDto(LocalDateTime startDateTime, LocalDateTime endDateTime) {
+        this.startDateTime = startDateTime;
+        this.endDateTime = endDateTime;
+    }
 
 
     @AssertTrue(message = "End date and time must be strictly after the start date and time")

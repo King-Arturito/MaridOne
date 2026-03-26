@@ -4,6 +4,7 @@ import org.example.maridone.exception.badrequest.BadCredentialsException;
 import org.example.maridone.exception.badrequest.InvalidRefreshTokenException;
 import org.example.maridone.exception.badrequest.NoRoleAssignedException;
 import org.example.maridone.exception.badrequest.UnauthorizedAccessException;
+import org.example.maridone.exception.conflict.OverlappingDatesException;
 import org.example.maridone.exception.notfound.*;
 import org.example.maridone.exception.unauthorized.*;
 import org.springframework.http.HttpStatus;
@@ -61,6 +62,15 @@ public class GlobalExceptionHandler {
     })
     public ResponseEntity<Map<String, String>> handleBadRequestExceptions(RuntimeException ex) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(Map.of("error", ex.getMessage()));
+    }
+
+    //409 Conflict
+    @ExceptionHandler({
+            OverlappingDatesException.class
+    })
+    public ResponseEntity<Map<String, String>> handleConflictExceptions(RuntimeException ex) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
                 .body(Map.of("error", ex.getMessage()));
     }
 }
