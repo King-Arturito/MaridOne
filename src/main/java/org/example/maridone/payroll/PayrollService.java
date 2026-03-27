@@ -109,6 +109,7 @@ public class PayrollService {
         return run;
     }
 
+    //todo: notify everyone inside the payroll run
     @Transactional
     @ExecutionTime
     public PayrollRun postRun(Long payId) {

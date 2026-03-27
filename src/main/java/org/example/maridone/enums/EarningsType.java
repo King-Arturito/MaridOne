@@ -1,6 +1,6 @@
 package org.example.maridone.enums;
 
-//for OvertimeRequest & ShiftSchedule
+//for OvertimeRequest
 public enum EarningsType {
     /*
         multipliers:

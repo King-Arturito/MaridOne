@@ -1,12 +1,13 @@
-package org.example.maridone.payroll.run;
+package org.example.maridone.payroll;
 
 import jakarta.validation.Valid;
 import org.example.maridone.annotation.AuditLog;
 import org.example.maridone.marker.OnCreate;
 import org.example.maridone.marker.OnUpdate;
-import org.example.maridone.payroll.PayrollService;
 import org.example.maridone.payroll.dto.*;
+import org.example.maridone.payroll.item.ItemFilter;
 import org.example.maridone.payroll.item.PayrollItemService;
+import org.example.maridone.payroll.run.PayrollRun;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
@@ -38,12 +39,20 @@ public class PayrollController {
     @GetMapping("/run/{payId}/items")
     @PreAuthorize("hasRole('HR')")
     @AuditLog
-    public Page<ItemSummaryDto> getRunItems(@PathVariable Long payId, Pageable pageable) {
-        return payrollItemService.getRunItems(payId, pageable);
+    public Page<ItemViewDto> getRunItems(ItemFilter filter,
+                                         @PathVariable Long payId,
+                                         Pageable pageable) {
+        return payrollItemService.getRunItems(payId, filter, pageable);
+    }
+
+    @GetMapping("/run/summary/{payId}")
+    @PreAuthorize("hasAnyRole('HR', 'MANAGEMENT')")
+    public List<PayTypeSummaryDto> getSummarizedRunItems(@PathVariable Long payId) {
+        return payrollItemService.getSummarizedRunItems(payId);
     }
 
      /*
-        Will probably not be used since creation of run is automatic when launching payroll
+        Will be used for manual adjustments
      */
     @PostMapping("/run/create")
     @PreAuthorize("hasRole('HR')")
