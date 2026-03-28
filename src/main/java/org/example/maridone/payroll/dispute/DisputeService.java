@@ -5,6 +5,7 @@ import org.example.maridone.annotation.ExecutionTime;
 import org.example.maridone.annotation.Notify;
 import org.example.maridone.common.CommonSpecs;
 import org.example.maridone.core.employee.Employee;
+import org.example.maridone.enums.PayrollStatus;
 import org.example.maridone.enums.Position;
 import org.example.maridone.enums.Status;
 import org.example.maridone.exception.unauthorized.DuplicateDisputeException;
@@ -44,7 +45,9 @@ public class DisputeService {
     @ExecutionTime
     @BulkNotify(message = "Dispute Requested", targetRole = Position.HR, importance = "HIGH")
     public DisputeRequest createDisputeRequest(Long itemId, DisputeRequestDto payload) {
-        PayrollItem item =  payrollItemRepository.findById(itemId).orElse(null);
+        PayrollItem item = payrollItemRepository
+                .findByItemIdAndPayrollRun_PayrollStatus(itemId, PayrollStatus.POSTED)
+                .orElse(null);
         if (item == null) {
             throw new ItemNotFoundException(itemId);
         }

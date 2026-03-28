@@ -1,10 +1,10 @@
 package org.example.maridone.payroll.item.component;
+
 import jakarta.persistence.*;
 import org.example.maridone.enums.DeductionType;
 import org.example.maridone.payroll.item.PayrollItem;
 
 import java.math.BigDecimal;
-
 
 @Entity
 @Table(name = "deductions_line")
@@ -25,7 +25,6 @@ public class DeductionsLine {
 
     @Column(name = "amount", nullable = false)
     private BigDecimal amount;
-
 
     public Long getDeductionsId() {
         return deductionsId;

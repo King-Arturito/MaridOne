@@ -11,25 +11,18 @@ import org.example.maridone.enums.DeductionType;
 import org.example.maridone.enums.ExemptionStatus;
 import org.example.maridone.payroll.item.PayrollItem;
 import org.example.maridone.payroll.item.component.DeductionsLine;
-import org.example.maridone.payroll.item.component.DeductionsRepository;
 import org.example.maridone.payroll.item.component.EarningsLine;
-import org.example.maridone.payroll.item.component.EarningsRepository;
 import org.example.maridone.payroll.run.PayrollRun;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
-import static org.mockito.Mockito.verifyNoInteractions;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
 class PayrollCalculatorTest {
 
-    @Mock
-    private EarningsRepository earningsRepository;
-    @Mock
-    private DeductionsRepository deductionsRepository;
     @Mock
     private DefaultConfig defaultConfig;
 
@@ -41,8 +34,6 @@ class PayrollCalculatorTest {
         PayrollConfig payrollConfig = new PayrollConfig();
         bracketService = new BracketService(payrollConfig);
         payrollCalculator = new PayrollCalculator(
-                earningsRepository,
-                deductionsRepository,
                 bracketService,
                 defaultConfig,
                 payrollConfig
@@ -64,7 +55,6 @@ class PayrollCalculatorTest {
         Assertions.assertFalse(line.getOvertime());
         Assertions.assertEquals(LocalDate.of(2026, 3, 15), line.getEarningsDate());
         Assertions.assertSame(item, line.getPayrollItem());
-        verifyNoInteractions(earningsRepository, deductionsRepository);
     }
 
     @Test
@@ -82,7 +72,6 @@ class PayrollCalculatorTest {
         Assertions.assertFalse(line.getOvertime());
         Assertions.assertEquals(LocalDate.of(2026, 3, 30), line.getEarningsDate());
         Assertions.assertSame(item, line.getPayrollItem());
-        verifyNoInteractions(earningsRepository, deductionsRepository);
     }
 
     @Test
@@ -118,7 +107,6 @@ class PayrollCalculatorTest {
         Assertions.assertFalse(premiumLine.getOvertime());
         Assertions.assertEquals(LocalDate.of(2026, 4, 1), premiumLine.getEarningsDate());
         Assertions.assertSame(item, premiumLine.getPayrollItem());
-        verifyNoInteractions(earningsRepository, deductionsRepository);
     }
 
     @Test
@@ -133,7 +121,6 @@ class PayrollCalculatorTest {
         Assertions.assertEquals(1, emptyResult.size());
         assertBigDecimalEquals("26000.00", nullResult.get(0).getAmount());
         assertBigDecimalEquals("26000.00", emptyResult.get(0).getAmount());
-        verifyNoInteractions(earningsRepository, deductionsRepository);
     }
 
     @Test
@@ -156,7 +143,6 @@ class PayrollCalculatorTest {
         assertDeduction(deductions, DeductionType.ABSENT_DEDUCTION, "500.25");
         assertDeduction(deductions, DeductionType.LATE_PENALTY, "120.75");
         deductions.forEach(line -> Assertions.assertSame(item, line.getPayrollItem()));
-        verifyNoInteractions(earningsRepository, deductionsRepository);
     }
 
     @Test
@@ -177,7 +163,6 @@ class PayrollCalculatorTest {
         assertDeduction(deductions, DeductionType.PAGIBIG, "100.00");
         assertDeduction(deductions, DeductionType.BRACKET_LEVEL_THREE, "2479.10");
         deductions.forEach(line -> Assertions.assertSame(item, line.getPayrollItem()));
-        verifyNoInteractions(earningsRepository, deductionsRepository);
     }
 
     @Test
@@ -194,7 +179,6 @@ class PayrollCalculatorTest {
 
         assertDeduction(deductions, DeductionType.BRACKET_LEVEL_THREE, "4071.60");
         Assertions.assertTrue(deductions.stream().noneMatch(d -> d.getDeductionType() == DeductionType.BRACKET_LEVEL_FOUR));
-        verifyNoInteractions(earningsRepository, deductionsRepository);
     }
 
     @Test
@@ -210,7 +194,6 @@ class PayrollCalculatorTest {
         );
 
         Assertions.assertTrue(deductions.isEmpty());
-        verifyNoInteractions(earningsRepository, deductionsRepository);
     }
 
     private Employee buildEmployee(ExemptionStatus exemptionStatus, String yearlySalary) {

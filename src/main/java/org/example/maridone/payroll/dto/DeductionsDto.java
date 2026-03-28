@@ -8,6 +8,7 @@ public class DeductionsDto {
 
     private Long deductionsId;
     private DeductionType deductionType;
+    private String description;
     private BigDecimal amount;
 
     public Long getDeductionsId() {
@@ -24,6 +25,14 @@ public class DeductionsDto {
 
     public void setDeductionType(DeductionType deductionType) {
         this.deductionType = deductionType;
+    }
+
+    public String getDescription() {
+        return description;
+    }
+
+    public void setDescription(String description) {
+        this.description = description;
     }
 
     public BigDecimal getAmount() {

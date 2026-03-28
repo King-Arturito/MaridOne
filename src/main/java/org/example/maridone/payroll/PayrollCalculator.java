@@ -21,9 +21,7 @@ import org.example.maridone.leave.request.LeaveRequest;
 import org.example.maridone.log.attendance.AttendanceLog;
 import org.example.maridone.payroll.item.PayrollItem;
 import org.example.maridone.payroll.item.component.DeductionsLine;
-import org.example.maridone.payroll.item.component.DeductionsRepository;
 import org.example.maridone.payroll.item.component.EarningsLine;
-import org.example.maridone.payroll.item.component.EarningsRepository;
 import org.example.maridone.schedule.shift.DailyShiftSchedule;
 import org.springframework.stereotype.Component;
 
@@ -32,22 +30,16 @@ public class PayrollCalculator {
 
     public record AttendanceSession(AttendanceLog inLog, AttendanceLog outLog) {}
 
-    private final EarningsRepository earningsRepository;
-    private final DeductionsRepository deductionsRepository;
     private final BracketService bracketService;
     private final DefaultConfig defaultConfig;
     private final PayrollConfig payrollConfig;
 
     public PayrollCalculator(
-        EarningsRepository earningsRepository,
-        DeductionsRepository deductionsRepository,
         BracketService bracketService,
         DefaultConfig defaultConfig,
         PayrollConfig payrollConfig
     )
     {
-        this.earningsRepository = earningsRepository;
-        this.deductionsRepository = deductionsRepository;
         this.bracketService = bracketService;
         this.defaultConfig = defaultConfig;
         this.payrollConfig = payrollConfig;

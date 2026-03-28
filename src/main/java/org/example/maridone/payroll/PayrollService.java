@@ -22,8 +22,10 @@ import org.example.maridone.core.employee.EmployeeRepository;
 import org.example.maridone.enums.EmploymentStatus;
 import org.example.maridone.enums.ExemptionStatus;
 import org.example.maridone.enums.PayrollStatus;
+import org.example.maridone.enums.RunType;
 import org.example.maridone.enums.Status;
 import org.example.maridone.exception.notfound.RunNotFoundException;
+import org.example.maridone.exception.unauthorized.InvalidActionException;
 import org.example.maridone.holiday.HolidayLookup;
 import org.example.maridone.holiday.HolidayService;
 import org.example.maridone.leave.request.LeaveRequest;
@@ -33,11 +35,12 @@ import org.example.maridone.log.attendance.AttendanceLog;
 import org.example.maridone.overtime.OvertimeRequest;
 import org.example.maridone.overtime.OvertimeRequestRepository;
 import org.example.maridone.overtime.spec.OvertimeSpecs;
+import org.example.maridone.payroll.dto.PayrollRunViewDto;
 import org.example.maridone.payroll.dto.RunCreateDto;
 import org.example.maridone.payroll.item.PayrollItem;
+import org.example.maridone.payroll.item.PayrollItemService;
 import org.example.maridone.payroll.item.component.DeductionsLine;
 import org.example.maridone.payroll.item.component.EarningsLine;
-import org.example.maridone.payroll.mapper.PayrollMapper;
 import org.example.maridone.payroll.run.PayrollItemRepository;
 import org.example.maridone.payroll.run.PayrollRun;
 import org.example.maridone.payroll.run.PayrollRunRepository;
@@ -61,9 +64,9 @@ public class PayrollService {
     private final LeaveRequestRepository leaveRequestRepository;
     private final HolidayService holidayService;
     private final PayrollCalculator payrollCalculator;
-    private final PayrollMapper payrollMapper;
     private final DefaultConfig defaultConfig;
     private final PayrollConfig payrollConfig;
+    private final PayrollItemService payrollItemService;
 
     public PayrollService(
             PayrollRunRepository payrollRunRepository,
@@ -75,9 +78,9 @@ public class PayrollService {
             LeaveRequestRepository leaveRequestRepository,
             HolidayService holidayService,
             PayrollCalculator payrollCalculator,
-            PayrollMapper payrollMapper,
             DefaultConfig defaultConfig,
-            PayrollConfig payrollConfig
+            PayrollConfig payrollConfig,
+            PayrollItemService payrollItemService
     )
     {
         this.payrollRunRepository = payrollRunRepository;
@@ -89,9 +92,9 @@ public class PayrollService {
         this.leaveRequestRepository = leaveRequestRepository;
         this.holidayService = holidayService;
         this.payrollCalculator = payrollCalculator;
-        this.payrollMapper = payrollMapper;
         this.defaultConfig = defaultConfig;
         this.payrollConfig = payrollConfig;
+        this.payrollItemService = payrollItemService;
     }
 
 
@@ -99,6 +102,7 @@ public class PayrollService {
     @Transactional
     @ExecutionTime
     public PayrollRun createRun(RunCreateDto payload) {
+        assertValidPeriod(payload);
         PayrollRun run = new PayrollRun();
         run.setPeriodDescription(payload.getPeriodDescription());
         run.setRunType(payload.getRunType());
@@ -112,28 +116,46 @@ public class PayrollService {
     //todo: notify everyone inside the payroll run
     @Transactional
     @ExecutionTime
-    public PayrollRun postRun(Long payId) {
+    public PayrollRunViewDto postRun(Long payId) {
         PayrollRun run = payrollRunRepository.findById(payId)
                 .orElseThrow(() -> new RunNotFoundException("Payroll Run ID:" + payId + " not found."));
+        if (payrollItemRepository.countByPayrollRun_PayId(payId) <= 0) {
+            throw new InvalidActionException("This payroll run has no generated payroll items to post yet.");
+        }
+        if (run.getRunType() == RunType.ADJUSTMENT) {
+            payrollItemService.applyStagedCorrections(run);
+        }
         run.setPayrollStatus(PayrollStatus.POSTED);
-        return payrollRunRepository.save(run);
+        payrollRunRepository.save(run);
+        return getRun(payId);
     }
 
+    @Transactional(readOnly = true)
+    @ExecutionTime
+    public List<PayrollRunViewDto> getRuns() {
+        return payrollRunRepository.findAllRunViews();
+    }
+
+    @Transactional(readOnly = true)
+    @ExecutionTime
+    public PayrollRunViewDto getRun(Long payId) {
+        return payrollRunRepository.findRunViewByPayId(payId)
+                .orElseThrow(() -> new RunNotFoundException("Payroll Run ID:" + payId + " not found."));
+    }
 
     @Transactional
     @ExecutionTime
-    public void processPayroll(RunCreateDto payload) {
+    public PayrollRunViewDto processPayroll(RunCreateDto payload) {
+        assertProcessablePayroll(payload);
+
         //create a payroll run for periodStart - periodEnd
         PayrollRun run = createRun(payload);
 
         Specification<Employee> spec = CommonSpecs.fieldNotEquals("employmentStatus", EmploymentStatus.TERMINATED);
         //get non-terminated employees
-        List<Employee> employees = employeeRepository.findAll(spec);
+        List<Employee> employees = findActiveEmployees(spec);
         //separate employees by exempt and nonexempt
-        Map<Boolean, List<Employee>> partitioned = employees.stream()
-                .collect(Collectors.partitioningBy(
-                        emp -> emp.getExemptionStatus().equals(ExemptionStatus.EXEMPT)
-                ));
+        Map<Boolean, List<Employee>> partitioned = partitionEmployeesByExemption(employees);
         List<Employee> exemptEmployees = partitioned.getOrDefault(true, List.of());
         List<Employee> nonExemptEmployees = partitioned.getOrDefault(false, List.of());
 
@@ -141,8 +163,8 @@ public class PayrollService {
 
         processPayrollNonExempt(run, items, nonExemptEmployees);
         payrollItemRepository.saveAll(items);
+        return getRun(run.getPayId());
     }
-
 
     //for exempt employees
     @Transactional
@@ -176,37 +198,21 @@ public class PayrollService {
          *      +6 hours to obtain night diff logs too
          * sorting: sorted by oldest logs first
          */
-        List<AttendanceLog> allLogs = attendanceLogRepository.findByEmployeeIdInAndTimestampBetween(
-                employeeIds,
-                attendanceWindowStart,
-                run.getPeriodEnd().atTime(LocalTime.MAX).plusHours(6).atZone(defaultConfig.getTimeZone()).toInstant(),
-                sorting
-        );
+        List<AttendanceLog> allLogs = findAttendanceLogs(employeeIds, run, attendanceWindowStart, sorting);
 
         //get all schedules of employees in employeeIds
-        List<DailyShiftSchedule> allSchedules = dailyShiftRepository.findAllByEmployeeIdsAndPeriod(
-                employeeIds,
-                schedulePeriodStart,
-                schedulePeriodEndExclusive
-        );
+        List<DailyShiftSchedule> allSchedules = findDailySchedules(employeeIds, schedulePeriodStart, schedulePeriodEndExclusive);
         //get all APPROVED leaves of employees in employeeIds for payroll period
-        List<LeaveRequest> allLeaves = leaveRequestRepository.findApprovedLeavesForPeriod(
-                employeeIds,
-                schedulePeriodStart,
-                schedulePeriodEndExclusive
-        );
+        List<LeaveRequest> allLeaves = findApprovedLeaves(employeeIds, schedulePeriodStart, schedulePeriodEndExclusive);
 
         //find any holidays for a day in payroll period
         HolidayLookup holidayLookup = holidayService.getHolidayLookup(run.getPeriodStart(), run.getPeriodEnd());
         Set<LocalDate> holidayDates = holidayLookup.holidayDates();
 
         //group List of Objects(Attendance, DailyShifts, LeaveRequest) to an employeeId inside their object
-        Map<Long, List<AttendanceLog>> attendanceMap = safeList(allLogs).stream()
-                .collect(Collectors.groupingBy(AttendanceLog::getEmployeeId));
-        Map<Long, List<DailyShiftSchedule>> scheduleMap = safeList(allSchedules).stream()
-                .collect(Collectors.groupingBy(DailyShiftSchedule::getEmployeeId));
-        Map<Long, List<LeaveRequest>> leaveMap = safeList(allLeaves).stream()
-                .collect(Collectors.groupingBy(leave -> leave.getEmployee().getEmployeeId()));
+        Map<Long, List<AttendanceLog>> attendanceMap = groupAttendanceLogs(allLogs);
+        Map<Long, List<DailyShiftSchedule>> scheduleMap = groupSchedulesByEmployee(allSchedules);
+        Map<Long, List<LeaveRequest>> leaveMap = groupLeavesByEmployee(allLeaves);
 
         //iterate through employees
         return employees.stream()
@@ -246,9 +252,7 @@ public class PayrollService {
                             attendanceDeductions.lateDeduction()
                     );
                     item.setDeductions(deductions);
-                    BigDecimal totalDeductions = deductions.stream()
-                            .map(DeductionsLine::getAmount)
-                            .reduce(BigDecimal.ZERO, BigDecimal::add);
+                    BigDecimal totalDeductions = sumDeductionAmounts(deductions);
                     item.setNetPay(semiMonthlySalary.subtract(totalDeductions).setScale(2, RoundingMode.HALF_UP));
                     return item;
                 })
@@ -275,12 +279,7 @@ public class PayrollService {
         LocalDateTime schedulePeriodEndExclusive = run.getPeriodEnd().plusDays(1).atStartOfDay();
 
         Sort sorting = Sort.by(Sort.Direction.ASC, "timestamp");
-        List<AttendanceLog> allLogs = attendanceLogRepository
-                .findByEmployeeIdInAndTimestampBetween(
-                        employeeIds,
-                        attendanceWindowStart,
-                        run.getPeriodEnd().atTime(LocalTime.MAX).plusHours(6).atZone(defaultConfig.getTimeZone()).toInstant(),
-                        sorting);
+        List<AttendanceLog> allLogs = findAttendanceLogs(employeeIds, run, attendanceWindowStart, sorting);
 
         // only approved overtime inside the payroll window contributes extra pay.
         Specification<OvertimeRequest> overtimeSpecs = Specification.allOf(
@@ -294,34 +293,22 @@ public class PayrollService {
 
         List<OvertimeRequest> overtimeRequests = overtimeRequestRepository.findAll(overtimeSpecs);
 
-        List<DailyShiftSchedule> allSchedules = dailyShiftRepository.findAllByEmployeeIdsAndPeriod(
-                employeeIds,
-                schedulePeriodStart,
-                schedulePeriodEndExclusive
-        );
+        List<DailyShiftSchedule> allSchedules = findDailySchedules(employeeIds, schedulePeriodStart, schedulePeriodEndExclusive);
 
-        List<LeaveRequest> allLeaves = leaveRequestRepository.findApprovedLeavesForPeriod(
-                employeeIds,
-                schedulePeriodStart,
-                schedulePeriodEndExclusive
-        );
+        List<LeaveRequest> allLeaves = findApprovedLeaves(employeeIds, schedulePeriodStart, schedulePeriodEndExclusive);
 
         HolidayLookup holidayLookup = holidayService.getHolidayLookup(run.getPeriodStart(), run.getPeriodEnd());
         Set<LocalDate> holidayDates = holidayLookup.holidayDates();
         Set<LocalDate> regularHolidayDates = holidayLookup.regularHolidayDates();
 
         // group shared data up front so the inner employee/day loop only does simple lookups.
-        Map<Long, List<AttendanceLog>> attendanceMap = allLogs.stream()
-                .collect(Collectors.groupingBy(AttendanceLog::getEmployeeId));
+        Map<Long, List<AttendanceLog>> attendanceMap = groupAttendanceLogs(allLogs);
 
-        Map<Long, List<DailyShiftSchedule>> scheduleMap = allSchedules.stream()
-                .collect(Collectors.groupingBy(DailyShiftSchedule::getEmployeeId));
+        Map<Long, List<DailyShiftSchedule>> scheduleMap = groupSchedulesByEmployee(allSchedules);
 
-        Map<Long, List<OvertimeRequest>> overtimeMap = overtimeRequests.stream()
-                .collect(Collectors.groupingBy(OvertimeRequest::getEmployeeId));
+        Map<Long, List<OvertimeRequest>> overtimeMap = groupOvertimeRequestsByEmployee(overtimeRequests);
 
-        Map<Long, List<LeaveRequest>> leaveMap = allLeaves.stream()
-                .collect(Collectors.groupingBy(leave -> leave.getEmployee().getEmployeeId()));
+        Map<Long, List<LeaveRequest>> leaveMap = groupLeavesByEmployee(allLeaves);
 
         for (Employee emp :  employees) {
             // non-exempt payroll starts from cutoff basic pay, then layers in variable earnings and attendance deductions.
@@ -519,12 +506,7 @@ public class PayrollService {
             item.setEarnings(calculatedEarnings);
             item.getEarnings().forEach(line -> line.setPayrollItem(item));
 
-            BigDecimal earningsTotal = item.getEarnings() == null
-                    ? BigDecimal.ZERO
-                    : item.getEarnings().stream()
-                            .map(EarningsLine::getAmount)
-                            .filter(amount -> amount != null)
-                            .reduce(BigDecimal.ZERO, BigDecimal::add);
+            BigDecimal earningsTotal = sumEarningAmounts(item.getEarnings());
 
             BigDecimal grossPay = earningsTotal.setScale(2, RoundingMode.HALF_UP);
             item.setGrossPay(grossPay);
@@ -541,12 +523,7 @@ public class PayrollService {
             item.setDeductions(calculatedDeductions);
             item.getDeductions().forEach(line -> line.setPayrollItem(item));
 
-            BigDecimal deductionsTotal = item.getDeductions() == null
-                    ? BigDecimal.ZERO
-                    : item.getDeductions().stream()
-                            .map(DeductionsLine::getAmount)
-                            .filter(amount -> amount != null)
-                            .reduce(BigDecimal.ZERO, BigDecimal::add);
+            BigDecimal deductionsTotal = sumDeductionAmounts(item.getDeductions());
 
             BigDecimal netPay = grossPay.subtract(deductionsTotal).setScale(2, RoundingMode.HALF_UP);
             item.setNetPay(netPay);
@@ -656,6 +633,112 @@ public class PayrollService {
 
     private <T> List<T> safeList(List<T> values) {
         return values == null ? List.of() : values;
+    }
+
+    private List<Employee> findActiveEmployees(Specification<Employee> spec) {
+        return employeeRepository.findAll(spec);
+    }
+
+    private Map<Boolean, List<Employee>> partitionEmployeesByExemption(List<Employee> employees) {
+        return employees.stream()
+                .collect(Collectors.partitioningBy(
+                        emp -> emp.getExemptionStatus().equals(ExemptionStatus.EXEMPT)
+                ));
+    }
+
+    private List<AttendanceLog> findAttendanceLogs(
+            List<Long> employeeIds,
+            PayrollRun run,
+            Instant attendanceWindowStart,
+            Sort sorting
+    ) {
+        return attendanceLogRepository.findByEmployeeIdInAndTimestampBetween(
+                employeeIds,
+                attendanceWindowStart,
+                run.getPeriodEnd().atTime(LocalTime.MAX).plusHours(6).atZone(defaultConfig.getTimeZone()).toInstant(),
+                sorting
+        );
+    }
+
+    private List<DailyShiftSchedule> findDailySchedules(
+            List<Long> employeeIds,
+            LocalDateTime schedulePeriodStart,
+            LocalDateTime schedulePeriodEndExclusive
+    ) {
+        return dailyShiftRepository.findAllByEmployeeIdsAndPeriod(
+                employeeIds,
+                schedulePeriodStart,
+                schedulePeriodEndExclusive
+        );
+    }
+
+    private List<LeaveRequest> findApprovedLeaves(
+            List<Long> employeeIds,
+            LocalDateTime schedulePeriodStart,
+            LocalDateTime schedulePeriodEndExclusive
+    ) {
+        return leaveRequestRepository.findApprovedLeavesForPeriod(
+                employeeIds,
+                schedulePeriodStart,
+                schedulePeriodEndExclusive
+        );
+    }
+
+    private Map<Long, List<AttendanceLog>> groupAttendanceLogs(List<AttendanceLog> allLogs) {
+        return safeList(allLogs).stream()
+                .collect(Collectors.groupingBy(AttendanceLog::getEmployeeId));
+    }
+
+    private Map<Long, List<DailyShiftSchedule>> groupSchedulesByEmployee(List<DailyShiftSchedule> allSchedules) {
+        return safeList(allSchedules).stream()
+                .collect(Collectors.groupingBy(DailyShiftSchedule::getEmployeeId));
+    }
+
+    private Map<Long, List<LeaveRequest>> groupLeavesByEmployee(List<LeaveRequest> allLeaves) {
+        return safeList(allLeaves).stream()
+                .collect(Collectors.groupingBy(leave -> leave.getEmployee().getEmployeeId()));
+    }
+
+    private Map<Long, List<OvertimeRequest>> groupOvertimeRequestsByEmployee(List<OvertimeRequest> overtimeRequests) {
+        return safeList(overtimeRequests).stream()
+                .collect(Collectors.groupingBy(OvertimeRequest::getEmployeeId));
+    }
+
+    private BigDecimal sumEarningAmounts(List<EarningsLine> earnings) {
+        return safeList(earnings).stream()
+                .map(EarningsLine::getAmount)
+                .filter(amount -> amount != null)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
+
+    private BigDecimal sumDeductionAmounts(List<DeductionsLine> deductions) {
+        return safeList(deductions).stream()
+                .map(DeductionsLine::getAmount)
+                .filter(amount -> amount != null)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
+
+    private void assertValidPeriod(RunCreateDto payload) {
+        if (payload == null || payload.getPeriodStart() == null || payload.getPeriodEnd() == null) {
+            throw new InvalidActionException("Payroll period start and end dates are required.");
+        }
+        if (payload.getPeriodEnd().isBefore(payload.getPeriodStart())) {
+            throw new InvalidActionException("Payroll period end cannot be earlier than the start date.");
+        }
+    }
+
+    private void assertProcessablePayroll(RunCreateDto payload) {
+        assertValidPeriod(payload);
+        if (payload.getRunType() != RunType.REGULAR) {
+            throw new InvalidActionException("Only regular payroll runs can be generated automatically.");
+        }
+        if (payrollRunRepository.existsByPeriodStartAndPeriodEndAndRunType(
+                payload.getPeriodStart(),
+                payload.getPeriodEnd(),
+                RunType.REGULAR
+        )) {
+            throw new InvalidActionException("A regular payroll run already exists for this period.");
+        }
     }
 
     private record AttendanceDeductionTotals(BigDecimal absentDeduction, BigDecimal lateDeduction) {}

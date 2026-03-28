@@ -44,6 +44,9 @@ public enum DeductionType {
     /** Company-initiated cash advances or "Vale" */
     CASH_ADVANCE,
 
+    /** HR-issued one-off correction line for a posted/disputed payslip */
+    MANUAL_ADJUSTMENT,
+
     // --- Attendance & Performance ---
     /** Deductions due to late arrivals or tardiness */
     LATE_PENALTY,

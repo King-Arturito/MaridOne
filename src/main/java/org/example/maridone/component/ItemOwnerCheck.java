@@ -2,6 +2,8 @@ package org.example.maridone.component;
 
 import org.example.maridone.core.user.UserAccount;
 import org.example.maridone.core.user.UserAccountRepository;
+import org.example.maridone.enums.PayrollStatus;
+import org.example.maridone.enums.RunType;
 import org.example.maridone.payroll.run.PayrollItemRepository;
 import org.springframework.stereotype.Component;
 
@@ -23,7 +25,11 @@ public class ItemOwnerCheck implements CheckerInterface {
             return false;
         }
         Long userId = user.getEmployee().getEmployeeId();
-        return payrollItemRepository.findById(itemId)
+        return payrollItemRepository.findByItemIdAndPayrollRun_PayrollStatusAndPayrollRun_RunTypeNot(
+                        itemId,
+                        PayrollStatus.POSTED,
+                        RunType.ADJUSTMENT
+                )
                 .map(item -> {
                     if (item.getEmployee() == null) {
                         return false;

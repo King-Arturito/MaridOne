@@ -2,8 +2,6 @@ package org.example.maridone.payroll;
 
 import org.example.maridone.config.DefaultConfig;
 import org.example.maridone.config.PayrollConfig;
-import org.example.maridone.payroll.item.component.DeductionsRepository;
-import org.example.maridone.payroll.item.component.EarningsRepository;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
@@ -16,8 +14,6 @@ class PayrollCalculatorHolidayMultiplierTest {
     void resolveHolidayAndRestDayRates_ShouldKeepEffectiveMultipliersUnchanged() {
         PayrollConfig payrollConfig = new PayrollConfig();
         PayrollCalculator payrollCalculator = new PayrollCalculator(
-                Mockito.mock(EarningsRepository.class),
-                Mockito.mock(DeductionsRepository.class),
                 new BracketService(payrollConfig),
                 Mockito.mock(DefaultConfig.class),
                 payrollConfig

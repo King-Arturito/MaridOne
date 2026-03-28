@@ -15,7 +15,10 @@ import org.example.maridone.core.employee.Employee;
 import org.example.maridone.core.employee.EmployeeRepository;
 import org.example.maridone.enums.DeductionType;
 import org.example.maridone.enums.ExemptionStatus;
+import org.example.maridone.enums.PayrollStatus;
+import org.example.maridone.enums.RunType;
 import org.example.maridone.enums.Status;
+import org.example.maridone.exception.unauthorized.InvalidActionException;
 import org.example.maridone.holiday.HolidayLookup;
 import org.example.maridone.holiday.HolidayService;
 import org.example.maridone.leave.request.LeaveRequest;
@@ -27,11 +30,11 @@ import org.example.maridone.overtime.OvertimeRequestRepository;
 import org.example.maridone.payroll.BracketService;
 import org.example.maridone.payroll.PayrollCalculator;
 import org.example.maridone.payroll.PayrollService;
+import org.example.maridone.payroll.dto.PayrollRunViewDto;
+import org.example.maridone.payroll.dto.RunCreateDto;
 import org.example.maridone.payroll.item.PayrollItem;
+import org.example.maridone.payroll.item.PayrollItemService;
 import org.example.maridone.payroll.item.component.EarningsLine;
-import org.example.maridone.payroll.item.component.DeductionsRepository;
-import org.example.maridone.payroll.item.component.EarningsRepository;
-import org.example.maridone.payroll.mapper.PayrollMapper;
 import org.example.maridone.schedule.shift.DailyShiftRepository;
 import org.example.maridone.schedule.shift.DailyShiftSchedule;
 import org.example.maridone.schedule.shift.TemplateShiftSchedule;
@@ -46,6 +49,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -62,9 +66,7 @@ class PayrollServiceTest {
     @Mock private LeaveRequestRepository leaveRequestRepository;
     @Mock private HolidayService holidayService;
     @Mock private DefaultConfig defaultConfig;
-    @Mock private EarningsRepository earningsRepository;
-    @Mock private DeductionsRepository deductionsRepository;
-    @Mock private PayrollMapper payrollMapper;
+    @Mock private PayrollItemService payrollItemService;
 
     private PayrollService payrollService;
 
@@ -73,8 +75,6 @@ class PayrollServiceTest {
         PayrollConfig payrollConfig = new PayrollConfig();
         BracketService bracketService = new BracketService(payrollConfig);
         PayrollCalculator payrollCalculator = new PayrollCalculator(
-                earningsRepository,
-                deductionsRepository,
                 bracketService,
                 defaultConfig,
                 payrollConfig
@@ -90,9 +90,9 @@ class PayrollServiceTest {
                 leaveRequestRepository,
                 holidayService,
                 payrollCalculator,
-                payrollMapper,
                 defaultConfig,
-                payrollConfig
+                payrollConfig,
+                payrollItemService
         );
     }
 
@@ -325,11 +325,100 @@ class PayrollServiceTest {
         assertBigDecimalEquals("26687.50", item.getGrossPay());
     }
 
+    @Test
+    void processPayroll_RegularRunShouldReturnGeneratedRunView() {
+        LocalDate workDate = LocalDate.of(2026, 3, 25);
+        RunCreateDto payload = buildRunPayload(workDate, workDate, RunType.REGULAR);
+        PayrollRunViewDto viewDto = new PayrollRunViewDto(
+                77L,
+                workDate,
+                workDate,
+                "Test run",
+                PayrollStatus.IN_PROGRESS,
+                RunType.REGULAR,
+                0L
+        );
+
+        when(payrollRunRepository.existsByPeriodStartAndPeriodEndAndRunType(workDate, workDate, RunType.REGULAR))
+                .thenReturn(false);
+        when(payrollRunRepository.save(any(PayrollRun.class))).thenAnswer(invocation -> {
+            PayrollRun run = invocation.getArgument(0);
+            ReflectionTestUtils.setField(run, "payId", 77L);
+            return run;
+        });
+        when(employeeRepository.findAll(any(Specification.class))).thenReturn(List.of());
+        when(payrollItemRepository.saveAll(anyList())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(payrollRunRepository.findRunViewByPayId(77L)).thenReturn(java.util.Optional.of(viewDto));
+
+        PayrollRunViewDto result = payrollService.processPayroll(payload);
+
+        Assertions.assertEquals(77L, result.getPayId());
+        Assertions.assertEquals(0L, result.getItemCount());
+        verify(payrollItemRepository).saveAll(anyList());
+    }
+
+    @Test
+    void processPayroll_AdjustmentRunShouldRejectAutomaticGeneration() {
+        LocalDate workDate = LocalDate.of(2026, 3, 26);
+        RunCreateDto payload = buildRunPayload(workDate, workDate, RunType.ADJUSTMENT);
+
+        Assertions.assertThrows(InvalidActionException.class, () -> payrollService.processPayroll(payload));
+    }
+
+    @Test
+    void postRun_WithoutPayrollItemsShouldRejectPosting() {
+        PayrollRun run = buildSingleDayRun(LocalDate.of(2026, 3, 27));
+        ReflectionTestUtils.setField(run, "payId", 88L);
+
+        when(payrollRunRepository.findById(88L)).thenReturn(java.util.Optional.of(run));
+        when(payrollItemRepository.countByPayrollRun_PayId(88L)).thenReturn(0L);
+
+        Assertions.assertThrows(InvalidActionException.class, () -> payrollService.postRun(88L));
+    }
+
+    @Test
+    void postRun_AdjustmentRunShouldApplyStagedCorrectionsBeforePosting() {
+        PayrollRun run = buildSingleDayRun(LocalDate.of(2026, 3, 28));
+        ReflectionTestUtils.setField(run, "payId", 89L);
+        run.setRunType(RunType.ADJUSTMENT);
+
+        PayrollRunViewDto viewDto = new PayrollRunViewDto(
+                89L,
+                run.getPeriodStart(),
+                run.getPeriodEnd(),
+                "Adjustment run",
+                PayrollStatus.POSTED,
+                RunType.ADJUSTMENT,
+                1L
+        );
+
+        when(payrollRunRepository.findById(89L)).thenReturn(java.util.Optional.of(run));
+        when(payrollItemRepository.countByPayrollRun_PayId(89L)).thenReturn(1L);
+        when(payrollRunRepository.save(any(PayrollRun.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(payrollRunRepository.findRunViewByPayId(89L)).thenReturn(java.util.Optional.of(viewDto));
+
+        PayrollRunViewDto result = payrollService.postRun(89L);
+
+        Assertions.assertEquals(PayrollStatus.POSTED, run.getPayrollStatus());
+        Assertions.assertEquals(89L, result.getPayId());
+        verify(payrollItemService).applyStagedCorrections(run);
+    }
+
     private PayrollRun buildSingleDayRun(LocalDate date) {
         PayrollRun run = new PayrollRun();
         run.setPeriodStart(date);
         run.setPeriodEnd(date);
         return run;
+    }
+
+    private RunCreateDto buildRunPayload(LocalDate start, LocalDate end, RunType runType) {
+        RunCreateDto payload = new RunCreateDto();
+        payload.setPeriodStart(start);
+        payload.setPeriodEnd(end);
+        payload.setPeriodDescription("Test run");
+        payload.setPayrollStatus(PayrollStatus.IN_PROGRESS);
+        payload.setRunType(runType);
+        return payload;
     }
 
     private Employee buildEmployee(Long employeeId, ExemptionStatus exemptionStatus, String yearlySalary) {

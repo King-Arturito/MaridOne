@@ -7,7 +7,6 @@ import org.example.maridone.marker.OnUpdate;
 import org.example.maridone.payroll.dto.*;
 import org.example.maridone.payroll.item.ItemFilter;
 import org.example.maridone.payroll.item.PayrollItemService;
-import org.example.maridone.payroll.run.PayrollRun;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
@@ -51,17 +50,45 @@ public class PayrollController {
         return payrollItemService.getSummarizedRunItems(payId);
     }
 
-     /*
-        Will be used for manual adjustments
-     */
+    @GetMapping("/run")
+    @PreAuthorize("hasRole('HR')")
+    public List<PayrollRunViewDto> getRuns() {
+        return payrollService.getRuns();
+    }
+
+    @GetMapping("/run/{payId}")
+    @PreAuthorize("hasRole('HR')")
+    public PayrollRunViewDto getRun(@PathVariable Long payId) {
+        return payrollService.getRun(payId);
+    }
+
+    @GetMapping("/item/manage/{itemId}")
+    @PreAuthorize("hasRole('HR')")
+    public CorrectionSourceItemDto getItemForCorrection(@PathVariable Long itemId) {
+        return payrollItemService.getItemForCorrection(itemId);
+    }
+
     @PostMapping("/run/create")
     @PreAuthorize("hasRole('HR')")
     @AuditLog
-    public ResponseEntity<PayrollRun> createRun(@RequestBody @Valid RunCreateDto payload) {
-        PayrollRun run = payrollService.createRun(payload);
+    public ResponseEntity<PayrollRunViewDto> createRun(@RequestBody @Valid RunCreateDto payload) {
+        var run = payrollService.createRun(payload);
         URI location = ServletUriComponentsBuilder
-                .fromCurrentRequest()
-                .path("/{id}")
+                .fromCurrentContextPath()
+                .path("/api/payroll/run/{id}")
+                .buildAndExpand(run.getPayId())
+                .toUri();
+        return ResponseEntity.created(location).body(payrollService.getRun(run.getPayId()));
+    }
+
+    @PostMapping("/run/process")
+    @PreAuthorize("hasRole('HR')")
+    @AuditLog
+    public ResponseEntity<PayrollRunViewDto> processRun(@RequestBody @Valid RunCreateDto payload) {
+        PayrollRunViewDto run = payrollService.processPayroll(payload);
+        URI location = ServletUriComponentsBuilder
+                .fromCurrentContextPath()
+                .path("/api/payroll/run/{id}")
                 .buildAndExpand(run.getPayId())
                 .toUri();
         return ResponseEntity.created(location).body(run);
@@ -70,13 +97,10 @@ public class PayrollController {
     @PatchMapping("/run/{payId}/post")
     @PreAuthorize("hasRole('HR')")
     @AuditLog
-    public ResponseEntity<PayrollRun> postRun(@PathVariable Long payId) {
+    public ResponseEntity<PayrollRunViewDto> postRun(@PathVariable Long payId) {
         return ResponseEntity.ok(payrollService.postRun(payId));
     }
 
-    /*
-       Will probably not be used also since creation of items are automatic when launching payroll
-    */
     @PostMapping("/item/create")
     @PreAuthorize("hasRole('HR')")
     @AuditLog
@@ -89,6 +113,22 @@ public class PayrollController {
                 .toUri();
         return ResponseEntity.created(location).body(item);
     }
+
+    @PostMapping("/run/{payId}/adjustment/correction")
+    @PreAuthorize("hasRole('HR')")
+    @AuditLog
+    public ResponseEntity<ItemDetailsDto> addLineCorrection(
+            @PathVariable Long payId,
+            @RequestBody @Valid PayrollLineCorrectionDto payload
+    ) {
+        ItemDetailsDto item = payrollItemService.addLineCorrection(payId, payload);
+        URI location = ServletUriComponentsBuilder
+                .fromCurrentContextPath()
+                .path("/api/payroll/item/{id}")
+                .buildAndExpand(item.getId())
+                .toUri();
+        return ResponseEntity.created(location).body(item);
+    }
     
     @PatchMapping("/item/update/{itemId}")
     @PreAuthorize("hasRole('HR')")
@@ -97,6 +137,4 @@ public class PayrollController {
         PayrollItemDto item = payrollItemService.updateItem(payload, itemId);
         return ResponseEntity.ok(item);
     }
-
-
 }

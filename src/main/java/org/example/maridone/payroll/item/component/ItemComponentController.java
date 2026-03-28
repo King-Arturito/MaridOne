@@ -22,17 +22,14 @@ public class ItemComponentController {
     }
 
     @GetMapping("/earnings/{itemId}")
-    @PreAuthorize("@itemOwnerCheck.isSelf(#itemId, authentication.getName())")
+    @PreAuthorize("hasRole('HR') or @itemOwnerCheck.isSelf(#itemId, authentication.getName())")
     public List<EarningsDto> getEarnings(@PathVariable Long itemId) {
         return earningsService.getEarnings(itemId);
     }
 
     @GetMapping("/deductions/{itemId}")
-    @PreAuthorize("@itemOwnerCheck.isSelf(#itemId, authentication.getName())")
+    @PreAuthorize("hasRole('HR') or @itemOwnerCheck.isSelf(#itemId, authentication.getName())")
     public List<DeductionsDto> getDeductions(@PathVariable Long itemId) {
         return deductionsService.getDeductions(itemId);
     }
-
-    //create earnings
-    //create deductions
 }

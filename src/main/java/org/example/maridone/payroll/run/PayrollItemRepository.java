@@ -1,5 +1,7 @@
 package org.example.maridone.payroll.run;
 
+import org.example.maridone.enums.PayrollStatus;
+import org.example.maridone.enums.RunType;
 import org.example.maridone.payroll.dto.ItemViewDto;
 import org.example.maridone.payroll.item.ItemFilter;
 import org.example.maridone.payroll.item.PayrollItem;
@@ -12,11 +14,35 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.util.Optional;
 
 @Repository
 public interface PayrollItemRepository extends JpaRepository<PayrollItem, Long>, JpaSpecificationExecutor<PayrollItem> {
 
     List<PayrollItem> findByEmployee_EmployeeId(Long empId);
+
+    List<PayrollItem> findByEmployee_EmployeeIdAndPayrollRun_PayrollStatusOrderByPayrollRun_PeriodEndDescItemIdDesc(
+            Long empId,
+            PayrollStatus payrollStatus
+    );
+
+    List<PayrollItem> findByEmployee_EmployeeIdAndPayrollRun_PayrollStatusAndPayrollRun_RunTypeNotOrderByPayrollRun_PeriodEndDescItemIdDesc(
+            Long empId,
+            PayrollStatus payrollStatus,
+            RunType runType
+    );
+
+    Optional<PayrollItem> findByPayrollRun_PayIdAndEmployee_EmployeeId(Long payId, Long empId);
+
+    Optional<PayrollItem> findByItemIdAndPayrollRun_PayrollStatus(Long itemId, PayrollStatus payrollStatus);
+
+    Optional<PayrollItem> findByItemIdAndPayrollRun_PayrollStatusAndPayrollRun_RunTypeNot(
+            Long itemId,
+            PayrollStatus payrollStatus,
+            RunType runType
+    );
+
+    long countByPayrollRun_PayId(Long payId);
 
     @Query("""
         SELECT new org.example.maridone.payroll.dto.ItemViewDto(
@@ -31,7 +57,7 @@ public interface PayrollItemRepository extends JpaRepository<PayrollItem, Long>,
         JOIN pi.employee e
         WHERE pi.payrollRun.payId = :payId
           AND (:#{#filter.empId} IS NULL OR e.employeeId = :#{#filter.empId})
-          AND (:#{#filter.itemId} IS NULL OR pi.employee.employeeId = :#{#filter.itemId})
+          AND (:#{#filter.itemId} IS NULL OR pi.itemId = :#{#filter.itemId})
           AND (:#{#filter.firstName} IS NULL OR LOWER(e.firstName) LIKE LOWER(CONCAT('%', :#{#filter.firstName}, '%')))
           AND (:#{#filter.lastName} IS NULL OR LOWER(e.lastName) LIKE LOWER(CONCAT('%', :#{#filter.lastName}, '%')))
     """)

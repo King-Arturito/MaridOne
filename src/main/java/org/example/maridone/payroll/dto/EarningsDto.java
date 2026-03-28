@@ -4,6 +4,7 @@ import java.math.BigDecimal;
 
 public class EarningsDto {
     private Long earningsId;
+    private String description;
     private BigDecimal hours;
     private BigDecimal rate;
     private BigDecimal amount;
@@ -16,6 +17,14 @@ public class EarningsDto {
 
     public void setEarningsId(Long earningsId) {
         this.earningsId = earningsId;
+    }
+
+    public String getDescription() {
+        return description;
+    }
+
+    public void setDescription(String description) {
+        this.description = description;
     }
 
     public BigDecimal getHours() {
