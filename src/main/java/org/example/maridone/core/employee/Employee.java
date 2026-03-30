@@ -65,6 +65,9 @@ public class Employee {
     @Email
     private String email;
 
+    @Column(name = "is_verified", nullable = false)
+    private Boolean isVerified = false;
+
     @Column(name = "phone_number", nullable = false, unique = true)
     private String phoneNumber;
 
@@ -202,6 +205,14 @@ public class Employee {
 
     public void setEmail(String email) {
         this.email = email;
+    }
+
+    public Boolean getVerified() {
+        return isVerified;
+    }
+
+    public void setVerified(Boolean verified) {
+        isVerified = verified;
     }
 
     public String getPhoneNumber() {

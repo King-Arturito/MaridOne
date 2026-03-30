@@ -9,7 +9,7 @@ import java.lang.annotation.Target;
 
 @Target(ElementType.METHOD)
 @Retention(RetentionPolicy.RUNTIME)
-public @interface BulkNotify {
+public @interface NotifyRole {
     String message();
     String importance() default "LOW";
     Position targetRole();

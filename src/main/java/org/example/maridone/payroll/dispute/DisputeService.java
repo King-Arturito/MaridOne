@@ -1,10 +1,9 @@
 package org.example.maridone.payroll.dispute;
 
-import org.example.maridone.annotation.BulkNotify;
+import org.example.maridone.annotation.NotifyRole;
 import org.example.maridone.annotation.ExecutionTime;
 import org.example.maridone.annotation.Notify;
 import org.example.maridone.common.CommonSpecs;
-import org.example.maridone.core.employee.Employee;
 import org.example.maridone.enums.PayrollStatus;
 import org.example.maridone.enums.Position;
 import org.example.maridone.enums.Status;
@@ -43,7 +42,7 @@ public class DisputeService {
 
     @Transactional
     @ExecutionTime
-    @BulkNotify(message = "Dispute Requested", targetRole = Position.HR, importance = "HIGH")
+    @NotifyRole(message = "Dispute Requested", targetRole = Position.HR, importance = "HIGH")
     public DisputeRequest createDisputeRequest(Long itemId, DisputeRequestDto payload) {
         PayrollItem item = payrollItemRepository
                 .findByItemIdAndPayrollRun_PayrollStatus(itemId, PayrollStatus.POSTED)
@@ -106,7 +105,7 @@ public class DisputeService {
 
     @ExecutionTime
     @Transactional
-    @BulkNotify(message = "Dispute Request Cancelled.", targetRole = Position.HR)
+    @NotifyRole(message = "Dispute Request Cancelled.", targetRole = Position.HR)
     public void cancelRequest(Long disputeId) {
         DisputeRequest disputeRequest = disputeRepository.findById(disputeId).orElseThrow(() -> new RequestNotFoundException("Dispute Request",disputeId));
         if (disputeRequest.getStatus().equals(Status.APPROVED)) {

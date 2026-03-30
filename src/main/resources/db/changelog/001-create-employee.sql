@@ -8,6 +8,7 @@ CREATE TABLE employee (
     employment_date_end   DATE,
     yearly_salary         NUMERIC(38, 2)  NOT NULL,
     email                 VARCHAR(254)    NOT NULL,
+    is_verified           BOOLEAN         NOT NULL DEFAULT FALSE,
     phone_number          VARCHAR(255)    NOT NULL,
     employment_status     VARCHAR(255)    NOT NULL,
     exemption_status      VARCHAR(255)    NOT NULL,

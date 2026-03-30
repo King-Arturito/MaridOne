@@ -66,4 +66,10 @@ public interface PayrollItemRepository extends JpaRepository<PayrollItem, Long>,
             @Param("filter") ItemFilter filter,
             Pageable pageable
     );
+
+    @Query("""
+    select pi.employee.employeeId from PayrollItem pi
+    where pi.payrollRun.payId = :payId
+""")
+    List<Long> findEmployeeIdsByPayrollRun(@Param("payId") Long payId);
 }

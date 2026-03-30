@@ -3,6 +3,9 @@ CREATE TABLE deductions_line (
     amount          NUMERIC(38, 2)  NOT NULL,
     deduction_type  VARCHAR(255)    NOT NULL,
     item_id         BIGINT          NOT NULL,
+    original_amount NUMERIC(38, 2),
+    adjusted_by     VARCHAR(255),
+    adjusted_at     TIMESTAMPTZ,
 
     CONSTRAINT deductions_line_deduction_type_check CHECK (deduction_type IN (
         'PAGIBIG', 'SSS', 'PHILHEALTH',

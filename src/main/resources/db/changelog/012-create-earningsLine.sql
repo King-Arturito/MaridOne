@@ -6,7 +6,10 @@ CREATE TABLE earnings_line (
     rate            NUMERIC(38, 2),
     is_overtime     BOOLEAN         NOT NULL,
     item_id         BIGINT          NOT NULL,
-    overtime_id   BIGINT          UNIQUE,
+    overtime_id     BIGINT          UNIQUE,
+    original_amount NUMERIC(38, 2),
+    adjusted_by     VARCHAR(255),
+    adjusted_at     TIMESTAMPTZ,
 
     CONSTRAINT fk_earnings_line_payroll_item     FOREIGN KEY (item_id)       REFERENCES payroll_item     (item_id),
     CONSTRAINT fk_earnings_line_overtime_request FOREIGN KEY (overtime_id) REFERENCES overtime_request (overtime_id)

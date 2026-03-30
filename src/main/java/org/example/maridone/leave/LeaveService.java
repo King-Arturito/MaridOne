@@ -37,8 +37,6 @@ import java.time.DayOfWeek;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.LocalTime;
-import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -109,7 +107,7 @@ public class LeaveService {
     @ExecutionTime
     @Transactional
     @AuditLog
-    @BulkNotify(message = "Leave Request has been cancelled", targetRole = Position.HR)
+    @NotifyRole(message = "Leave Request has been cancelled", targetRole = Position.HR)
     public void cancelRequest(Long requestId) {
         LeaveRequest request = leaveRequestRepository.findById(requestId).orElseThrow(() -> new RequestNotFoundException("Leave Request", requestId));
         if (request.getRequestStatus().equals(Status.APPROVED)) {
@@ -182,7 +180,7 @@ public class LeaveService {
 
     @Transactional
     @ExecutionTime
-    @BulkNotify(message = "Leave Request Pending", targetRole = Position.HR, importance = "HIGH")
+    @NotifyRole(message = "Leave Request Pending", targetRole = Position.HR, importance = "HIGH")
     public List<LeaveRequest> createLeaveRequest(LeaveRequestDto payload, Long empId) {
         Employee emp =  employeeRepository.findById(empId).orElseThrow(() -> new EmployeeNotFoundException(empId));
         List<LeaveRequest> requests = new ArrayList<>();

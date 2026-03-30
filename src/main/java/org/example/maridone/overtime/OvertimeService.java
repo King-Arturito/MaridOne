@@ -1,7 +1,6 @@
 package org.example.maridone.overtime;
 
-import org.example.maridone.annotation.AuditLog;
-import org.example.maridone.annotation.BulkNotify;
+import org.example.maridone.annotation.NotifyRole;
 import org.example.maridone.annotation.ExecutionTime;
 import org.example.maridone.annotation.Notify;
 import org.example.maridone.common.CommonSpecs;
@@ -12,7 +11,6 @@ import org.example.maridone.enums.Position;
 import org.example.maridone.enums.Status;
 import org.example.maridone.exception.conflict.OverlappingDatesException;
 import org.example.maridone.exception.notfound.AccountNotFoundException;
-import org.example.maridone.exception.unauthorized.InvalidRangeException;
 import org.example.maridone.exception.unauthorized.OvertimeException;
 import org.example.maridone.overtime.dto.OvertimeRequestDto;
 import org.example.maridone.overtime.dto.OvertimeResponseDto;
@@ -44,7 +42,7 @@ public class OvertimeService {
 
     @Transactional
     @ExecutionTime
-    @BulkNotify(message = "Overtime Requested", importance = "HIGH", targetRole = Position.HR)
+    @NotifyRole(message = "Overtime Requested", importance = "HIGH", targetRole = Position.HR)
     public OvertimeRequest createOvertimeRequest(OvertimeRequestDto requestDto, String username) {
         Specification<Employee> spec = Specification.allOf(
                 EmployeeSpecs.hasUserAccount(username)
@@ -108,7 +106,7 @@ public class OvertimeService {
 
     @Transactional
     @ExecutionTime
-    @BulkNotify(message = "Overtime Request Cancelled.", targetRole = Position.HR)
+    @NotifyRole(message = "Overtime Request Cancelled.", targetRole = Position.HR)
     public void cancelRequest(Long overtimeId) {
         OvertimeRequest overtimeRequest =  overtimeRequestRepository.findById(overtimeId).orElseThrow(() -> new OvertimeException("Overtime Not Found"));
         if (overtimeRequest.getRequestStatus().equals(Status.APPROVED)) {

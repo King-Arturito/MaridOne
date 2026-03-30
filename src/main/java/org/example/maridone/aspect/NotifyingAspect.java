@@ -7,7 +7,8 @@ import org.aspectj.lang.annotation.Around;
 import org.aspectj.lang.annotation.Aspect;
 import org.aspectj.lang.annotation.Pointcut;
 import org.aspectj.lang.reflect.MethodSignature;
-import org.example.maridone.annotation.BulkNotify;
+import org.example.maridone.annotation.NotifyPayRun;
+import org.example.maridone.annotation.NotifyRole;
 import org.example.maridone.annotation.Notify;
 import org.example.maridone.core.employee.Employee;
 import org.example.maridone.core.employee.EmployeeRepository;
@@ -15,6 +16,7 @@ import org.example.maridone.enums.EmploymentStatus;
 import org.example.maridone.exception.notfound.EmployeeNotFoundException;
 import org.example.maridone.notification.Notification;
 import org.example.maridone.notification.NotificationRepository;
+import org.example.maridone.payroll.run.PayrollItemRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.expression.EvaluationContext;
@@ -38,25 +40,33 @@ public class NotifyingAspect {
 
     private final NotificationRepository notificationRepository;
     private final EmployeeRepository employeeRepository;
+    private final PayrollItemRepository payrollItemRepository;
+
     private final ExpressionParser spelParser = new SpelExpressionParser();
 
-    public NotifyingAspect(NotificationRepository notificationRepository, EmployeeRepository employeeRepository) {
+    public NotifyingAspect(NotificationRepository notificationRepository,
+                           PayrollItemRepository payrollItemRepository,
+                           EmployeeRepository employeeRepository) {
         this.notificationRepository  = notificationRepository;
+        this.payrollItemRepository = payrollItemRepository;
         this.employeeRepository = employeeRepository;
     }
 
     @Pointcut("@annotation(org.example.maridone.annotation.Notify)")
     public void notifyUser() {}
 
-    @Pointcut("@annotation(org.example.maridone.annotation.BulkNotify)")
+    @Pointcut("@annotation(org.example.maridone.annotation.NotifyRole)")
     public void notifyRoleBulk() {}
+
+    @Pointcut("@annotation(org.example.maridone.annotation.NotifyPayRun) && args(payId,..)")
+    public void notifyPayRun(Long payId) {}
 
     @AfterReturning("notifyRoleBulk()")
     public void addNotifications(JoinPoint joinPoint) {
         List<Notification> notifications = new ArrayList<>();
         MethodSignature signature = (MethodSignature) joinPoint.getSignature();
         Method method = signature.getMethod();
-        BulkNotify notify = method.getAnnotation(BulkNotify.class);
+        NotifyRole notify = method.getAnnotation(NotifyRole.class);
         List<Long> employeeIds = employeeRepository.findEmployeeIdsByPosition(notify.targetRole(), EmploymentStatus.TERMINATED);
 
         for (Long employeeId : employeeIds) {
@@ -102,6 +112,32 @@ public class NotifyingAspect {
         notificationRepository.save(notif);
 
         logger.info("Notified: {} | Importance: {} | Target: {}", message, importance, targetEmployee);
+        return result;
+    }
+
+    @Around("notifyPayRun(payId)")
+    public Object addPayRunNotification(ProceedingJoinPoint proceedingJoinPoint, Long payId) throws Throwable {
+        Object result = proceedingJoinPoint.proceed();
+
+        List<Notification> notifications = new ArrayList<>();
+        List<Long> empIds = payrollItemRepository.findEmployeeIdsByPayrollRun(payId);
+
+        Instant createdAt = Instant.now();
+        String message = "Pay Run Posted";
+        for (Long employeeId : empIds) {
+            Employee emp = employeeRepository.getReferenceById(employeeId);
+            Notification notification = new Notification();
+            notification.setCreatedAt(createdAt);
+            notification.setEmployee(emp);
+            notification.setReadStatus(false);
+            notification.setMessage(message);
+            notification.setImportance("HIGH");
+            notifications.add(notification);
+        }
+
+        notificationRepository.saveAll(notifications);
+
+        logger.info("Notifications for Payroll Run sent.");
         return result;
     }
 

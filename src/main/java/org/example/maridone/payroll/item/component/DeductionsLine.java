@@ -27,13 +27,13 @@ public class DeductionsLine {
     @Column(name = "amount", nullable = false)
     private BigDecimal amount;
 
-    @Column(name = "original_amount")
+    @Column(name = "original_amount", nullable = true)
     private BigDecimal originalAmount;
 
-    @Column(name = "adjusted_by")
+    @Column(name = "adjusted_by", nullable = true)
     private String adjustedBy;
 
-    @Column(name = "adjusted_at")
+    @Column(name = "adjusted_at", nullable = true)
     private Instant adjustedAt;
 
     public Long getDeductionsId() {
