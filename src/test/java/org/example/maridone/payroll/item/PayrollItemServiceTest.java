@@ -26,6 +26,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.math.BigDecimal;
@@ -174,6 +176,9 @@ public class PayrollItemServiceTest {
 
         Assertions.assertSame(dto, result);
         Assertions.assertEquals(new BigDecimal("800.00"), sourceLine.getAmount());
+        Assertions.assertNull(sourceLine.getOriginalAmount());
+        Assertions.assertNull(sourceLine.getAdjustedBy());
+        Assertions.assertNull(sourceLine.getAdjustedAt());
         Assertions.assertNotNull(savedAdjustmentLine.get());
         Assertions.assertEquals(new BigDecimal("-150.00"), savedAdjustmentLine.get().getAmount());
         Assertions.assertNotNull(savedAdjustmentItem.get());
@@ -237,9 +242,19 @@ public class PayrollItemServiceTest {
         when(payrollItemRepository.save(any(PayrollItem.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(activityLogRepository.save(any(ActivityLog.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        payrollItemService.applyStagedCorrections(targetRun);
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken("hr.payroll", "ignored", List.of())
+        );
+        try {
+            payrollItemService.applyStagedCorrections(targetRun);
+        } finally {
+            SecurityContextHolder.clearContext();
+        }
 
         Assertions.assertEquals(new BigDecimal("650.00"), sourceLine.getAmount());
+        Assertions.assertEquals(new BigDecimal("800.00"), sourceLine.getOriginalAmount());
+        Assertions.assertEquals("hr.payroll", sourceLine.getAdjustedBy());
+        Assertions.assertNotNull(sourceLine.getAdjustedAt());
         Assertions.assertEquals(new BigDecimal("650.00"), sourceItem.getGrossPay());
         Assertions.assertEquals(new BigDecimal("650.00"), sourceItem.getNetPay());
         verify(activityLogRepository).save(argThat(log ->

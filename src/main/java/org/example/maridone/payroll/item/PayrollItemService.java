@@ -42,6 +42,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -258,18 +259,48 @@ public class PayrollItemService {
     }
 
     private void applyLineCorrection(CorrectionSource source, BigDecimal correctedAmount) {
+        String adjustedBy = getCurrentUsername();
+        Instant adjustedAt = Instant.now();
         if (source.earningLine() != null) {
-            source.earningLine().setAmount(correctedAmount);
+            stampAppliedAdjustment(source.earningLine(), correctedAmount, adjustedBy, adjustedAt);
             earningsRepository.save(source.earningLine());
             return;
         }
         if (source.deductionLine() != null) {
-            source.deductionLine().setAmount(correctedAmount);
+            stampAppliedAdjustment(source.deductionLine(), correctedAmount, adjustedBy, adjustedAt);
             deductionsRepository.save(source.deductionLine());
             return;
         }
 
         throw new InvalidActionException("The selected payslip line can no longer be corrected.");
+    }
+
+    private void stampAppliedAdjustment(
+            EarningsLine line,
+            BigDecimal correctedAmount,
+            String adjustedBy,
+            Instant adjustedAt
+    ) {
+        if (line.getOriginalAmount() == null) {
+            line.setOriginalAmount(CommonCalculator.normalize(line.getAmount()));
+        }
+        line.setAmount(correctedAmount);
+        line.setAdjustedBy(adjustedBy);
+        line.setAdjustedAt(adjustedAt);
+    }
+
+    private void stampAppliedAdjustment(
+            DeductionsLine line,
+            BigDecimal correctedAmount,
+            String adjustedBy,
+            Instant adjustedAt
+    ) {
+        if (line.getOriginalAmount() == null) {
+            line.setOriginalAmount(CommonCalculator.normalize(line.getAmount()));
+        }
+        line.setAmount(correctedAmount);
+        line.setAdjustedBy(adjustedBy);
+        line.setAdjustedAt(adjustedAt);
     }
 
     private PayrollItem getOrCreateAdjustmentItem(PayrollRun targetRun, Employee employee) {

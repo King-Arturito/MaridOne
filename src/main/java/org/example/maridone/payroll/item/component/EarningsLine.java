@@ -6,6 +6,7 @@ import org.example.maridone.overtime.OvertimeRequest;
 import org.example.maridone.payroll.item.PayrollItem;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.time.LocalDate;
 
 @Entity
@@ -38,6 +39,15 @@ public class EarningsLine {
 
     @Column(name = "is_overtime", nullable = false)
     private Boolean isOvertime;
+
+    @Column(name = "original_amount")
+    private BigDecimal originalAmount;
+
+    @Column(name = "adjusted_by")
+    private String adjustedBy;
+
+    @Column(name = "adjusted_at")
+    private Instant adjustedAt;
 
     @OneToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "overtime_id", nullable = true)
@@ -94,6 +104,30 @@ public class EarningsLine {
 
     public void setOvertime(Boolean overtime) {
         isOvertime = overtime;
+    }
+
+    public BigDecimal getOriginalAmount() {
+        return originalAmount;
+    }
+
+    public void setOriginalAmount(BigDecimal originalAmount) {
+        this.originalAmount = originalAmount;
+    }
+
+    public String getAdjustedBy() {
+        return adjustedBy;
+    }
+
+    public void setAdjustedBy(String adjustedBy) {
+        this.adjustedBy = adjustedBy;
+    }
+
+    public Instant getAdjustedAt() {
+        return adjustedAt;
+    }
+
+    public void setAdjustedAt(Instant adjustedAt) {
+        this.adjustedAt = adjustedAt;
     }
 
     public OvertimeRequest getOvertimeRequest() {

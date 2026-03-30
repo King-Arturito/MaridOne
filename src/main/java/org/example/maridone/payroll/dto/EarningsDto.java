@@ -1,6 +1,7 @@
 package org.example.maridone.payroll.dto;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 
 public class EarningsDto {
     private Long earningsId;
@@ -8,6 +9,9 @@ public class EarningsDto {
     private BigDecimal hours;
     private BigDecimal rate;
     private BigDecimal amount;
+    private BigDecimal originalAmount;
+    private String adjustedBy;
+    private Instant adjustedAt;
     private boolean isOvertime;
     private Long overtimeId;
 
@@ -49,6 +53,30 @@ public class EarningsDto {
 
     public void setAmount(BigDecimal amount) {
         this.amount = amount;
+    }
+
+    public BigDecimal getOriginalAmount() {
+        return originalAmount;
+    }
+
+    public void setOriginalAmount(BigDecimal originalAmount) {
+        this.originalAmount = originalAmount;
+    }
+
+    public String getAdjustedBy() {
+        return adjustedBy;
+    }
+
+    public void setAdjustedBy(String adjustedBy) {
+        this.adjustedBy = adjustedBy;
+    }
+
+    public Instant getAdjustedAt() {
+        return adjustedAt;
+    }
+
+    public void setAdjustedAt(Instant adjustedAt) {
+        this.adjustedAt = adjustedAt;
     }
 
     public boolean isOvertime() {

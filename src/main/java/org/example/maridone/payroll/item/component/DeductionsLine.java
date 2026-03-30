@@ -5,6 +5,7 @@ import org.example.maridone.enums.DeductionType;
 import org.example.maridone.payroll.item.PayrollItem;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 
 @Entity
 @Table(name = "deductions_line")
@@ -25,6 +26,15 @@ public class DeductionsLine {
 
     @Column(name = "amount", nullable = false)
     private BigDecimal amount;
+
+    @Column(name = "original_amount")
+    private BigDecimal originalAmount;
+
+    @Column(name = "adjusted_by")
+    private String adjustedBy;
+
+    @Column(name = "adjusted_at")
+    private Instant adjustedAt;
 
     public Long getDeductionsId() {
         return deductionsId;
@@ -52,5 +62,29 @@ public class DeductionsLine {
 
     public void setAmount(BigDecimal amount) {
         this.amount = amount;
+    }
+
+    public BigDecimal getOriginalAmount() {
+        return originalAmount;
+    }
+
+    public void setOriginalAmount(BigDecimal originalAmount) {
+        this.originalAmount = originalAmount;
+    }
+
+    public String getAdjustedBy() {
+        return adjustedBy;
+    }
+
+    public void setAdjustedBy(String adjustedBy) {
+        this.adjustedBy = adjustedBy;
+    }
+
+    public Instant getAdjustedAt() {
+        return adjustedAt;
+    }
+
+    public void setAdjustedAt(Instant adjustedAt) {
+        this.adjustedAt = adjustedAt;
     }
 }
