@@ -72,4 +72,6 @@ public interface PayrollItemRepository extends JpaRepository<PayrollItem, Long>,
     where pi.payrollRun.payId = :payId
 """)
     List<Long> findEmployeeIdsByPayrollRun(@Param("payId") Long payId);
+
+    List<PayrollItem> findByPayrollRun_PayId(Long payId);
 }

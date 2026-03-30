@@ -4,5 +4,5 @@ import java.math.BigDecimal;
 
 public interface PayTypeSummaryProjection {
     String getType();
-    BigDecimal getTotalAmount(); // Or Double, depending on your database column
+    BigDecimal getTotalAmount();
 }

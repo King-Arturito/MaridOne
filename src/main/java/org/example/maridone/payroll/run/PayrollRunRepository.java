@@ -2,6 +2,7 @@ package org.example.maridone.payroll.run;
 
 import org.example.maridone.enums.RunType;
 import org.example.maridone.payroll.dto.PayrollRunViewDto;
+import org.example.maridone.payroll.payslip.PayslipProjection;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -51,4 +52,9 @@ public interface PayrollRunRepository extends JpaRepository<PayrollRun, Long> {
         GROUP BY pr.payId, pr.periodStart, pr.periodEnd, pr.periodDescription, pr.payrollStatus, pr.runType
     """)
     Optional<PayrollRunViewDto> findRunViewByPayId(@Param("payId") Long payId);
+
+    @Query("""
+    select pr.periodStart, pr.periodEnd from PayrollRun pr where pr.payId = :payId
+""")
+    PayslipProjection findPayPeriod(@Param("payId") Long payId);
 }

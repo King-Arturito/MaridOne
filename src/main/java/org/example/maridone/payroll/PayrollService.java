@@ -14,6 +14,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 import org.example.maridone.annotation.ExecutionTime;
+import org.example.maridone.annotation.GeneratePayslip;
 import org.example.maridone.annotation.NotifyPayRun;
 import org.example.maridone.common.CommonSpecs;
 import org.example.maridone.config.DefaultConfig;
@@ -114,10 +115,10 @@ public class PayrollService {
         return run;
     }
 
-    //todo: notify everyone inside the payroll run
     @Transactional
     @ExecutionTime
     @NotifyPayRun
+    @GeneratePayslip
     public PayrollRunViewDto postRun(Long payId) {
         PayrollRun run = payrollRunRepository.findById(payId)
                 .orElseThrow(() -> new RunNotFoundException("Payroll Run ID:" + payId + " not found."));

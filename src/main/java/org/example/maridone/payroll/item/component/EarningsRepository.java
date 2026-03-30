@@ -11,6 +11,10 @@ import java.util.List;
 public interface EarningsRepository extends JpaRepository<EarningsLine, Long> {
     List<EarningsLine> findByPayrollItem_ItemId(Long itemId);
 
+    List<EarningsLine> findByPayrollItem_ItemIdInOrderByEarningsDateAsc(List<Long> itemIds);
+
+    List<EarningsLine>  findByPayrollItem_ItemIdOrderByEarningsDateAsc(Long itemId);
+
     @Query(value = """
     SELECT
         CASE

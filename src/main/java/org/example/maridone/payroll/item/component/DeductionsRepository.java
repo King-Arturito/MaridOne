@@ -13,6 +13,8 @@ public interface DeductionsRepository extends JpaRepository<DeductionsLine, Long
 
     List<DeductionsLine> findByPayrollItem_ItemId(Long itemId);
 
+    List<DeductionsLine> findByPayrollItem_ItemIdIn(List<Long> itemIds);
+
     @Query(value = """
     SELECT
         d.deduction_type AS type,
