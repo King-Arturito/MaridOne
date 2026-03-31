@@ -164,12 +164,12 @@ public class PayslipService {
                 throw new RuntimeException("Unknown Error: No PayrollItem for employee " + employee.getEmployeeId());
             }
 
-            // Retrieve pre-fetched lists from the Maps (using getOrDefault to avoid nulls if lists are empty)
+            // Retrieve prefetched lists
             List<EarningsLine> employeeEarningsLines = earningsMap.getOrDefault(item.getItemId(), Collections.emptyList());
             List<DeductionsLine> employeeDeductionsLines = deductionsMap.getOrDefault(item.getItemId(), Collections.emptyList());
             List<AttendanceLog> employeeLogs = logsMap.getOrDefault(employee.getEmployeeId(), Collections.emptyList());
 
-            // Process data using updated helper methods
+            // Process data
             List<PayBreakdown> earnings = buildEarningsList(employeeEarningsLines);
             List<PayBreakdown> deductions = buildDeductionsList(employeeDeductionsLines);
             Integer workedDays = resolveWorkedDays(employeeLogs);
