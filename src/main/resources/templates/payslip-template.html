@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8"/>
+    <title>Payslip</title>
+</head>
+<body>
+
+<h1>Payslip Details</h1>
+
+<div>
+    <p><strong>Name:</strong> <span th:text="${details.name}">Employee Name</span></p>
+    <p><strong>Department:</strong> <span th:text="${details.department}">Department</span></p>
+    <p><strong>Designation:</strong> <span th:text="${details.designation}">Designation</span></p>
+    <p><strong>Pay Period:</strong> <span th:text="${details.periodStart}">Start Date</span> to <span th:text="${details.periodEnd}">End Date</span></p>
+    <p><strong>Worked Days:</strong> <span th:text="${details.workedDays}">0</span></p>
+</div>
+
+<hr />
+
+<h2>Earnings</h2>
+<ul>
+    <li th:each="earning : ${details.earningsList}">
+        <span th:text="${earning.name}">Earning Name</span>:
+        <span th:text="${earning.amount}">0.00</span>
+    </li>
+</ul>
+<p><strong>Overall Earnings:</strong> <span th:text="${details.overallEarnings}">0.00</span></p>
+
+<hr />
+
+<h2>Deductions</h2>
+<ul>
+    <li th:each="deduction : ${details.deductionsBreakdownList}">
+        <span th:text="${deduction.name}">Deduction Name</span>:
+        <span th:text="${deduction.amount}">0.00</span>
+    </li>
+</ul>
+<p><strong>Overall Deductions:</strong> <span th:text="${details.overallDeductions}">0.00</span></p>
+
+</body>
+</html>

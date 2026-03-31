@@ -54,7 +54,9 @@ public interface PayrollRunRepository extends JpaRepository<PayrollRun, Long> {
     Optional<PayrollRunViewDto> findRunViewByPayId(@Param("payId") Long payId);
 
     @Query("""
-    select pr.periodStart, pr.periodEnd from PayrollRun pr where pr.payId = :payId
-""")
+        select pr.periodStart as payPeriodStart, pr.periodEnd as payPeriodEnd
+        from PayrollRun pr
+        where pr.payId = :payId
+    """)
     PayslipProjection findPayPeriod(@Param("payId") Long payId);
 }
