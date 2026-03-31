@@ -50,6 +50,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -366,6 +367,19 @@ class PayrollServiceTest {
     }
 
     @Test
+    void createRun_ShouldAlwaysStartInProgress() {
+        LocalDate workDate = LocalDate.of(2026, 3, 27);
+        RunCreateDto payload = buildRunPayload(workDate, workDate, RunType.REGULAR);
+        payload.setPayrollStatus(PayrollStatus.POSTED);
+
+        when(payrollRunRepository.save(any(PayrollRun.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        PayrollRun result = payrollService.createRun(payload);
+
+        Assertions.assertEquals(PayrollStatus.IN_PROGRESS, result.getPayrollStatus());
+    }
+
+    @Test
     void postRun_WithoutPayrollItemsShouldRejectPosting() {
         PayrollRun run = buildSingleDayRun(LocalDate.of(2026, 3, 27));
         ReflectionTestUtils.setField(run, "payId", 88L);
@@ -377,7 +391,7 @@ class PayrollServiceTest {
     }
 
     @Test
-    void postRun_AdjustmentRunShouldApplyStagedCorrectionsBeforePosting() {
+    void postRun_AdjustmentRunShouldPostWithoutUsingLegacyCorrectionService() {
         PayrollRun run = buildSingleDayRun(LocalDate.of(2026, 3, 28));
         ReflectionTestUtils.setField(run, "payId", 89L);
         run.setRunType(RunType.ADJUSTMENT);
@@ -401,7 +415,7 @@ class PayrollServiceTest {
 
         Assertions.assertEquals(PayrollStatus.POSTED, run.getPayrollStatus());
         Assertions.assertEquals(89L, result.getPayId());
-        verify(payrollItemService).applyStagedCorrections(run);
+        verifyNoInteractions(payrollItemService);
     }
 
     private PayrollRun buildSingleDayRun(LocalDate date) {

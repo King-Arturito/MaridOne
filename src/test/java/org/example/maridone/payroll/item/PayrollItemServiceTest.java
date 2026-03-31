@@ -4,13 +4,17 @@ import org.example.maridone.core.employee.Employee;
 import org.example.maridone.core.employee.EmployeeRepository;
 import org.example.maridone.enums.Activity;
 import org.example.maridone.enums.AdjustmentKind;
+import org.example.maridone.enums.DeductionType;
 import org.example.maridone.enums.PayrollStatus;
 import org.example.maridone.enums.RunType;
+import org.example.maridone.exception.unauthorized.InvalidActionException;
 import org.example.maridone.log.ActivityLogRepository;
 import org.example.maridone.log.activity.ActivityLog;
 import org.example.maridone.payroll.dto.EarningsDto;
 import org.example.maridone.payroll.dto.ItemDetailsDto;
+import org.example.maridone.payroll.dto.PayrollItemDto;
 import org.example.maridone.payroll.dto.PayrollLineCorrectionDto;
+import org.example.maridone.payroll.item.component.DeductionsLine;
 import org.example.maridone.payroll.item.component.DeductionsRepository;
 import org.example.maridone.payroll.item.component.DeductionsService;
 import org.example.maridone.payroll.item.component.EarningsLine;
@@ -26,8 +30,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.math.BigDecimal;
@@ -38,7 +40,6 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
-import static org.mockito.Mockito.atLeast;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -78,10 +79,9 @@ public class PayrollItemServiceTest {
         org.example.maridone.payroll.dto.DeductionsDto deductionsDto = new org.example.maridone.payroll.dto.DeductionsDto();
         deductionsDto.setAmount(new BigDecimal("200.00"));
 
-        when(payrollItemRepository.findByEmployee_EmployeeIdAndPayrollRun_PayrollStatusAndPayrollRun_RunTypeNotOrderByPayrollRun_PeriodEndDescItemIdDesc(
+        when(payrollItemRepository.findByEmployee_EmployeeIdAndPayrollRun_PayrollStatusOrderByPayrollRun_PeriodEndDescItemIdDesc(
                 empId,
-                PayrollStatus.POSTED,
-                RunType.ADJUSTMENT
+                PayrollStatus.POSTED
         )).thenReturn(List.of(item));
         when(payrollMapper.toItemDetailsDto(item)).thenReturn(dto);
         when(earningsService.getEarnings(14L)).thenReturn(List.of(earningsDto));
@@ -95,7 +95,22 @@ public class PayrollItemServiceTest {
     }
 
     @Test
-    void addLineCorrection_ShouldStageAdjustmentInsideAdjustmentRun() {
+    void createItem_ShouldRejectPostedRun() {
+        PayrollRun postedRun = new PayrollRun();
+        ReflectionTestUtils.setField(postedRun, "payId", 5L);
+        postedRun.setPayrollStatus(PayrollStatus.POSTED);
+
+        PayrollItemDto payload = new PayrollItemDto();
+        payload.setPayId(5L);
+        payload.setEmpId(10L);
+
+        when(payrollRunRepository.findById(5L)).thenReturn(Optional.of(postedRun));
+
+        Assertions.assertThrows(InvalidActionException.class, () -> payrollItemService.createItem(payload));
+    }
+
+    @Test
+    void addLineCorrection_ShouldCreateDeductionLineInsideAdjustmentRun() {
         PayrollRun targetRun = new PayrollRun();
         ReflectionTestUtils.setField(targetRun, "payId", 5L);
         targetRun.setRunType(RunType.ADJUSTMENT);
@@ -136,7 +151,7 @@ public class PayrollItemServiceTest {
 
         ItemDetailsDto dto = new ItemDetailsDto();
         AtomicReference<PayrollItem> savedAdjustmentItem = new AtomicReference<>();
-        AtomicReference<EarningsLine> savedAdjustmentLine = new AtomicReference<>();
+        AtomicReference<DeductionsLine> savedAdjustmentLine = new AtomicReference<>();
 
         when(payrollRunRepository.findById(5L)).thenReturn(Optional.of(targetRun));
         when(payrollItemRepository.findByItemIdAndPayrollRun_PayrollStatusAndPayrollRun_RunTypeNot(
@@ -155,20 +170,18 @@ public class PayrollItemServiceTest {
         });
         when(earningsRepository.findById(77L)).thenReturn(Optional.of(sourceLine));
         when(earningsService.getOriginalEarnings(21L)).thenReturn(List.of(sourceLineDto));
-        when(activityLogRepository.findByActivityTypeAndMessageStartingWithOrderByActivityIdAsc(Activity.MODIFY, "PAYCORR|run=5|"))
-                .thenReturn(List.of());
-        when(earningsRepository.save(any(EarningsLine.class))).thenAnswer(invocation -> {
-            EarningsLine line = invocation.getArgument(0);
-            if (ReflectionTestUtils.getField(line, "earningsId") == null) {
-                ReflectionTestUtils.setField(line, "earningsId", 44L);
+        when(deductionsRepository.save(any(DeductionsLine.class))).thenAnswer(invocation -> {
+            DeductionsLine line = invocation.getArgument(0);
+            if (ReflectionTestUtils.getField(line, "deductionsId") == null) {
+                ReflectionTestUtils.setField(line, "deductionsId", 55L);
             }
             savedAdjustmentLine.set(line);
             return line;
         });
-        when(deductionsRepository.findByPayrollItem_ItemId(31L)).thenReturn(List.of());
-        when(earningsRepository.findByPayrollItem_ItemId(31L)).thenAnswer(invocation ->
+        when(deductionsRepository.findByPayrollItem_ItemId(31L)).thenAnswer(invocation ->
                 savedAdjustmentLine.get() == null ? List.of() : List.of(savedAdjustmentLine.get())
         );
+        when(earningsRepository.findByPayrollItem_ItemId(31L)).thenReturn(List.of());
         when(activityLogRepository.save(any(ActivityLog.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(payrollMapper.toItemDetailsDto(any(PayrollItem.class))).thenReturn(dto);
 
@@ -180,88 +193,17 @@ public class PayrollItemServiceTest {
         Assertions.assertNull(sourceLine.getAdjustedBy());
         Assertions.assertNull(sourceLine.getAdjustedAt());
         Assertions.assertNotNull(savedAdjustmentLine.get());
-        Assertions.assertEquals(new BigDecimal("-150.00"), savedAdjustmentLine.get().getAmount());
+        Assertions.assertEquals(DeductionType.MANUAL_ADJUSTMENT, savedAdjustmentLine.get().getDeductionType());
+        Assertions.assertEquals(new BigDecimal("150.00"), savedAdjustmentLine.get().getAmount());
         Assertions.assertNotNull(savedAdjustmentItem.get());
-        Assertions.assertEquals(new BigDecimal("-150.00"), savedAdjustmentItem.get().getGrossPay());
+        Assertions.assertEquals(new BigDecimal("0.00"), savedAdjustmentItem.get().getGrossPay());
         Assertions.assertEquals(new BigDecimal("-150.00"), savedAdjustmentItem.get().getNetPay());
         verify(activityLogRepository).save(argThat(log ->
                 log != null
+                        && log.getActivityType() == Activity.MODIFY
                         && log.getMessage() != null
-                        && log.getMessage().startsWith("PAYCORR|run=5|srcItem=21|srcType=EARNING|srcLine=77|corr=650.00|adjItem=31|adjType=EARNING|adjLine=44")
-        ));
-        verify(activityLogRepository, atLeast(2)).save(any(ActivityLog.class));
-    }
-
-    @Test
-    void applyStagedCorrections_ShouldUpdateOriginalLineWhenAdjustmentRunPosts() {
-        PayrollRun targetRun = new PayrollRun();
-        ReflectionTestUtils.setField(targetRun, "payId", 5L);
-        targetRun.setRunType(RunType.ADJUSTMENT);
-        targetRun.setPayrollStatus(PayrollStatus.IN_PROGRESS);
-
-        PayrollRun sourceRun = new PayrollRun();
-        sourceRun.setRunType(RunType.REGULAR);
-        sourceRun.setPayrollStatus(PayrollStatus.POSTED);
-
-        Employee employee = new Employee();
-        ReflectionTestUtils.setField(employee, "employeeId", 10L);
-
-        PayrollItem sourceItem = new PayrollItem();
-        ReflectionTestUtils.setField(sourceItem, "itemId", 21L);
-        sourceItem.setEmployee(employee);
-        sourceItem.setPayrollRun(sourceRun);
-
-        EarningsLine sourceLine = new EarningsLine();
-        ReflectionTestUtils.setField(sourceLine, "earningsId", 77L);
-        sourceLine.setPayrollItem(sourceItem);
-        sourceLine.setAmount(new BigDecimal("800.00"));
-        sourceLine.setHours(BigDecimal.ZERO);
-        sourceLine.setRate(BigDecimal.ZERO);
-        sourceLine.setOvertime(false);
-
-        EarningsDto sourceLineDto = new EarningsDto();
-        sourceLineDto.setEarningsId(77L);
-        sourceLineDto.setDescription("Basic Pay");
-
-        ActivityLog stagedCorrection = new ActivityLog();
-        stagedCorrection.setActivityType(Activity.MODIFY);
-        stagedCorrection.setMessage("PAYCORR|run=5|srcItem=21|srcType=EARNING|srcLine=77|corr=650.00|adjItem=31|adjType=EARNING|adjLine=44");
-
-        when(activityLogRepository.findByActivityTypeAndMessageStartingWithOrderByActivityIdAsc(Activity.MODIFY, "PAYCORR|run=5|"))
-                .thenReturn(List.of(stagedCorrection));
-        when(payrollItemRepository.findByItemIdAndPayrollRun_PayrollStatusAndPayrollRun_RunTypeNot(
-                21L,
-                PayrollStatus.POSTED,
-                RunType.ADJUSTMENT
-        )).thenReturn(Optional.of(sourceItem));
-        when(earningsRepository.findById(77L)).thenReturn(Optional.of(sourceLine));
-        when(earningsService.getOriginalEarnings(21L)).thenReturn(List.of(sourceLineDto));
-        when(earningsRepository.save(any(EarningsLine.class))).thenAnswer(invocation -> invocation.getArgument(0));
-        when(earningsRepository.findByPayrollItem_ItemId(21L)).thenReturn(List.of(sourceLine));
-        when(deductionsRepository.findByPayrollItem_ItemId(21L)).thenReturn(List.of());
-        when(payrollItemRepository.save(any(PayrollItem.class))).thenAnswer(invocation -> invocation.getArgument(0));
-        when(activityLogRepository.save(any(ActivityLog.class))).thenAnswer(invocation -> invocation.getArgument(0));
-
-        SecurityContextHolder.getContext().setAuthentication(
-                new UsernamePasswordAuthenticationToken("hr.payroll", "ignored", List.of())
-        );
-        try {
-            payrollItemService.applyStagedCorrections(targetRun);
-        } finally {
-            SecurityContextHolder.clearContext();
-        }
-
-        Assertions.assertEquals(new BigDecimal("650.00"), sourceLine.getAmount());
-        Assertions.assertEquals(new BigDecimal("800.00"), sourceLine.getOriginalAmount());
-        Assertions.assertEquals("hr.payroll", sourceLine.getAdjustedBy());
-        Assertions.assertNotNull(sourceLine.getAdjustedAt());
-        Assertions.assertEquals(new BigDecimal("650.00"), sourceItem.getGrossPay());
-        Assertions.assertEquals(new BigDecimal("650.00"), sourceItem.getNetPay());
-        verify(activityLogRepository).save(argThat(log ->
-                log != null
-                        && log.getMessage() != null
-                        && log.getMessage().contains("correction applied")
-                        && log.getMessage().contains("800.00->650.00")
+                        && !log.getMessage().startsWith("PAYCORR|")
+                        && log.getMessage().contains("emp #10 item #21 Basic Pay line #77 800.00->650.00 in adj run #5")
         ));
     }
 }

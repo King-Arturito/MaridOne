@@ -7,6 +7,7 @@ import org.example.maridone.core.employee.Employee;
 import org.example.maridone.core.employee.EmployeeRepository;
 import org.example.maridone.enums.Activity;
 import org.example.maridone.enums.AdjustmentKind;
+import org.example.maridone.enums.DeductionType;
 import org.example.maridone.enums.PayrollStatus;
 import org.example.maridone.enums.RunType;
 import org.example.maridone.exception.notfound.EmployeeNotFoundException;
@@ -42,17 +43,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
-import java.time.Instant;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
-import java.util.Optional;
 
 @Service
 public class PayrollItemService {
-    private static final String CORRECTION_STAGE_PREFIX = "PAYCORR|";
-
     private final PayrollItemRepository payrollItemRepository;
     private final PayrollMapper payrollMapper;
     private final PayrollRunRepository payrollRunRepository;
@@ -89,10 +84,9 @@ public class PayrollItemService {
     @ExecutionTime
     public List<ItemDetailsDto> getItems(Long empId) {
         List<PayrollItem> items = payrollItemRepository
-                .findByEmployee_EmployeeIdAndPayrollRun_PayrollStatusAndPayrollRun_RunTypeNotOrderByPayrollRun_PeriodEndDescItemIdDesc(
+                .findByEmployee_EmployeeIdAndPayrollRun_PayrollStatusOrderByPayrollRun_PeriodEndDescItemIdDesc(
                         empId,
-                        PayrollStatus.POSTED,
-                        RunType.ADJUSTMENT
+                        PayrollStatus.POSTED
                 );
         return items.stream()
                 .map(this::toDisplayedItemDetails)
@@ -106,6 +100,11 @@ public class PayrollItemService {
         PayrollRun run = payrollRunRepository.findById(payload.getPayId()).orElseThrow(
                 () -> new RunNotFoundException("Payroll Run ID:" + payload.getPayId() + " not found.")
         );
+        assertRunIsEditable(run);
+        payrollItemRepository.findByPayrollRun_PayIdAndEmployee_EmployeeId(payload.getPayId(), payload.getEmpId())
+                .ifPresent(existing -> {
+                    throw new InvalidActionException("This employee already has a payroll item in the selected payroll run.");
+                });
 
         Employee emp = employeeRepository.findById(payload.getEmpId()).orElseThrow(
                 () -> new EmployeeNotFoundException(payload.getEmpId())
@@ -117,19 +116,6 @@ public class PayrollItemService {
         item.setNetPay(BigDecimal.ZERO.setScale(2));
         payrollItemRepository.save(item);
         return payrollMapper.toItemDetailsDto(item);
-    }
-
-    @Transactional
-    @ExecutionTime
-    public PayrollItemDto updateItem(PayrollItemDto payload, Long itemId) {
-        PayrollItem item = payrollItemRepository.findById(itemId).orElseThrow(
-                () -> new ItemNotFoundException(itemId)
-        );
-
-        item.setGrossPay(payload.getGrossPay());
-        item.setNetPay(payload.getNetPay());
-        payrollItemRepository.save(item);
-        return payrollMapper.toPayrollItemDto(item);
     }
 
     @ExecutionTime
@@ -172,55 +158,17 @@ public class PayrollItemService {
         }
 
         PayrollItem adjustmentItem = getOrCreateAdjustmentItem(targetRun, source.employee());
-        Optional<PendingCorrection> existingCorrection = findPendingCorrection(
-                payId,
-                source.sourceItem().getItemId(),
-                source.sourceLineType(),
-                source.sourceLineId()
-        );
-        StagedAdjustment stagedAdjustment = stageLineCorrection(
+        stageLineCorrection(
                 targetRun,
                 adjustmentItem,
                 source,
-                correctedAmount,
-                existingCorrection.orElse(null)
+                correctedAmount
         );
 
         refreshItemTotals(adjustmentItem);
         payrollItemRepository.save(adjustmentItem);
-        saveCorrectionStage(targetRun, source, correctedAmount, stagedAdjustment);
         logLineCorrectionStaged(targetRun, source, correctedAmount);
         return payrollMapper.toItemDetailsDto(adjustmentItem);
-    }
-
-    @Transactional
-    public void applyStagedCorrections(PayrollRun targetRun) {
-        if (targetRun == null || targetRun.getPayId() == null || targetRun.getRunType() != RunType.ADJUSTMENT) {
-            return;
-        }
-
-        Map<String, PendingCorrection> pendingCorrections = getPendingCorrections(targetRun.getPayId());
-        if (pendingCorrections.isEmpty()) {
-            return;
-        }
-
-        Map<Long, PayrollItem> sourceItemsToRefresh = new LinkedHashMap<>();
-        for (PendingCorrection correction : pendingCorrections.values()) {
-            PayrollItem sourceItem = getPostedSourceItem(correction.sourceItemId());
-            Employee employee = getCorrectionEmployee(sourceItem);
-            CorrectionSource source = correction.sourceLineType() == AdjustmentKind.EARNING
-                    ? resolveEarningCorrectionSource(sourceItem, employee, correction.sourceLineId())
-                    : resolveDeductionCorrectionSource(sourceItem, employee, correction.sourceLineId());
-
-            applyLineCorrection(source, correction.correctedAmount());
-            sourceItemsToRefresh.put(sourceItem.getItemId(), sourceItem);
-            logLineCorrectionApplied(targetRun, source, correction.correctedAmount());
-        }
-
-        sourceItemsToRefresh.values().forEach(item -> {
-            refreshItemTotals(item);
-            payrollItemRepository.save(item);
-        });
     }
 
     public List<PayTypeSummaryDto> getSummarizedRunItems(Long payId) {
@@ -244,9 +192,7 @@ public class PayrollItemService {
         if (run.getRunType() != RunType.ADJUSTMENT) {
             throw new InvalidActionException("Manual adjustments can only be added to adjustment payroll runs.");
         }
-        if (run.getPayrollStatus() == PayrollStatus.POSTED) {
-            throw new InvalidActionException("This adjustment payroll run has already been posted.");
-        }
+        assertRunIsEditable(run);
         return run;
     }
 
@@ -256,51 +202,6 @@ public class PayrollItemService {
             throw new InvalidActionException("Corrected amount cannot be negative.");
         }
         return normalizedAmount;
-    }
-
-    private void applyLineCorrection(CorrectionSource source, BigDecimal correctedAmount) {
-        String adjustedBy = getCurrentUsername();
-        Instant adjustedAt = Instant.now();
-        if (source.earningLine() != null) {
-            stampAppliedAdjustment(source.earningLine(), correctedAmount, adjustedBy, adjustedAt);
-            earningsRepository.save(source.earningLine());
-            return;
-        }
-        if (source.deductionLine() != null) {
-            stampAppliedAdjustment(source.deductionLine(), correctedAmount, adjustedBy, adjustedAt);
-            deductionsRepository.save(source.deductionLine());
-            return;
-        }
-
-        throw new InvalidActionException("The selected payslip line can no longer be corrected.");
-    }
-
-    private void stampAppliedAdjustment(
-            EarningsLine line,
-            BigDecimal correctedAmount,
-            String adjustedBy,
-            Instant adjustedAt
-    ) {
-        if (line.getOriginalAmount() == null) {
-            line.setOriginalAmount(CommonCalculator.normalize(line.getAmount()));
-        }
-        line.setAmount(correctedAmount);
-        line.setAdjustedBy(adjustedBy);
-        line.setAdjustedAt(adjustedAt);
-    }
-
-    private void stampAppliedAdjustment(
-            DeductionsLine line,
-            BigDecimal correctedAmount,
-            String adjustedBy,
-            Instant adjustedAt
-    ) {
-        if (line.getOriginalAmount() == null) {
-            line.setOriginalAmount(CommonCalculator.normalize(line.getAmount()));
-        }
-        line.setAmount(correctedAmount);
-        line.setAdjustedBy(adjustedBy);
-        line.setAdjustedAt(adjustedAt);
     }
 
     private PayrollItem getOrCreateAdjustmentItem(PayrollRun targetRun, Employee employee) {
@@ -320,23 +221,26 @@ public class PayrollItemService {
                 });
     }
 
-    private StagedAdjustment stageLineCorrection(
+    private void stageLineCorrection(
             PayrollRun targetRun,
             PayrollItem adjustmentItem,
             CorrectionSource source,
-            BigDecimal correctedAmount,
-            PendingCorrection existingCorrection
+            BigDecimal correctedAmount
     ) {
         BigDecimal netAdjustment = calculateNetAdjustment(source, correctedAmount);
-        BigDecimal stagedAmount = CommonCalculator.normalize(netAdjustment);
+        BigDecimal stagedAmount = CommonCalculator.normalize(netAdjustment.abs());
 
-        if (stagedAmount.compareTo(BigDecimal.ZERO.setScale(2)) == 0) {
+        if (netAdjustment.compareTo(BigDecimal.ZERO.setScale(2)) == 0) {
             throw new InvalidActionException("The corrected amount matches the original line, so no adjustment is needed.");
         }
 
-        deleteExistingDeductionLine(existingCorrection);
-        EarningsLine line = upsertAdjustmentEarningLine(targetRun, adjustmentItem, existingCorrection, stagedAmount);
-        return new StagedAdjustment(adjustmentItem.getItemId(), AdjustmentKind.EARNING, line.getEarningsId(), stagedAmount);
+        AdjustmentKind targetLineType = netAdjustment.signum() > 0 ? AdjustmentKind.EARNING : AdjustmentKind.DEDUCTION;
+        if (targetLineType == AdjustmentKind.EARNING) {
+            createAdjustmentEarningLine(targetRun, adjustmentItem, stagedAmount);
+            return;
+        }
+
+        createAdjustmentDeductionLine(adjustmentItem, stagedAmount);
     }
 
     private BigDecimal calculateNetAdjustment(CorrectionSource source, BigDecimal correctedAmount) {
@@ -345,22 +249,12 @@ public class PayrollItemService {
                 : source.sourceAmount().subtract(correctedAmount);
     }
 
-    private void deleteExistingDeductionLine(PendingCorrection existingCorrection) {
-        if (existingCorrection == null || existingCorrection.adjustmentLineType() != AdjustmentKind.DEDUCTION) {
-            return;
-        }
-        deductionsRepository.findById(existingCorrection.adjustmentLineId()).ifPresent(deductionsRepository::delete);
-    }
-
-    private EarningsLine upsertAdjustmentEarningLine(
+    private EarningsLine createAdjustmentEarningLine(
             PayrollRun targetRun,
             PayrollItem adjustmentItem,
-            PendingCorrection existingCorrection,
             BigDecimal stagedAmount
     ) {
-        EarningsLine line = existingCorrection != null && existingCorrection.adjustmentLineType() == AdjustmentKind.EARNING
-                ? earningsRepository.findById(existingCorrection.adjustmentLineId()).orElseGet(EarningsLine::new)
-                : new EarningsLine();
+        EarningsLine line = new EarningsLine();
         line.setPayrollItem(adjustmentItem);
         line.setHours(BigDecimal.ONE.setScale(2));
         line.setRate(stagedAmount);
@@ -371,79 +265,15 @@ public class PayrollItemService {
         return earningsRepository.save(line);
     }
 
-    private Optional<PendingCorrection> findPendingCorrection(
-            Long payId,
-            Long sourceItemId,
-            AdjustmentKind sourceLineType,
-            Long sourceLineId
+    private DeductionsLine createAdjustmentDeductionLine(
+            PayrollItem adjustmentItem,
+            BigDecimal stagedAmount
     ) {
-        String sourceKey = sourceKey(sourceItemId, sourceLineType, sourceLineId);
-        return Optional.ofNullable(getPendingCorrections(payId).get(sourceKey));
-    }
-
-    private Map<String, PendingCorrection> getPendingCorrections(Long payId) {
-        String prefix = CORRECTION_STAGE_PREFIX + "run=" + payId + "|";
-        Map<String, PendingCorrection> pendingCorrections = new LinkedHashMap<>();
-        activityLogRepository.findByActivityTypeAndMessageStartingWithOrderByActivityIdAsc(Activity.MODIFY, prefix)
-                .stream()
-                .map(ActivityLog::getMessage)
-                .map(this::parsePendingCorrection)
-                .flatMap(Optional::stream)
-                .forEach(correction -> pendingCorrections.put(correction.sourceKey(), correction));
-        return pendingCorrections;
-    }
-
-    private Optional<PendingCorrection> parsePendingCorrection(String message) {
-        if (message == null || !message.startsWith(CORRECTION_STAGE_PREFIX)) {
-            return Optional.empty();
-        }
-
-        try {
-            Map<String, String> values = new LinkedHashMap<>();
-            for (String token : message.substring(CORRECTION_STAGE_PREFIX.length()).split("\\|")) {
-                int separatorIndex = token.indexOf('=');
-                if (separatorIndex <= 0 || separatorIndex >= token.length() - 1) {
-                    continue;
-                }
-                values.put(token.substring(0, separatorIndex), token.substring(separatorIndex + 1));
-            }
-
-            PendingCorrection correction = new PendingCorrection(
-                    Long.parseLong(values.get("run")),
-                    Long.parseLong(values.get("srcItem")),
-                    AdjustmentKind.valueOf(values.get("srcType")),
-                    Long.parseLong(values.get("srcLine")),
-                    CommonCalculator.normalize(new BigDecimal(values.get("corr"))),
-                    Long.parseLong(values.get("adjItem")),
-                    AdjustmentKind.valueOf(values.get("adjType")),
-                    Long.parseLong(values.get("adjLine"))
-            );
-            return Optional.of(correction);
-        } catch (RuntimeException ex) {
-            return Optional.empty();
-        }
-    }
-
-    private void saveCorrectionStage(
-            PayrollRun targetRun,
-            CorrectionSource source,
-            BigDecimal correctedAmount,
-            StagedAdjustment stagedAdjustment
-    ) {
-        String username = getCurrentUsername();
-        String message = String.format(
-                "%srun=%d|srcItem=%d|srcType=%s|srcLine=%d|corr=%s|adjItem=%d|adjType=%s|adjLine=%d",
-                CORRECTION_STAGE_PREFIX,
-                targetRun.getPayId(),
-                source.sourceItem().getItemId(),
-                source.sourceLineType().name(),
-                source.sourceLineId(),
-                correctedAmount.toPlainString(),
-                stagedAdjustment.adjustmentItemId(),
-                stagedAdjustment.adjustmentLineType().name(),
-                stagedAdjustment.adjustmentLineId()
-        );
-        activityLogRepository.save(buildActivityLog(username, Activity.MODIFY, message));
+        DeductionsLine line = new DeductionsLine();
+        line.setPayrollItem(adjustmentItem);
+        line.setDeductionType(DeductionType.MANUAL_ADJUSTMENT);
+        line.setAmount(stagedAmount);
+        return deductionsRepository.save(line);
     }
 
     private CorrectionSource resolveCorrectionSource(PayrollLineCorrectionDto payload) {
@@ -497,9 +327,7 @@ public class PayrollItemService {
                 AdjustmentKind.EARNING,
                 sourceLineId,
                 label,
-                CommonCalculator.normalize(line.getAmount()),
-                line,
-                null
+                CommonCalculator.normalize(line.getAmount())
         );
     }
 
@@ -519,9 +347,7 @@ public class PayrollItemService {
                 AdjustmentKind.DEDUCTION,
                 sourceLineId,
                 label,
-                CommonCalculator.normalize(line.getAmount()),
-                null,
-                line
+                CommonCalculator.normalize(line.getAmount())
         );
     }
 
@@ -550,27 +376,6 @@ public class PayrollItemService {
         String label = abbreviate(source.label(), 60);
         String message = String.format(
                 "Payslip correction staged by %s: emp #%d item #%d %s line #%d %s->%s in adj run #%d",
-                username,
-                source.employee().getEmployeeId(),
-                source.sourceItem().getItemId(),
-                label,
-                source.sourceLineId(),
-                source.sourceAmount().toPlainString(),
-                correctedAmount.toPlainString(),
-                targetRun.getPayId()
-        );
-        activityLogRepository.save(buildActivityLog(
-                username,
-                Activity.MODIFY,
-                abbreviate(message, 255)
-        ));
-    }
-
-    private void logLineCorrectionApplied(PayrollRun targetRun, CorrectionSource source, BigDecimal correctedAmount) {
-        String username = getCurrentUsername();
-        String label = abbreviate(source.label(), 60);
-        String message = String.format(
-                "Payslip correction applied by %s: emp #%d item #%d %s line #%d %s->%s from adj run #%d",
                 username,
                 source.employee().getEmployeeId(),
                 source.sourceItem().getItemId(),
@@ -654,6 +459,9 @@ public class PayrollItemService {
     }
 
     private void refreshItemTotals(PayrollItem item) {
+        if (item == null) {
+            return;
+        }
         if (item.getItemId() == 0L) {
             return;
         }
@@ -678,8 +486,10 @@ public class PayrollItemService {
         item.setNetPay(CommonCalculator.normalize(totalEarnings.subtract(totalDeductions)));
     }
 
-    private String sourceKey(Long sourceItemId, AdjustmentKind sourceLineType, Long sourceLineId) {
-        return sourceItemId + "|" + sourceLineType.name() + "|" + sourceLineId;
+    private void assertRunIsEditable(PayrollRun run) {
+        if (run.getPayrollStatus() == PayrollStatus.POSTED) {
+            throw new InvalidActionException("This payroll run has already been posted.");
+        }
     }
 
     private record CorrectionSource(
@@ -688,30 +498,6 @@ public class PayrollItemService {
             AdjustmentKind sourceLineType,
             Long sourceLineId,
             String label,
-            BigDecimal sourceAmount,
-            EarningsLine earningLine,
-            DeductionsLine deductionLine
+            BigDecimal sourceAmount
     ) {}
-
-    private record StagedAdjustment(
-            Long adjustmentItemId,
-            AdjustmentKind adjustmentLineType,
-            Long adjustmentLineId,
-            BigDecimal stagedAmount
-    ) {}
-
-    private record PendingCorrection(
-            Long payId,
-            Long sourceItemId,
-            AdjustmentKind sourceLineType,
-            Long sourceLineId,
-            BigDecimal correctedAmount,
-            Long adjustmentItemId,
-            AdjustmentKind adjustmentLineType,
-            Long adjustmentLineId
-    ) {
-        private String sourceKey() {
-            return sourceItemId + "|" + sourceLineType.name() + "|" + sourceLineId;
-        }
-    }
 }

@@ -3,7 +3,6 @@ package org.example.maridone.payroll;
 import jakarta.validation.Valid;
 import org.example.maridone.annotation.AuditLog;
 import org.example.maridone.marker.OnCreate;
-import org.example.maridone.marker.OnUpdate;
 import org.example.maridone.payroll.dto.*;
 import org.example.maridone.payroll.item.ItemFilter;
 import org.example.maridone.payroll.item.PayrollItemService;
@@ -128,13 +127,5 @@ public class PayrollController {
                 .buildAndExpand(item.getId())
                 .toUri();
         return ResponseEntity.created(location).body(item);
-    }
-    
-    @PatchMapping("/item/update/{itemId}")
-    @PreAuthorize("hasRole('HR')")
-    @AuditLog
-    public ResponseEntity<PayrollItemDto> updateItem(@RequestBody @Validated(OnUpdate.class) PayrollItemDto payload, @PathVariable Long itemId) {
-        PayrollItemDto item = payrollItemService.updateItem(payload, itemId);
-        return ResponseEntity.ok(item);
     }
 }

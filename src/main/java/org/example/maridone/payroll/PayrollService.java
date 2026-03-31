@@ -108,7 +108,7 @@ public class PayrollService {
         PayrollRun run = new PayrollRun();
         run.setPeriodDescription(payload.getPeriodDescription());
         run.setRunType(payload.getRunType());
-        run.setPayrollStatus(payload.getPayrollStatus());
+        run.setPayrollStatus(PayrollStatus.IN_PROGRESS);
         run.setPeriodEnd(payload.getPeriodEnd());
         run.setPeriodStart(payload.getPeriodStart());
         payrollRunRepository.save(run);
@@ -122,11 +122,11 @@ public class PayrollService {
     public PayrollRunViewDto postRun(Long payId) {
         PayrollRun run = payrollRunRepository.findById(payId)
                 .orElseThrow(() -> new RunNotFoundException("Payroll Run ID:" + payId + " not found."));
+        if (run.getPayrollStatus() == PayrollStatus.POSTED) {
+            throw new InvalidActionException("This payroll run has already been posted.");
+        }
         if (payrollItemRepository.countByPayrollRun_PayId(payId) <= 0) {
             throw new InvalidActionException("This payroll run has no generated payroll items to post yet.");
-        }
-        if (run.getRunType() == RunType.ADJUSTMENT) {
-            payrollItemService.applyStagedCorrections(run);
         }
         run.setPayrollStatus(PayrollStatus.POSTED);
         payrollRunRepository.save(run);

@@ -3,20 +3,26 @@ package org.example.maridone.payroll.item.component;
 import org.example.maridone.common.CommonCalculator;
 import org.example.maridone.config.PayrollConfig;
 import org.example.maridone.core.employee.Employee;
+import org.example.maridone.enums.PayrollStatus;
 import org.example.maridone.holiday.HolidayLookup;
 import org.example.maridone.holiday.HolidayService;
 import org.example.maridone.payroll.PayrollCalculator;
 import org.example.maridone.payroll.dto.EarningsDto;
 import org.example.maridone.payroll.item.PayrollItem;
+import org.example.maridone.payroll.run.PayrollItemRepository;
 import org.example.maridone.payroll.mapper.PayrollMapper;
 import org.example.maridone.payroll.run.PayrollRun;
+import org.example.maridone.exception.unauthorized.InvalidActionException;
 import org.example.maridone.enums.RunType;
 import org.example.maridone.schedule.shift.DailyShiftRepository;
 import org.example.maridone.schedule.shift.DailyShiftSchedule;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
@@ -35,6 +41,8 @@ public class EarningsService {
     private static final String PREMIUM_PAY = "Premium Pay";
 
     private final EarningsRepository earningsRepository;
+    private final DeductionsRepository deductionsRepository;
+    private final PayrollItemRepository payrollItemRepository;
     private final PayrollMapper payrollMapper;
     private final HolidayService holidayService;
     private final DailyShiftRepository dailyShiftRepository;
@@ -43,6 +51,8 @@ public class EarningsService {
 
     public EarningsService(
             EarningsRepository earningsRepository,
+            DeductionsRepository deductionsRepository,
+            PayrollItemRepository payrollItemRepository,
             PayrollMapper payrollMapper,
             HolidayService holidayService,
             DailyShiftRepository dailyShiftRepository,
@@ -50,6 +60,8 @@ public class EarningsService {
             PayrollConfig payrollConfig
     ) {
         this.earningsRepository = earningsRepository;
+        this.deductionsRepository = deductionsRepository;
+        this.payrollItemRepository = payrollItemRepository;
         this.payrollMapper = payrollMapper;
         this.holidayService = holidayService;
         this.dailyShiftRepository = dailyShiftRepository;
@@ -67,6 +79,34 @@ public class EarningsService {
     public List<EarningsDto> getOriginalEarnings(Long itemId) {
         List<EarningsLine> earnings = earningsRepository.findByPayrollItem_ItemId(itemId);
         return toDtos(earnings, buildContext(earnings));
+    }
+
+    @Transactional
+    public EarningsDto updateEarning(EarningsDto payload, Long earningsId) {
+        if (payload == null) {
+            throw new InvalidActionException("Earnings update payload is required.");
+        }
+
+        EarningsLine line = earningsRepository.findById(earningsId)
+                .orElseThrow(() -> new InvalidActionException("Earnings line ID:" + earningsId + " not found."));
+        PayrollItem item = getEditablePayrollItem(line.getPayrollItem());
+        BigDecimal previousAmount = normalize(line.getAmount());
+        BigDecimal updatedAmount = normalizeNonNegative(payload.getAmount(), "Earnings amount is required.");
+
+        if (payload.getHours() != null) {
+            line.setHours(normalizeNonNegative(payload.getHours(), "Hours cannot be negative."));
+        }
+        if (payload.getRate() != null) {
+            line.setRate(normalizeNonNegative(payload.getRate(), "Rate cannot be negative."));
+        }
+        if (isRegularRun(item) && updatedAmount.compareTo(previousAmount) != 0) {
+            stampRegularEdit(line, previousAmount);
+        }
+
+        line.setAmount(updatedAmount);
+        EarningsLine updatedLine = earningsRepository.save(line);
+        refreshItemTotals(item);
+        return toDtos(List.of(updatedLine), buildContext(List.of(updatedLine))).get(0);
     }
 
     private List<EarningsDto> toDtos(List<EarningsLine> earnings, EarningsContext context) {
@@ -196,6 +236,73 @@ public class EarningsService {
 
     private BigDecimal normalize(BigDecimal value) {
         return CommonCalculator.normalize(value);
+    }
+
+    private PayrollItem getEditablePayrollItem(PayrollItem item) {
+        if (item == null) {
+            throw new InvalidActionException("This earnings line is missing its payroll item.");
+        }
+        PayrollRun run = item.getPayrollRun();
+        if (run == null) {
+            throw new InvalidActionException("This earnings line is missing its payroll run.");
+        }
+        if (run.getPayrollStatus() == PayrollStatus.POSTED) {
+            throw new InvalidActionException("This payroll run has already been posted.");
+        }
+        return item;
+    }
+
+    private boolean isRegularRun(PayrollItem item) {
+        return item.getPayrollRun() != null && item.getPayrollRun().getRunType() == RunType.REGULAR;
+    }
+
+    private void stampRegularEdit(EarningsLine line, BigDecimal previousAmount) {
+        if (line.getOriginalAmount() == null) {
+            line.setOriginalAmount(previousAmount);
+        }
+        line.setAdjustedBy(getCurrentUsername());
+        line.setAdjustedAt(Instant.now());
+    }
+
+    private BigDecimal normalizeNonNegative(BigDecimal value, String errorMessage) {
+        if (value == null) {
+            throw new InvalidActionException(errorMessage);
+        }
+        BigDecimal normalized = normalize(value);
+        if (normalized.compareTo(BigDecimal.ZERO.setScale(2)) < 0) {
+            throw new InvalidActionException(errorMessage);
+        }
+        return normalized;
+    }
+
+    private void refreshItemTotals(PayrollItem item) {
+        List<EarningsLine> earnings = earningsRepository.findByPayrollItem_ItemId(item.getItemId());
+        List<DeductionsLine> deductions = deductionsRepository.findByPayrollItem_ItemId(item.getItemId());
+
+        item.setEarnings(earnings);
+        item.setDeductions(deductions);
+
+        BigDecimal totalEarnings = earnings.stream()
+                .map(EarningsLine::getAmount)
+                .filter(amount -> amount != null)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        BigDecimal totalDeductions = deductions.stream()
+                .map(DeductionsLine::getAmount)
+                .filter(amount -> amount != null)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        item.setGrossPay(CommonCalculator.normalize(totalEarnings));
+        item.setNetPay(CommonCalculator.normalize(totalEarnings.subtract(totalDeductions)));
+        payrollItemRepository.save(item);
+    }
+
+    private String getCurrentUsername() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || !authentication.isAuthenticated() || "anonymousUser".equals(authentication.getPrincipal())) {
+            return "unknownUser";
+        }
+        return authentication.getName();
     }
 
     private record EarningsContext(

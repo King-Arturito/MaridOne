@@ -2,15 +2,20 @@ package org.example.maridone.payroll.itemcomponent;
 
 import org.example.maridone.config.PayrollConfig;
 import org.example.maridone.core.employee.Employee;
+import org.example.maridone.enums.PayrollStatus;
+import org.example.maridone.enums.RunType;
+import org.example.maridone.exception.unauthorized.InvalidActionException;
 import org.example.maridone.holiday.HolidayLookup;
 import org.example.maridone.holiday.HolidayService;
 import org.example.maridone.payroll.PayrollCalculator;
 import org.example.maridone.payroll.dto.EarningsDto;
 import org.example.maridone.payroll.item.PayrollItem;
+import org.example.maridone.payroll.item.component.DeductionsRepository;
 import org.example.maridone.payroll.item.component.EarningsLine;
 import org.example.maridone.payroll.item.component.EarningsRepository;
 import org.example.maridone.payroll.item.component.EarningsService;
 import org.example.maridone.payroll.mapper.PayrollMapper;
+import org.example.maridone.payroll.run.PayrollItemRepository;
 import org.example.maridone.payroll.run.PayrollRun;
 import org.example.maridone.schedule.shift.DailyShiftRepository;
 import org.example.maridone.schedule.shift.DailyShiftSchedule;
@@ -20,12 +25,15 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 
 import static org.mockito.ArgumentMatchers.any;
@@ -35,6 +43,8 @@ import static org.mockito.Mockito.when;
 class EarningsServiceTest {
 
     @Mock private EarningsRepository earningsRepository;
+    @Mock private DeductionsRepository deductionsRepository;
+    @Mock private PayrollItemRepository payrollItemRepository;
     @Mock private PayrollMapper payrollMapper;
     @Mock private HolidayService holidayService;
     @Mock private DailyShiftRepository dailyShiftRepository;
@@ -156,5 +166,86 @@ class EarningsServiceTest {
         Assertions.assertEquals(1, result.size());
         Assertions.assertEquals("Basic Pay", result.get(0).getDescription());
         Assertions.assertEquals(new BigDecimal("650.00"), result.get(0).getAmount());
+    }
+
+    @Test
+    void updateEarning_ShouldStampAdjustmentMetadataForRegularInProgressRun() {
+        PayrollRun run = new PayrollRun();
+        run.setRunType(RunType.REGULAR);
+        run.setPayrollStatus(PayrollStatus.IN_PROGRESS);
+
+        PayrollItem item = new PayrollItem();
+        ReflectionTestUtils.setField(item, "itemId", 70L);
+        item.setPayrollRun(run);
+
+        EarningsLine line = new EarningsLine();
+        ReflectionTestUtils.setField(line, "earningsId", 18L);
+        line.setPayrollItem(item);
+        line.setHours(BigDecimal.ZERO);
+        line.setRate(BigDecimal.ZERO);
+        line.setAmount(new BigDecimal("800.00"));
+        line.setOvertime(false);
+
+        EarningsDto payload = new EarningsDto();
+        payload.setHours(BigDecimal.ZERO);
+        payload.setRate(BigDecimal.ZERO);
+        payload.setAmount(new BigDecimal("650.00"));
+
+        when(earningsRepository.findById(18L)).thenReturn(Optional.of(line));
+        when(earningsRepository.save(any(EarningsLine.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(earningsRepository.findByPayrollItem_ItemId(70L)).thenReturn(List.of(line));
+        when(deductionsRepository.findByPayrollItem_ItemId(70L)).thenReturn(List.of());
+        when(payrollItemRepository.save(any(PayrollItem.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(payrollMapper.toEarningsDto(any(EarningsLine.class))).thenAnswer(invocation -> {
+            EarningsLine savedLine = invocation.getArgument(0);
+            EarningsDto dto = new EarningsDto();
+            dto.setAmount(savedLine.getAmount());
+            dto.setOriginalAmount(savedLine.getOriginalAmount());
+            dto.setAdjustedBy(savedLine.getAdjustedBy());
+            dto.setAdjustedAt(savedLine.getAdjustedAt());
+            return dto;
+        });
+
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken("hr.payroll", "ignored", List.of())
+        );
+        try {
+            EarningsDto result = earningsService.updateEarning(payload, 18L);
+
+            Assertions.assertEquals(new BigDecimal("650.00"), line.getAmount());
+            Assertions.assertEquals(new BigDecimal("800.00"), line.getOriginalAmount());
+            Assertions.assertEquals("hr.payroll", line.getAdjustedBy());
+            Assertions.assertNotNull(line.getAdjustedAt());
+            Assertions.assertEquals(new BigDecimal("650.00"), item.getGrossPay());
+            Assertions.assertEquals(new BigDecimal("650.00"), item.getNetPay());
+            Assertions.assertEquals("Basic Pay", result.getDescription());
+        } finally {
+            SecurityContextHolder.clearContext();
+        }
+    }
+
+    @Test
+    void updateEarning_ShouldRejectPostedRun() {
+        PayrollRun run = new PayrollRun();
+        run.setRunType(RunType.REGULAR);
+        run.setPayrollStatus(PayrollStatus.POSTED);
+
+        PayrollItem item = new PayrollItem();
+        item.setPayrollRun(run);
+
+        EarningsLine line = new EarningsLine();
+        ReflectionTestUtils.setField(line, "earningsId", 21L);
+        line.setPayrollItem(item);
+        line.setAmount(new BigDecimal("800.00"));
+        line.setHours(BigDecimal.ZERO);
+        line.setRate(BigDecimal.ZERO);
+        line.setOvertime(false);
+
+        EarningsDto payload = new EarningsDto();
+        payload.setAmount(new BigDecimal("700.00"));
+
+        when(earningsRepository.findById(21L)).thenReturn(Optional.of(line));
+
+        Assertions.assertThrows(InvalidActionException.class, () -> earningsService.updateEarning(payload, 21L));
     }
 }
