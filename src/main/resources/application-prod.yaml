@@ -14,3 +14,16 @@ holiday:
   refresh-after: 1d
   connect-timeout: 5s
   request-timeout: 10s
+
+spring:
+  mail:
+    host: smtp.gmail.com
+    port: 587
+    username: ${MAIL_ADDRESS_USERNAME}
+    password: ${MAIL_ADDRESS_PASSWORD}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true

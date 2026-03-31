@@ -1,19 +1,22 @@
 package org.example.maridone.auth;
 
+import org.example.maridone.auth.twofactor.TwoFactorService;
+import org.example.maridone.auth.twofactor.TwoFactorSetupResponse;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
+import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/api")
 public class AuthController {
 
     private final AuthService authService;
+    private final TwoFactorService twoFactorService;
 
-    public AuthController(AuthService authService) {
+    public AuthController(AuthService authService, TwoFactorService twoFactorService) {
         this.authService = authService;
+        this.twoFactorService = twoFactorService;
     }
 
     @PostMapping("/auth/login")
@@ -30,5 +33,44 @@ public class AuthController {
     public ResponseEntity<String> logout(@RequestBody LogoutRequest request) {
         authService.logoutUser(request);
         return ResponseEntity.ok("Successfully logged out");
+    }
+
+    @PostMapping("/auth/verify-2fa")
+    public ResponseEntity<AuthResponse> verifyTwoFactorAuth(
+            @RequestHeader("Authorization") String authorizationHeader,
+            @RequestBody String code) {
+        //skips 'Bearer '
+        String preAuthToken = authorizationHeader.substring(7);
+        return ResponseEntity.ok(authService.verify2fa(preAuthToken, code));
+    }
+
+    @PostMapping("/auth/verify-email")
+    public ResponseEntity<String> verifyEmail(@RequestBody String token) {
+        authService.verifyEmail(token);
+        return ResponseEntity.ok("Email successfully verified");
+    }
+
+    @PostMapping("/settings/send-email-verification")
+    public ResponseEntity<Void> sendEmailVerification(Authentication authentication) {
+        return ResponseEntity.ok(authService.sendEmailVerification(authentication.getName()));
+    }
+
+    @PostMapping("/settings/2fa/disable")
+    public ResponseEntity<Void> disable2fa(Authentication authentication) {
+        return ResponseEntity.ok(twoFactorService.disable2fa(authentication.getName()));
+    }
+
+    @PostMapping("/settings/2fa/enable")
+    public ResponseEntity<TwoFactorSetupResponse> setup2fa(Authentication authentication) {
+        return ResponseEntity.ok(twoFactorService.generateSetupDetails(authentication.getName()));
+    }
+
+    @PostMapping("/settings/2fa/confirm")
+    public ResponseEntity<String> confirm2fa(
+            Authentication authentication,
+            @RequestBody String code) {
+
+        twoFactorService.confirmAndEnable2fa(authentication.getName(), code);
+        return ResponseEntity.ok("Two-Factor Authentication successfully enabled.");
     }
 }

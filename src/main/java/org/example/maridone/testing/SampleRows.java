@@ -195,7 +195,12 @@ public class SampleRows {
                 emp.setPosition(Position.EMPLOYEE);
         }
 
-        emp.setEmail("email" + i + "@gmail.com");
+        if(i == 1) {
+            emp.setEmail("arthurjustin.evangelista.cics@ust.edu.ph");
+        } else {
+            emp.setEmail("email" + i + "@gmail.com");
+        }
+
         emp.setPhoneNumber("0901500009" + i);
 
         // Set address
