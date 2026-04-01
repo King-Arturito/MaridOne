@@ -1,8 +1,10 @@
 package org.example.maridone.notification;
 
-import org.example.maridone.annotation.ExecutionTime;
 import org.example.maridone.annotation.AutoScheduled;
+import org.example.maridone.annotation.ExecutionTime;
 import org.example.maridone.common.CommonSpecs;
+import org.example.maridone.exception.notfound.RequestNotFoundException;
+import org.example.maridone.exception.unauthorized.InvalidActionException;
 import org.example.maridone.notification.spec.NotificationSpecs;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -35,12 +37,17 @@ public class NotificationService {
 
     @Transactional
     @ExecutionTime
-    public void readNotification(Long notificationId) {
-        Notification notif = notificationRepository.findById(notificationId).orElse(null);
-        if (notif != null) {
-            notif.setReadStatus(true);
-            notificationRepository.save(notif);
+    public void readNotification(String username, Long notificationId) {
+        if (notificationId == null) {
+            throw new InvalidActionException("Notification ID is required.");
         }
+
+        Notification notif = notificationRepository
+                .findByNotificationIdAndEmployee_UserAccount_Username(notificationId, username)
+                .orElseThrow(() -> new RequestNotFoundException("Notification", notificationId));
+
+        notif.setReadStatus(true);
+        notificationRepository.save(notif);
     }
 
     @Transactional

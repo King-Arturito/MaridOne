@@ -18,6 +18,7 @@ public class DisputeResponseDto {
     private Long itemId;
     @NotNull(groups = OnUpdate.class)
     private Long employeeId;
+    private String employeeName;
 
     public Long getId() {
         return id;
@@ -89,6 +90,14 @@ public class DisputeResponseDto {
 
     public void setEmployeeId(Long employeeId) {
         this.employeeId = employeeId;
+    }
+
+    public String getEmployeeName() {
+        return employeeName;
+    }
+
+    public void setEmployeeName(String employeeName) {
+        this.employeeName = employeeName;
     }
 }
 

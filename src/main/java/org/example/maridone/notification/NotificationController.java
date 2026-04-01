@@ -29,7 +29,7 @@ public class NotificationController {
 
     @PreAuthorize("isAuthenticated()")
     @PatchMapping
-    public void readNotification(Long notificationId) {
-        notificationService.readNotification(notificationId);
+    public void readNotification(Authentication authentication, @RequestParam Long notificationId) {
+        notificationService.readNotification(authentication.getName(), notificationId);
     }
 }
