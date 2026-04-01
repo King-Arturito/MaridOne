@@ -29,6 +29,12 @@ public class UserAccount {
     @JsonIgnore
     private Employee employee;
 
+    @Column(name = "two_factor_enabled", nullable = false)
+    private Boolean twoFactorEnabled = false;
+
+    @Column(name = "two_factor_secret", nullable = true)
+    private String twoFactorSecret;
+
     @Column(name = "emp_id", insertable = false, updatable = false)
     private Long employeeId;
 
@@ -70,6 +76,22 @@ public class UserAccount {
 
     public Long getEmployeeId() {
         return employeeId;
+    }
+
+    public Boolean getTwoFactorEnabled() {
+        return twoFactorEnabled;
+    }
+
+    public void setTwoFactorEnabled(Boolean twoFactorEnabled) {
+        this.twoFactorEnabled = twoFactorEnabled;
+    }
+
+    public String getTwoFactorSecret() {
+        return twoFactorSecret;
+    }
+
+    public void setTwoFactorSecret(String twoFactorSecret) {
+        this.twoFactorSecret = twoFactorSecret;
     }
 
     public List<DocumentPath> getDocumentPaths() {

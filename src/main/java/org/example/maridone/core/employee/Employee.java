@@ -207,11 +207,11 @@ public class Employee {
         this.email = email;
     }
 
-    public Boolean getVerified() {
+    public Boolean getIsVerified() {
         return isVerified;
     }
 
-    public void setVerified(Boolean verified) {
+    public void setIsVerified(Boolean verified) {
         isVerified = verified;
     }
 

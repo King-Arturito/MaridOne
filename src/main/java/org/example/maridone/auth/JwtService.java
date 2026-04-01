@@ -33,24 +33,25 @@ public class JwtService {
                 .toList();
 
         claims.put("roles", roles);
+        claims.put("scope", "access");
         return generateToken(claims, user);
     }
 
     public String generateToken(Map<String, Object> claims, UserDetails user) {
-        return buildToken(claims, user, jwtConfig.getExpiration());
+        return buildToken(claims, user.getUsername(), jwtConfig.getExpiration());
     }
 
     public String generateRefreshToken(UserDetails user, boolean rememberMe) {
         long expiry = rememberMe
                 ? jwtConfig.getRememberMeExpiration()
                 : jwtConfig.getRefreshTokenExpiration();
-        return buildToken(new HashMap<>(), user, expiry);
+        return buildToken(new HashMap<>(), user.getUsername(), expiry);
     }
 
-    private String buildToken(Map<String, Object> claims, UserDetails user, Long expiration) {
+    private String buildToken(Map<String, Object> claims, String username, Long expiration) {
         return Jwts.builder()
                 .claims(claims)
-                .subject(user.getUsername())
+                .subject(username)
                 .issuedAt(new Date(System.currentTimeMillis()))
                 .expiration(new Date(System.currentTimeMillis() + expiration))
                 .signWith(getKey(jwtConfig.getSecret()))
@@ -70,8 +71,21 @@ public class JwtService {
         return (username.equals(userDetails.getUsername())) && !isTokenExpired(token);
     }
 
+    public boolean isAccessToken(String token) {
+        try {
+            Claims claims = extractAllClaims(token);
+            return "access".equals(claims.get("scope", String.class));
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
     private boolean isTokenExpired(String token) {
-        return extractAllClaims(token).getExpiration().before(new Date());
+        try {
+            return extractAllClaims(token).getExpiration().before(new Date());
+        } catch (Exception e) {
+            return true;
+        }
     }
 
     private Claims extractAllClaims(String token) {
@@ -80,5 +94,40 @@ public class JwtService {
                 .build()
                 .parseSignedClaims(token)
                 .getPayload();
+    }
+
+    public String generatePreAuthToken(UserDetails userDetails) {
+        Map<String, Object> claims = new HashMap<>();
+        claims.put("scope", "pre_auth");
+
+        //5 minutes
+        return buildToken(claims, userDetails.getUsername(), 300000L);
+    }
+
+    public boolean isValidPreAuthToken(String token) {
+        try {
+            Claims claims = extractAllClaims(token);
+            String scope = claims.get("scope", String.class);
+            return "pre_auth".equals(scope);
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    public boolean isValidVerificationToken(String token) {
+        try {
+            Claims claims = extractAllClaims(token);
+            String scope = claims.get("scope", String.class);
+            return "email_verification".equals(scope);
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    public String generateEmailVerificationToken(String username) {
+        Map<String, Object> claims = new HashMap<>();
+        claims.put("scope", "email_verification");
+        //1 day
+        return buildToken(claims, username, 86400000L);
     }
 }

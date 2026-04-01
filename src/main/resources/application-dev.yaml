@@ -14,7 +14,17 @@ spring:
     enabled: true
     change-log: classpath:/db/changelog/db.changelog-master.yaml
     contexts: dev
-
+  mail:
+    host: smtp.gmail.com
+    port: 587
+    username: arthurevangelista0422@gmail.com
+    password: vntymirkvctwjnkw
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
 jwt:
   secret: DBJLzOFR+2X80I/8vtaH22D/0Tldy0qU1KlxXLYDiwA=
 
@@ -31,3 +41,5 @@ holiday:
   refresh-after: 1d
   connect-timeout: 5s
   request-timeout: 10s
+
+
