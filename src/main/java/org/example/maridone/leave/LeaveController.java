@@ -36,7 +36,7 @@ public class LeaveController {
     }
 
     @GetMapping("/request")
-    @PreAuthorize("hasRole('HR')")
+    @PreAuthorize("hasAnyRole('HR', 'MANAGEMENT')")
     public Page<LeaveResponseDto> getLeaveRequests(LeaveFilter filter,
                                                    @PageableDefault(sort = "requestId", direction = Sort.Direction.ASC, size = 20) Pageable pageable) {
         return leaveService.getLeaveRequests(filter, pageable);

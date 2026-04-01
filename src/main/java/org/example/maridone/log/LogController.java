@@ -39,7 +39,7 @@ public class LogController {
     }
 
     @GetMapping("/attendance")
-    @PreAuthorize("hasRole('HR')")
+    @PreAuthorize("hasAnyRole('HR', 'MANAGEMENT')")
     public Page<AttendanceLog> getAttendance(
             @RequestParam(required = false) Long empId,
             @PageableDefault(size = 25, sort = "timestamp", direction = Sort.Direction.DESC) Pageable pageable) {
