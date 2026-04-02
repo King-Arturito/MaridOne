@@ -36,7 +36,10 @@ import java.time.LocalTime;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Locale;
 import java.util.Objects;
 
@@ -251,6 +254,11 @@ public class SampleRows {
         List<AttendanceLog> attendanceLogs = new ArrayList<>();
         LocalDate startDate = LocalDate.of(2026, 4, 1);
         LocalDate endDate = LocalDate.of(2026, 5, 1);
+        List<LocalDate> workDates = new ArrayList<>();
+
+        for (LocalDate currentDate = startDate; !currentDate.isAfter(endDate); currentDate = currentDate.plusDays(1)) {
+            workDates.add(currentDate);
+        }
 
         for (Employee employee : employees) {
             if (employee.getEmploymentStatus() == EmploymentStatus.TERMINATED
@@ -258,23 +266,42 @@ public class SampleRows {
                 continue;
             }
 
-            LocalDate currentDate = startDate;
-            while (!currentDate.isAfter(endDate)) {
-                attendanceLogs.add(createAttendanceLog(employee, currentDate, "IN"));
-                attendanceLogs.add(createAttendanceLog(employee, currentDate, "OUT"));
-                currentDate = currentDate.plusDays(1);
+            Map<LocalDate, AttendanceVariance> varianceByDate = buildAttendanceVarianceByDate(employee, workDates);
+            for (LocalDate workDate : workDates) {
+                AttendanceVariance variance = varianceByDate.getOrDefault(workDate, AttendanceVariance.ON_TIME);
+                attendanceLogs.add(createAttendanceLog(employee, workDate, "IN", variance));
+                attendanceLogs.add(createAttendanceLog(employee, workDate, "OUT", variance));
             }
         }
 
         attendanceLogRepository.saveAll(attendanceLogs);
     }
 
-    private AttendanceLog createAttendanceLog(Employee employee, LocalDate workDate, String direction) {
+    private Map<LocalDate, AttendanceVariance> buildAttendanceVarianceByDate(Employee employee, List<LocalDate> workDates) {
+        int anomalyCount = 1 + Math.floorMod(employee.getEmployeeId().intValue(), 4);
+        Map<LocalDate, AttendanceVariance> varianceByDate = new HashMap<>();
+
+        workDates.stream()
+                .sorted(Comparator.comparingInt(date ->
+                        Math.floorMod(Objects.hash(employee.getEmployeeId(), date, "attendance-variance"), Integer.MAX_VALUE)))
+                .limit(anomalyCount)
+                .forEach(date -> varianceByDate.put(
+                        date,
+                        Math.floorMod(Objects.hash(employee.getEmployeeId(), date, "attendance-variance-type"), 2) == 0
+                                ? AttendanceVariance.LATE_IN
+                                : AttendanceVariance.EARLY_OUT
+                ));
+
+        return varianceByDate;
+    }
+
+    private AttendanceLog createAttendanceLog(Employee employee, LocalDate workDate, String direction, AttendanceVariance variance) {
         LocalTime baseTime = "IN".equals(direction) ? SHIFT_START : SHIFT_END;
-        int offsetMinutes = Math.floorMod(
-                Objects.hash(employee.getEmployeeId(), workDate, direction),
-                21
-        ) - 10;
+        int offsetMinutes = switch (variance) {
+            case ON_TIME -> 0;
+            case LATE_IN -> "IN".equals(direction) ? lateOffsetMinutes(employee, workDate) : 0;
+            case EARLY_OUT -> "OUT".equals(direction) ? -earlyOutOffsetMinutes(employee, workDate) : 0;
+        };
 
         AttendanceLog attendanceLog = new AttendanceLog();
         attendanceLog.setEmployeeId(employee.getEmployeeId());
@@ -286,6 +313,20 @@ public class SampleRows {
                         .toInstant()
         );
         return attendanceLog;
+    }
+
+    private int lateOffsetMinutes(Employee employee, LocalDate workDate) {
+        return 5 + Math.floorMod(
+                Objects.hash(employee.getEmployeeId(), workDate, "late-minutes"),
+                14
+        );
+    }
+
+    private int earlyOutOffsetMinutes(Employee employee, LocalDate workDate) {
+        return 5 + Math.floorMod(
+                Objects.hash(employee.getEmployeeId(), workDate, "early-out-minutes"),
+                14
+        );
     }
 
     private Instant toInstant(LocalDateTime dateTime) {
@@ -441,5 +482,11 @@ public class SampleRows {
             int authorIndex,
             LocalDateTime createdAt
     ) {
+    }
+
+    private enum AttendanceVariance {
+        ON_TIME,
+        LATE_IN,
+        EARLY_OUT
     }
 }
