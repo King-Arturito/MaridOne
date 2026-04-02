@@ -1,11 +1,6 @@
 package org.example.maridone.testing;
 
-import java.math.BigDecimal;
-import java.time.*;
-import java.time.temporal.ChronoUnit;
-import java.util.ArrayList;
-import java.util.List;
-
+import jakarta.annotation.PostConstruct;
 import org.example.maridone.core.bank.BankAccount;
 import org.example.maridone.core.bank.BankAccountRepository;
 import org.example.maridone.core.employee.Employee;
@@ -13,36 +8,18 @@ import org.example.maridone.core.employee.EmployeeRepository;
 import org.example.maridone.core.user.UserAccount;
 import org.example.maridone.embeddable.Address;
 import org.example.maridone.enums.AccountStatus;
-import org.example.maridone.enums.DeductionType;
-import org.example.maridone.enums.EarningsType;
 import org.example.maridone.enums.EmploymentStatus;
 import org.example.maridone.enums.ExemptionStatus;
 import org.example.maridone.enums.LeaveType;
-import org.example.maridone.enums.PayrollStatus;
 import org.example.maridone.enums.Position;
-import org.example.maridone.enums.RunType;
-import org.example.maridone.enums.Status;
 import org.example.maridone.leave.balance.LeaveBalance;
 import org.example.maridone.leave.balance.LeaveBalanceRepository;
-import org.example.maridone.leave.request.LeaveRequest;
-import org.example.maridone.leave.request.LeaveRequestRepository;
 import org.example.maridone.log.AttendanceLogRepository;
 import org.example.maridone.log.attendance.AttendanceLog;
 import org.example.maridone.notification.Notification;
 import org.example.maridone.notification.NotificationRepository;
-import org.example.maridone.overtime.OvertimeRequest;
-import org.example.maridone.overtime.OvertimeRequestRepository;
-import org.example.maridone.payroll.dispute.DisputeRequest;
-import org.example.maridone.payroll.item.PayrollItem;
-import org.example.maridone.payroll.item.component.DeductionsLine;
-import org.example.maridone.payroll.item.component.EarningsLine;
-import org.example.maridone.payroll.run.PayrollItemRepository;
-import org.example.maridone.payroll.run.PayrollRun;
-import org.example.maridone.payroll.run.PayrollRunRepository;
 import org.example.maridone.schedule.calendar.CalendarRepository;
 import org.example.maridone.schedule.calendar.CompanyCalendar;
-import org.example.maridone.schedule.shift.DailyShiftRepository;
-import org.example.maridone.schedule.shift.DailyShiftSchedule;
 import org.example.maridone.schedule.shift.TemplateShiftRepository;
 import org.example.maridone.schedule.shift.TemplateShiftSchedule;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -50,22 +27,29 @@ import org.springframework.context.annotation.Profile;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 
-import jakarta.annotation.PostConstruct;
+import java.math.BigDecimal;
+import java.time.DayOfWeek;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.time.ZoneId;
-import java.util.Map;
-import java.util.Set;
+import java.time.ZonedDateTime;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
+import java.util.Objects;
 
 @Component
 @Profile("dev")
 public class SampleRows {
 
     private static final ZoneId SEED_TIME_ZONE = ZoneId.of("Asia/Manila");
+    private static final LocalTime SHIFT_START = LocalTime.of(8, 0);
+    private static final LocalTime SHIFT_END = LocalTime.of(17, 0);
 
     @Autowired
     private EmployeeRepository employeeRepository;
-
-    @Autowired
-    private PayrollRunRepository payrollRunRepository;
 
     @Autowired
     private CalendarRepository calendarRepository;
@@ -74,16 +58,10 @@ public class SampleRows {
     private TemplateShiftRepository templateShiftRepository;
 
     @Autowired
-    private DailyShiftRepository dailyShiftRepository;
-
-    @Autowired
     private BankAccountRepository bankAccountRepository;
 
     @Autowired
     private NotificationRepository notificationRepository;
-
-    @Autowired
-    private LeaveRequestRepository leaveRequestRepository;
 
     @Autowired
     private LeaveBalanceRepository leaveBalanceRepository;
@@ -92,593 +70,376 @@ public class SampleRows {
     private AttendanceLogRepository attendanceLogRepository;
 
     @Autowired
-    private OvertimeRequestRepository overtimeRequestRepository;
-
-    @Autowired
-    private PayrollItemRepository payrollItemRepository;
-
-    @Autowired
     private PasswordEncoder passwordEncoder;
-
 
     @PostConstruct
     public void init() {
-        if (employeeRepository.count() == 0)
+        if (employeeRepository.count() == 0) {
             sampleData();
+        }
     }
 
     public void sampleData() {
-        PayrollRun payrollRun = new PayrollRun();
-        payrollRun.setPayrollStatus(PayrollStatus.IN_PROGRESS);
-        payrollRun.setRunType(RunType.REGULAR);
-        payrollRun.setPeriodStart(LocalDate.now().minusDays(14));
-        payrollRun.setPeriodEnd(LocalDate.now());
-        payrollRun.setPeriodDescription("Test1");
-        payrollRun = payrollRunRepository.save(payrollRun);
+        List<Employee> employees = createEmployees();
 
-        List<PayrollItem> items = new ArrayList<>();
-        Employee managementAnnouncementAuthor = null;
-        Employee hrAnnouncementAuthor = null;
-
-        // Create 10 sample employees
-        for (int i = 1; i <= 10; i++) {
-            // 1. Create and save employee first
-            Employee emp = createEmployee(i);
-            emp = employeeRepository.save(emp);
-
-            if (managementAnnouncementAuthor == null && emp.getPosition() == Position.MANAGEMENT) {
-                managementAnnouncementAuthor = emp;
-            }
-            if (hrAnnouncementAuthor == null && emp.getPosition() == Position.HR) {
-                hrAnnouncementAuthor = emp;
-            }
-
-            // 2. Create and save child entities, linking back to employee
-            createAndSaveBankAccounts(emp, i);
-            createAndSaveNotifications(emp, i);
-            createAndSaveLeaveRequests(emp, i);
-            createAndSaveLeaveBalances(emp, i);
-            createAndSaveShiftSchedules(emp, i);
-            createAndSaveAttendanceLogs(emp, i);
-            createAndSaveOvertimeRequests(emp, i);
-
-            // 3. Create payroll item (will be saved via payrollRun cascade)
-            PayrollItem item = createPayrollItem(emp, i, payrollRun);
-            items.add(item);
-        }
-
-        // Save payroll run with all items
-        payrollRun.setItems(items);
-        payrollRunRepository.save(payrollRun);
-
-        if (managementAnnouncementAuthor != null) {
-            calendarRepository.save(calendarEvents(new CompanyCalendar(), 1, managementAnnouncementAuthor));
-        }
-        if (hrAnnouncementAuthor != null) {
-            calendarRepository.save(calendarEvents(new CompanyCalendar(), 2, hrAnnouncementAuthor));
-        }
+        assignManagers(employees);
+        createAndSaveCompanyCalendar(employees);
+        createAndSaveUserAccounts(employees);
+        createAndSaveBankAccounts(employees);
+        createAndSaveShiftSchedules(employees);
+        createAndSaveLeaveBalances(employees);
+        createAndSaveNotifications(employees);
+        createAndSaveAttendanceLogs(employees);
     }
 
-    private Employee createEmployee(int i) {
-        Employee emp = new Employee();
-        LocalDate birthDate = LocalDate.of(2000, 10, i + 1);
+    private List<Employee> createEmployees() {
+        List<Employee> employees = new ArrayList<>();
+        for (EmployeeSeed seed : employeeSeeds()) {
+            employees.add(employeeRepository.save(toEmployee(seed)));
+        }
+        return employees;
+    }
+
+    private Employee toEmployee(EmployeeSeed seed) {
+        Employee employee = new Employee();
+        employee.setFirstName(seed.firstName());
+        employee.setMiddleName(seed.middleName());
+        employee.setLastName(seed.lastName());
+        employee.setBirthDate(seed.birthDate());
+        employee.setEmploymentDateStart(seed.employmentDateStart());
+        employee.setEmploymentDateEnd(seed.employmentDateEnd());
+        employee.setYearlySalary(seed.yearlySalary());
+        employee.setEmail(seed.email());
+        employee.setIsVerified(seed.isVerified());
+        employee.setPhoneNumber(seed.phoneNumber());
+        employee.setEmploymentStatus(seed.employmentStatus());
+        employee.setExemptionStatus(seed.exemptionStatus());
+        employee.setPosition(seed.position());
+        employee.setAddress(toAddress(seed));
+        return employee;
+    }
+
+    private Address toAddress(EmployeeSeed seed) {
         Address address = new Address();
-
-        // Set basic info
-        emp.setFirstName("firstName" + i);
-        if (i == 5 || i == 8) {
-            emp.setMiddleName("middleName" + i);
-            emp.setExemptionStatus(ExemptionStatus.EXEMPT);
-        } else {
-            emp.setExemptionStatus(ExemptionStatus.NON_EXEMPT);
-        }
-        emp.setLastName("lastName" + (i * 2));
-        emp.setBirthDate(birthDate);
-        emp.setEmploymentDateStart(LocalDate.now().minusDays(i * 10));
-        emp.setYearlySalary(BigDecimal.valueOf(500000 * (i / 2.5)));
-
-        if (i == 4) {
-            emp.setEmploymentDateEnd(LocalDate.now().minusDays(i));
-        }
-
-        // Set employment status and position
-        switch (i) {
-            case 1:
-                emp.setEmploymentStatus(EmploymentStatus.REGULAR);
-                emp.setPosition(Position.MANAGEMENT);
-                break;
-            case 2:
-                emp.setEmploymentStatus(EmploymentStatus.PART_TIME);
-                emp.setPosition(Position.HR);
-                break;
-            case 3:
-                emp.setEmploymentStatus(EmploymentStatus.SUSPENDED);
-                emp.setPosition(Position.ACCOUNTING);
-                break;
-            case 4:
-                emp.setEmploymentStatus(EmploymentStatus.TERMINATED);
-                emp.setPosition(Position.EMPLOYEE);
-                break;
-            case 5:
-                emp.setEmploymentStatus(EmploymentStatus.REGULAR);
-                emp.setPosition(Position.MANAGER);
-                break;
-            default:
-                emp.setEmploymentStatus(EmploymentStatus.REGULAR);
-                emp.setPosition(Position.EMPLOYEE);
-        }
-
-        if (i > 5  && i <= 10) {
-            emp.setManager(employeeRepository.getReferenceById(5L));
-        }
-        if(i == 1) {
-            emp.setEmail("arthurjustin.evangelista.cics@ust.edu.ph");
-        } else {
-            emp.setEmail("email" + i + "@gmail.com");
-        }
-
-        emp.setPhoneNumber("0901500009" + i);
-
-        // Set address
-        address.setPermanentAddress("permanentAddress" + i);
-        address.setCity("city" + i);
-        address.setState("state" + i);
-        address.setZipCode("174" + i);
-        address.setCountry("Philippines");
-
-        if (i == 4) {
-            address.setTemporaryAddress("temporaryAddress" + i);
-        }
-
-        emp.setAddress(address);
-
-        // Create user account (saved via cascade)
-        UserAccount userAccount = new UserAccount();
-        userAccount.setAccountStatus(AccountStatus.ACTIVE);
-        userAccount.setEmployee(emp);
-        userAccount.setPasswordHash(passwordEncoder.encode("test"));
-        userAccount.setUsername("userName" + i);
-        emp.setUserAccount(userAccount);
-
-        return emp;
+        address.setPermanentAddress(seed.permanentAddress());
+        address.setTemporaryAddress(seed.temporaryAddress());
+        address.setCity(seed.city());
+        address.setState(seed.state());
+        address.setCountry(seed.country());
+        address.setZipCode(seed.zipCode());
+        return address;
     }
 
-    private void createAndSaveBankAccounts(Employee emp, int i) {
-        BankAccount bankAccount1 = new BankAccount();
-        bankAccount1.setBankName("BPI");
-        bankAccount1.setAccountNumber(String.valueOf(i));
-        bankAccount1.setEmployee(emp);
-        bankAccount1.setActive(i % 3 != 0);
+    private void assignManagers(List<Employee> employees) {
+        Employee cecilia = employees.get(10);
+        Employee daniel = employees.get(11);
 
-        BankAccount bankAccount2 = new BankAccount();
-        bankAccount2.setBankName("BDO");
-        bankAccount2.setAccountNumber(String.valueOf(i * 10));
-        bankAccount2.setEmployee(emp);
-        bankAccount2.setActive(i % 6 != 0);
+        employees.get(4).setManager(cecilia);
+        employees.get(7).setManager(cecilia);
+        employees.get(8).setManager(daniel);
+        employees.get(9).setManager(daniel);
 
-        bankAccountRepository.save(bankAccount1);
-        bankAccountRepository.save(bankAccount2);
+        employeeRepository.saveAll(List.of(
+                employees.get(4),
+                employees.get(7),
+                employees.get(8),
+                employees.get(9)
+        ));
     }
 
-    private void createAndSaveNotifications(Employee emp, int i) {
+    private void createAndSaveCompanyCalendar(List<Employee> employees) {
+        List<CompanyCalendar> events = new ArrayList<>();
+        for (CalendarSeed seed : calendarSeeds()) {
+            CompanyCalendar event = new CompanyCalendar();
+            event.setTitle(seed.title());
+            event.setDescription(seed.description());
+            event.setStartDate(toInstant(seed.startDateTime()));
+            event.setEndDate(toInstant(seed.endDateTime()));
+            event.setIsActive(true);
+            event.setEmployee(employees.get(seed.authorIndex()));
+            event.setCreatedAt(toInstant(seed.createdAt()));
+            events.add(event);
+        }
+        calendarRepository.saveAll(events);
+    }
+
+    private void createAndSaveUserAccounts(List<Employee> employees) {
+        for (Employee employee : employees) {
+            UserAccount userAccount = new UserAccount();
+            userAccount.setEmployee(employee);
+            userAccount.setUsername(employee.getFirstName().toLowerCase(Locale.ROOT) + employee.getEmployeeId());
+            userAccount.setPasswordHash(passwordEncoder.encode("test"));
+            userAccount.setAccountStatus(AccountStatus.ACTIVE);
+            userAccount.setTwoFactorEnabled(false);
+            userAccount.setTwoFactorSecret(null);
+            employee.setUserAccount(userAccount);
+            employeeRepository.save(employee);
+        }
+    }
+
+    private void createAndSaveBankAccounts(List<Employee> employees) {
+        List<BankAccount> accounts = new ArrayList<>();
+        for (Employee employee : employees) {
+            accounts.add(createBankAccount(employee, "100-800-", "Bank Alpha"));
+            accounts.add(createBankAccount(employee, "200-900-", "Bank Beta"));
+        }
+        bankAccountRepository.saveAll(accounts);
+    }
+
+    private BankAccount createBankAccount(Employee employee, String prefix, String bankName) {
+        BankAccount account = new BankAccount();
+        account.setEmployee(employee);
+        account.setAccountNumber(prefix + String.format("%04d", employee.getEmployeeId()));
+        account.setBankName(bankName);
+        account.setActive(true);
+        return account;
+    }
+
+    private void createAndSaveShiftSchedules(List<Employee> employees) {
+        List<TemplateShiftSchedule> schedules = new ArrayList<>();
+        for (Employee employee : employees) {
+            for (DayOfWeek dayOfWeek : DayOfWeek.values()) {
+                TemplateShiftSchedule schedule = new TemplateShiftSchedule();
+                schedule.setEmployee(employee);
+                schedule.setDayOfWeek(dayOfWeek);
+                schedule.setStartTime(SHIFT_START);
+                schedule.setEndTime(SHIFT_END);
+                schedules.add(schedule);
+            }
+        }
+        templateShiftRepository.saveAll(schedules);
+    }
+
+    private void createAndSaveLeaveBalances(List<Employee> employees) {
+        List<LeaveBalance> leaveBalances = new ArrayList<>();
+        for (Employee employee : employees) {
+            for (LeaveType leaveType : LeaveType.values()) {
+                LeaveBalance leaveBalance = new LeaveBalance();
+                leaveBalance.setEmployee(employee);
+                leaveBalance.setLeaveType(leaveType);
+                leaveBalance.setBalanceHours(BigDecimal.valueOf(6.00));
+                leaveBalances.add(leaveBalance);
+            }
+        }
+        leaveBalanceRepository.saveAll(leaveBalances);
+    }
+
+    private void createAndSaveNotifications(List<Employee> employees) {
         List<Notification> notifications = new ArrayList<>();
+        ZonedDateTime base = ZonedDateTime.of(2026, 4, 1, 8, 0, 0, 0, SEED_TIME_ZONE);
 
-        for (int j = 0; j < 5; j++) {
-            Notification notification = new Notification();
-            notification.setMessage("Sample notification message " + j);
-            notification.setCreatedAt(Instant.now().minus(i, ChronoUnit.DAYS));
-            notification.setReadStatus(j % 2 == 0);
-            notification.setImportance(j == 2 ? "HIGH" : "LOW");
-            notification.setEmployee(emp);
-            notifications.add(notification);
+        for (Employee employee : employees) {
+            for (int i = 1; i <= 10; i++) {
+                Notification notification = new Notification();
+                notification.setMessage("System Alert #" + i + " for employee #" + employee.getEmployeeId());
+                notification.setImportance(i <= 5 ? "HIGH" : "LOW");
+                notification.setReadStatus(i <= 3);
+                notification.setCreatedAt(
+                        base.plusHours((employee.getEmployeeId() - 1) * 2L)
+                                .plusHours(i * 6L)
+                                .toInstant()
+                );
+                notification.setEmployee(employee);
+                notifications.add(notification);
+            }
         }
 
         notificationRepository.saveAll(notifications);
     }
 
-    private void createAndSaveLeaveRequests(Employee emp, int i) {
-        List<LeaveRequest> leaveRequests = new ArrayList<>();
-
-        LeaveRequest leaveRequest = new LeaveRequest();
-        leaveRequest.setEmployee(emp);
-        leaveRequest.setStartDateTime(LocalDateTime.of(LocalDate.now(), LocalTime.of(23,30)));
-        leaveRequest.setEndDateTime(LocalDateTime.of(LocalDate.now().plusDays(1), LocalTime.of(0,30)));
-        leaveRequest.setRequestStatus(i % 2 == 0 ? Status.APPROVED : Status.PENDING);
-        leaveRequest.setReason("Vacation request #" + i);
-        leaveRequest.setLeaveType(LeaveType.VACATION_LEAVE);
-        leaveRequests.add(leaveRequest);
-
-        if (i == 6) {
-            leaveRequests.add(createApprovedLeaveRequest(
-                    emp,
-                    LocalDate.of(2026, 4, 8),
-                    LocalTime.of(8, 0),
-                    LocalTime.of(17, 0),
-                    "All-around payroll scenario full-day leave"
-            ));
-        }
-
-        leaveRequestRepository.saveAll(leaveRequests);
-    }
-
-    private void createAndSaveLeaveBalances(Employee emp, int i) {
-        LeaveType[] leaves = LeaveType.values();
-        LeaveBalance leaveBalance = new LeaveBalance();
-        leaveBalance.setEmployee(emp);
-        leaveBalance.setBalanceHours(new BigDecimal(i * 24));
-        leaveBalance.setLeaveType(leaves[i % 7]);
-
-        leaveBalanceRepository.save(leaveBalance);
-    }
-
-    private void createAndSaveShiftSchedules(Employee emp, int i) {
-        List<TemplateShiftSchedule> templateShiftSchedules = new ArrayList<>();
-
-        int maxDay = i == 6 ? 6 : 7;
-        for (int k = 1; k <= maxDay; k++) {
-            TemplateShiftSchedule templateShiftSchedule = new TemplateShiftSchedule();
-            templateShiftSchedule.setEmployee(emp);
-            templateShiftSchedule.setDayOfWeek(DayOfWeek.of(k));
-            // Changed to a 9-hour attendance window (8:00-17:00) since 1 unpaid lunch hour is included in attendance.
-            templateShiftSchedule.setStartTime(LocalTime.of(8, 0));
-            templateShiftSchedule.setEndTime(LocalTime.of(17, 0));
-            templateShiftSchedules.add(templateShiftSchedule);
-        }
-
-        templateShiftRepository.saveAll(templateShiftSchedules);
-
-        if (i == 6) {
-            createAndSaveAllAroundDailyShifts(templateShiftSchedules);
-        }
-    }
-
-    private void createAndSaveAllAroundDailyShifts(List<TemplateShiftSchedule> templateShiftSchedules) {
-        Map<DayOfWeek, TemplateShiftSchedule> schedulesByDay = templateShiftSchedules.stream()
-                .collect(java.util.stream.Collectors.toMap(TemplateShiftSchedule::getDayOfWeek, schedule -> schedule));
-
-        List<DailyShiftSchedule> dailyShifts = new ArrayList<>();
-        LocalDate currentDate = LocalDate.of(2026, 3, 26);
-        LocalDate endDate = LocalDate.of(2026, 4, 10);
-
-        while (!currentDate.isAfter(endDate)) {
-            if (!currentDate.equals(LocalDate.of(2026, 4, 8))) {
-                TemplateShiftSchedule templateShift = schedulesByDay.get(currentDate.getDayOfWeek());
-                if (templateShift != null) {
-                    DailyShiftSchedule dailyShift = new DailyShiftSchedule();
-                    dailyShift.setTemplateShiftSchedule(templateShift);
-                    if (currentDate.equals(LocalDate.of(2026, 4, 7))) {
-                        dailyShift.setStartDateTime(LocalDateTime.of(currentDate, LocalTime.of(14, 0)));
-                        dailyShift.setEndDateTime(LocalDateTime.of(currentDate, LocalTime.of(22, 0)));
-                    } else {
-                        dailyShift.setStartDateTime(LocalDateTime.of(currentDate, templateShift.getStartTime()));
-                        dailyShift.setEndDateTime(LocalDateTime.of(currentDate, templateShift.getEndTime()));
-                    }
-                    dailyShifts.add(dailyShift);
-                }
-            }
-            currentDate = currentDate.plusDays(1);
-        }
-
-        if (!dailyShifts.isEmpty()) {
-            dailyShiftRepository.saveAll(dailyShifts);
-        }
-    }
-
-    private void createAndSaveAttendanceLogs(Employee emp, int i) {
+    private void createAndSaveAttendanceLogs(List<Employee> employees) {
         List<AttendanceLog> attendanceLogs = new ArrayList<>();
+        LocalDate startDate = LocalDate.of(2026, 4, 1);
+        LocalDate endDate = LocalDate.of(2026, 5, 1);
 
-        if (i == 6) {
-            seedAllAroundRuntimeAttendance(attendanceLogs, emp);
-        } else if (i == 10) {
-            seedNonExemptRuntimeAttendance(attendanceLogs, emp);
-        } else if (i == 8) {
-            seedExemptRuntimeAttendance(attendanceLogs, emp);
-        }
-
-        if (!attendanceLogs.isEmpty()) {
-            attendanceLogRepository.saveAll(attendanceLogs);
-        }
-    }
-
-    private void createAndSaveOvertimeRequests(Employee emp, int i) {
-        List<OvertimeRequest> overtimeRequests = new ArrayList<>();
-
-        if (i == 6) {
-            overtimeRequests.add(createApprovedOvertimeRequest(
-                    emp,
-                    LocalDate.of(2026, 4, 6),
-                    LocalTime.of(18, 0),
-                    LocalTime.of(20, 0),
-                    "All-around payroll scenario ordinary OT"
-            ));
-            overtimeRequests.add(createApprovedOvertimeRequest(
-                    emp,
-                    LocalDate.of(2026, 4, 7),
-                    LocalTime.of(22, 0),
-                    LocalTime.of(0, 0),
-                    "All-around payroll scenario night OT compounding"
-            ));
-        }
-
-        if (i == 10) {
-            // Runtime-visible approved overtime for the October non-exempt case.
-            overtimeRequests.add(createApprovedOvertimeRequest(
-                    emp,
-                    LocalDate.of(2026, 10, 22),
-                    LocalTime.of(18, 0),
-                    LocalTime.of(20, 0),
-                    "Seeded October OT for payroll runtime verification"
-            ));
-        }
-
-        if (!overtimeRequests.isEmpty()) {
-            overtimeRequestRepository.saveAll(overtimeRequests);
-        }
-    }
-
-    private void seedAllAroundRuntimeAttendance(List<AttendanceLog> attendanceLogs, Employee emp) {
-        // Dedicated all-in-one runtime case for firstName6. Sundays are true rest days for this employee.
-        addAttendanceRange(
-                attendanceLogs,
-                emp,
-                LocalDate.of(2026, 3, 26),
-                LocalDate.of(2026, 4, 10),
-                Set.of(
-                        LocalDate.of(2026, 3, 30), // ordinary absence
-                        LocalDate.of(2026, 4, 3),  // regular holiday without attendance
-                        LocalDate.of(2026, 4, 5),  // rest day without attendance
-                        LocalDate.of(2026, 4, 8),  // approved leave
-                        LocalDate.of(2026, 4, 9)   // regular holiday without attendance
-                ),
-                Map.of(
-                        LocalDate.of(2026, 3, 29), new SeedAttendancePair(LocalTime.of(21, 0), LocalTime.of(6, 0), 1),
-                        LocalDate.of(2026, 4, 2), new SeedAttendancePair(LocalTime.of(8, 0), LocalTime.of(17, 0)),
-                        LocalDate.of(2026, 4, 4), new SeedAttendancePair(LocalTime.of(8, 0), LocalTime.of(17, 0)),
-                        LocalDate.of(2026, 4, 6), new SeedAttendancePair(LocalTime.of(8, 0), LocalTime.of(17, 0)),
-                        LocalDate.of(2026, 4, 7), new SeedAttendancePair(LocalTime.of(14, 0), LocalTime.of(0, 0), 1)
-                )
-        );
-    }
-
-    private void seedNonExemptRuntimeAttendance(List<AttendanceLog> attendanceLogs, Employee emp) {
-        // 15th payout: Jan 26-Feb 10, 2026. No holidays in the current PH cache, useful for >13-day coverage.
-        addAttendanceRange(
-                attendanceLogs,
-                emp,
-                LocalDate.of(2026, 1, 26),
-                LocalDate.of(2026, 2, 10),
-                Set.of(LocalDate.of(2026, 1, 30)),
-                Map.of(
-                        LocalDate.of(2026, 2, 2), new SeedAttendancePair(LocalTime.of(8, 30), LocalTime.of(17, 0))
-                )
-        );
-
-        // 15th payout: Mar 26-Apr 10, 2026. Holiday-reduced window used for <13 deductible days.
-        addAttendanceRange(
-                attendanceLogs,
-                emp,
-                LocalDate.of(2026, 3, 26),
-                LocalDate.of(2026, 4, 10),
-                Set.of(
-                        LocalDate.of(2026, 3, 28),
-                        LocalDate.of(2026, 4, 3),
-                        LocalDate.of(2026, 4, 9)
-                ),
-                Map.of(
-                        LocalDate.of(2026, 3, 29), new SeedAttendancePair(LocalTime.of(8, 10), LocalTime.of(17, 0)),
-                        LocalDate.of(2026, 4, 2), new SeedAttendancePair(LocalTime.of(8, 0), LocalTime.of(17, 0)),
-                        LocalDate.of(2026, 4, 4), new SeedAttendancePair(LocalTime.of(8, 0), LocalTime.of(17, 0))
-                )
-        );
-
-        // 30th payout: Oct 11-25, 2026. Clean no-holiday window for ordinary attendance deductions.
-        addAttendanceRange(
-                attendanceLogs,
-                emp,
-                LocalDate.of(2026, 10, 11),
-                LocalDate.of(2026, 10, 25),
-                Set.of(),
-                Map.of(
-                        LocalDate.of(2026, 10, 14), new SeedAttendancePair(LocalTime.of(8, 0), LocalTime.of(16, 0)),
-                        LocalDate.of(2026, 10, 18), new SeedAttendancePair(LocalTime.of(8, 20), LocalTime.of(17, 0)),
-                        // Overnight attendance to surface a visible night differential line in the October test run.
-                        LocalDate.of(2026, 10, 20), new SeedAttendancePair(LocalTime.of(21, 0), LocalTime.of(6, 0), 1)
-                )
-        );
-    }
-
-    private void seedExemptRuntimeAttendance(List<AttendanceLog> attendanceLogs, Employee emp) {
-        // Exempt runtime logs are seeded to show handbook behavior: whole-day absence may deduct, but lates do not.
-        addAttendanceRange(
-                attendanceLogs,
-                emp,
-                LocalDate.of(2026, 1, 26),
-                LocalDate.of(2026, 2, 10),
-                Set.of(LocalDate.of(2026, 2, 1)),
-                Map.of(
-                        LocalDate.of(2026, 2, 3), new SeedAttendancePair(LocalTime.of(9, 0), LocalTime.of(17, 0))
-                )
-        );
-
-        addAttendanceRange(
-                attendanceLogs,
-                emp,
-                LocalDate.of(2026, 3, 26),
-                LocalDate.of(2026, 4, 10),
-                Set.of(LocalDate.of(2026, 4, 8)),
-                Map.of(
-                        LocalDate.of(2026, 3, 27), new SeedAttendancePair(LocalTime.of(9, 30), LocalTime.of(17, 0))
-                )
-        );
-
-        addAttendanceRange(
-                attendanceLogs,
-                emp,
-                LocalDate.of(2026, 10, 11),
-                LocalDate.of(2026, 10, 25),
-                Set.of(),
-                Map.of(
-                        LocalDate.of(2026, 10, 16), new SeedAttendancePair(LocalTime.of(8, 45), LocalTime.of(17, 0))
-                )
-        );
-    }
-
-    private void addAttendanceRange(
-            List<AttendanceLog> attendanceLogs,
-            Employee emp,
-            LocalDate startDate,
-            LocalDate endDate,
-            Set<LocalDate> absentDates,
-            Map<LocalDate, SeedAttendancePair> overrides
-    ) {
-        LocalDate currentDate = startDate;
-        while (!currentDate.isAfter(endDate)) {
-            if (!absentDates.contains(currentDate)) {
-                SeedAttendancePair pair = overrides.getOrDefault(
-                        currentDate,
-                        new SeedAttendancePair(LocalTime.of(8, 0), LocalTime.of(17, 0))
-                );
-                attendanceLogs.add(createAttendanceLog(emp, currentDate, pair.logIn(), "IN"));
-                attendanceLogs.add(createAttendanceLog(emp, currentDate.plusDays(pair.logOutDayOffset()), pair.logOut(), "OUT"));
+        for (Employee employee : employees) {
+            if (employee.getEmploymentStatus() == EmploymentStatus.TERMINATED
+                    || employee.getEmploymentStatus() == EmploymentStatus.SUSPENDED) {
+                continue;
             }
-            currentDate = currentDate.plusDays(1);
+
+            LocalDate currentDate = startDate;
+            while (!currentDate.isAfter(endDate)) {
+                attendanceLogs.add(createAttendanceLog(employee, currentDate, "IN"));
+                attendanceLogs.add(createAttendanceLog(employee, currentDate, "OUT"));
+                currentDate = currentDate.plusDays(1);
+            }
         }
+
+        attendanceLogRepository.saveAll(attendanceLogs);
     }
 
-    private AttendanceLog createAttendanceLog(Employee emp, LocalDate workDate, LocalTime time, String direction) {
-        AttendanceLog log = new AttendanceLog();
-        log.setEmployeeId(emp.getEmployeeId());
-        log.setTimestamp(workDate.atTime(time).atZone(SEED_TIME_ZONE).toInstant());
-        log.setDirection(direction);
-        return log;
+    private AttendanceLog createAttendanceLog(Employee employee, LocalDate workDate, String direction) {
+        LocalTime baseTime = "IN".equals(direction) ? SHIFT_START : SHIFT_END;
+        int offsetMinutes = Math.floorMod(
+                Objects.hash(employee.getEmployeeId(), workDate, direction),
+                21
+        ) - 10;
+
+        AttendanceLog attendanceLog = new AttendanceLog();
+        attendanceLog.setEmployeeId(employee.getEmployeeId());
+        attendanceLog.setDirection(direction);
+        attendanceLog.setTimestamp(
+                workDate.atTime(baseTime)
+                        .plusMinutes(offsetMinutes)
+                        .atZone(SEED_TIME_ZONE)
+                        .toInstant()
+        );
+        return attendanceLog;
     }
 
-    private OvertimeRequest createApprovedOvertimeRequest(
-            Employee emp,
-            LocalDate workDate,
-            LocalTime startTime,
-            LocalTime endTime,
-            String reason
+    private Instant toInstant(LocalDateTime dateTime) {
+        return dateTime.atZone(SEED_TIME_ZONE).toInstant();
+    }
+
+    private List<EmployeeSeed> employeeSeeds() {
+        return List.of(
+                new EmployeeSeed("John", null, "Doe", LocalDate.of(1985, 1, 15), LocalDate.of(2024, 1, 8), null,
+                        BigDecimal.valueOf(1_500_000.00), "john.doe@maridone.test", true, "09170000001",
+                        EmploymentStatus.REGULAR, ExemptionStatus.EXEMPT, Position.MANAGEMENT,
+                        "101 Executive Ave", null, "Makati", "Metro Manila", "Philippines", "1200"),
+                new EmployeeSeed("Jane", null, "Smith", LocalDate.of(1988, 3, 22), LocalDate.of(2024, 2, 12), null,
+                        BigDecimal.valueOf(1_200_000.00), "jane.smith@maridone.test", true, "09170000002",
+                        EmploymentStatus.REGULAR, ExemptionStatus.EXEMPT, Position.MANAGEMENT,
+                        "102 Executive Ave", null, "Taguig", "Metro Manila", "Philippines", "1630"),
+                new EmployeeSeed("Robert", null, "Brown", LocalDate.of(1990, 5, 9), LocalDate.of(2025, 1, 6), null,
+                        BigDecimal.valueOf(600_000.00), "robert.brown@maridone.test", true, "09170000003",
+                        EmploymentStatus.REGULAR, ExemptionStatus.EXEMPT, Position.HR,
+                        "201 People Ops St", null, "Pasig", "Metro Manila", "Philippines", "1600"),
+                new EmployeeSeed("Emily", "Anne", "Davis", LocalDate.of(1992, 7, 11), LocalDate.of(2025, 2, 3), null,
+                        BigDecimal.valueOf(550_000.00), "emily.davis@maridone.test", true, "09170000004",
+                        EmploymentStatus.REGULAR, ExemptionStatus.EXEMPT, Position.HR,
+                        "202 People Ops St", null, "Quezon City", "Metro Manila", "Philippines", "1100"),
+                new EmployeeSeed("Michael", null, "Wilson", LocalDate.of(1995, 9, 17), LocalDate.of(2026, 1, 15), null,
+                        BigDecimal.valueOf(300_000.00), "michael.wilson@maridone.test", false, "09170000005",
+                        EmploymentStatus.NEW_HIRE, ExemptionStatus.EXEMPT, Position.EMPLOYEE,
+                        "301 Operations Rd", null, "Mandaluyong", "Metro Manila", "Philippines", "1550"),
+                new EmployeeSeed("Linda", null, "Jones", LocalDate.of(1991, 4, 28), LocalDate.of(2024, 6, 10), null,
+                        BigDecimal.valueOf(500_000.00), "linda.jones@maridone.test", true, "09170000006",
+                        EmploymentStatus.REGULAR, ExemptionStatus.NON_EXEMPT, Position.ACCOUNTING,
+                        "401 Finance Blvd", null, "Pasay", "Metro Manila", "Philippines", "1300"),
+                new EmployeeSeed("William", null, "Garcia", LocalDate.of(1998, 12, 3), LocalDate.of(2026, 2, 2), null,
+                        BigDecimal.valueOf(320_000.00), "william.garcia@maridone.test", false, "09170000007",
+                        EmploymentStatus.NEW_HIRE, ExemptionStatus.NON_EXEMPT, Position.ACCOUNTING,
+                        "402 Finance Blvd", null, "Paranaque", "Metro Manila", "Philippines", "1700"),
+                new EmployeeSeed("Susan", null, "Miller", LocalDate.of(1999, 10, 20), LocalDate.of(2025, 11, 3), null,
+                        BigDecimal.valueOf(150_000.00), "susan.miller@maridone.test", true, "09170000008",
+                        EmploymentStatus.PART_TIME, ExemptionStatus.NON_EXEMPT, Position.EMPLOYEE,
+                        "501 Support Lane", null, "Manila", "Metro Manila", "Philippines", "1000"),
+                new EmployeeSeed("Joseph", null, "Taylor", LocalDate.of(1987, 8, 13), LocalDate.of(2024, 4, 1), LocalDate.of(2026, 3, 20),
+                        BigDecimal.valueOf(100_000.00), "joseph.taylor@maridone.test", true, "09170000009",
+                        EmploymentStatus.TERMINATED, ExemptionStatus.NON_EXEMPT, Position.EMPLOYEE,
+                        "502 Support Lane", "Temp Housing Block A", "Caloocan", "Metro Manila", "Philippines", "1400"),
+                new EmployeeSeed("Richard", null, "Moore", LocalDate.of(1993, 11, 30), LocalDate.of(2025, 8, 18), null,
+                        BigDecimal.valueOf(200_000.00), "richard.moore@maridone.test", true, "09170000010",
+                        EmploymentStatus.SUSPENDED, ExemptionStatus.NON_EXEMPT, Position.EMPLOYEE,
+                        "503 Support Lane", null, "Las Pinas", "Metro Manila", "Philippines", "1740"),
+                new EmployeeSeed("Cecilia", null, "Reyes", LocalDate.of(1989, 6, 18), LocalDate.of(2024, 3, 11), null,
+                        BigDecimal.valueOf(720_000.00), "cecilia.reyes@maridone.test", true, "09170000011",
+                        EmploymentStatus.REGULAR, ExemptionStatus.EXEMPT, Position.MANAGER,
+                        "601 Leadership Row", null, "San Juan", "Metro Manila", "Philippines", "1502"),
+                new EmployeeSeed("Daniel", null, "Cruz", LocalDate.of(1991, 2, 25), LocalDate.of(2024, 5, 20), null,
+                        BigDecimal.valueOf(710_000.00), "daniel.cruz@maridone.test", true, "09170000012",
+                        EmploymentStatus.REGULAR, ExemptionStatus.EXEMPT, Position.MANAGER,
+                        "602 Leadership Row", null, "Marikina", "Metro Manila", "Philippines", "1800")
+        );
+    }
+
+    private List<CalendarSeed> calendarSeeds() {
+        return List.of(
+                new CalendarSeed("Q2 Orientation",
+                        "Quarter 2 onboarding, policy refreshers, and introductions for all employees.",
+                        LocalDateTime.of(2026, 4, 1, 9, 0),
+                        LocalDateTime.of(2026, 4, 1, 17, 0),
+                        2,
+                        LocalDateTime.of(2026, 3, 29, 8, 30)),
+                new CalendarSeed("Strategy Workshop",
+                        "Leadership and department heads align on Q2 execution priorities and KPIs.",
+                        LocalDateTime.of(2026, 4, 5, 8, 0),
+                        LocalDateTime.of(2026, 4, 6, 17, 0),
+                        0,
+                        LocalDateTime.of(2026, 4, 1, 10, 15)),
+                new CalendarSeed("Security Audit",
+                        "Internal systems and access review covering devices, credentials, and compliance checks.",
+                        LocalDateTime.of(2026, 4, 10, 9, 0),
+                        LocalDateTime.of(2026, 4, 11, 17, 0),
+                        5,
+                        LocalDateTime.of(2026, 4, 3, 9, 0)),
+                new CalendarSeed("Leadership Summit",
+                        "Management forum for escalation handling, staffing plans, and budget checkpoints.",
+                        LocalDateTime.of(2026, 4, 16, 10, 0),
+                        LocalDateTime.of(2026, 4, 16, 15, 0),
+                        1,
+                        LocalDateTime.of(2026, 4, 8, 11, 45)),
+                new CalendarSeed("Team Building Day",
+                        "Cross-functional games, workshops, and employee engagement activities.",
+                        LocalDateTime.of(2026, 4, 21, 8, 0),
+                        LocalDateTime.of(2026, 4, 21, 17, 0),
+                        3,
+                        LocalDateTime.of(2026, 4, 12, 14, 0)),
+                new CalendarSeed("General Assembly",
+                        "Company-wide updates on financial performance, operations, and people initiatives.",
+                        LocalDateTime.of(2026, 4, 25, 14, 0),
+                        LocalDateTime.of(2026, 4, 25, 16, 0),
+                        0,
+                        LocalDateTime.of(2026, 4, 15, 16, 20)),
+                new CalendarSeed("Infrastructure Review",
+                        "Review of office systems, attendance tooling, and deployment readiness.",
+                        LocalDateTime.of(2026, 4, 29, 9, 0),
+                        LocalDateTime.of(2026, 4, 29, 12, 0),
+                        5,
+                        LocalDateTime.of(2026, 4, 18, 9, 40)),
+                new CalendarSeed("Labor Day Holiday",
+                        "Observed company holiday. Offices are closed except for approved essential operations.",
+                        LocalDateTime.of(2026, 5, 1, 0, 0),
+                        LocalDateTime.of(2026, 5, 1, 23, 59, 59),
+                        2,
+                        LocalDateTime.of(2026, 4, 20, 8, 0)),
+                new CalendarSeed("Project Kickoff",
+                        "Kickoff for the next internal systems milestone with scope and owner alignment.",
+                        LocalDateTime.of(2026, 5, 6, 9, 0),
+                        LocalDateTime.of(2026, 5, 6, 10, 0),
+                        1,
+                        LocalDateTime.of(2026, 4, 25, 13, 0)),
+                new CalendarSeed("Stakeholder Meeting",
+                        "Monthly stakeholder sync for delivery risks, budget status, and staffing concerns.",
+                        LocalDateTime.of(2026, 5, 12, 10, 0),
+                        LocalDateTime.of(2026, 5, 12, 12, 0),
+                        0,
+                        LocalDateTime.of(2026, 4, 28, 15, 30))
+        );
+    }
+
+    private record EmployeeSeed(
+            String firstName,
+            String middleName,
+            String lastName,
+            LocalDate birthDate,
+            LocalDate employmentDateStart,
+            LocalDate employmentDateEnd,
+            BigDecimal yearlySalary,
+            String email,
+            boolean isVerified,
+            String phoneNumber,
+            EmploymentStatus employmentStatus,
+            ExemptionStatus exemptionStatus,
+            Position position,
+            String permanentAddress,
+            String temporaryAddress,
+            String city,
+            String state,
+            String country,
+            String zipCode
     ) {
-        LocalDateTime overtimeStart = workDate.atTime(startTime);
-        LocalDateTime overtimeEnd = workDate.atTime(endTime);
-        if (!overtimeEnd.isAfter(overtimeStart)) {
-            overtimeEnd = overtimeEnd.plusDays(1);
-        }
-
-        OvertimeRequest request = new OvertimeRequest();
-        request.setEmployee(emp);
-        request.setRequestStatus(Status.APPROVED);
-        request.setRequestAt(workDate.minusDays(1).atTime(9, 0).atZone(SEED_TIME_ZONE).toInstant());
-        request.setWorkDate(workDate);
-        request.setStartTime(overtimeStart);
-        request.setEndTime(overtimeEnd);
-        request.setOvertimeType(EarningsType.OVERTIME);
-        request.setReason(reason);
-        request.setApprover("seed-admin");
-        request.setApprovedAt(workDate.minusDays(1).atTime(10, 0).atZone(SEED_TIME_ZONE).toInstant());
-        request.setApproveReason("Seeded approved overtime");
-        return request;
     }
 
-    private LeaveRequest createApprovedLeaveRequest(
-            Employee emp,
-            LocalDate workDate,
-            LocalTime startTime,
-            LocalTime endTime,
-            String reason
+    private record CalendarSeed(
+            String title,
+            String description,
+            LocalDateTime startDateTime,
+            LocalDateTime endDateTime,
+            int authorIndex,
+            LocalDateTime createdAt
     ) {
-        LeaveRequest request = new LeaveRequest();
-        request.setEmployee(emp);
-        request.setStartDateTime(workDate.atTime(startTime));
-        request.setEndDateTime(workDate.atTime(endTime));
-        request.setRequestStatus(Status.APPROVED);
-        request.setReason(reason);
-        request.setLeaveType(LeaveType.VACATION_LEAVE);
-        request.setApprover("seed-admin");
-        request.setApproverReason("Seeded approved leave");
-        return request;
-    }
-
-    private PayrollItem createPayrollItem(Employee emp, int i, PayrollRun payrollRun) {
-        PayrollItem payrollItem = new PayrollItem();
-        payrollItem.setEmployee(emp);
-        payrollItem.setPayrollRun(payrollRun);
-        payrollItem.setGrossPay(BigDecimal.valueOf(5000));
-        payrollItem.setNetPay(BigDecimal.valueOf(3000));
-
-        // Create deductions
-        List<DeductionsLine> deductions = new ArrayList<>();
-        for (int j = 0; j < 2; j++) {
-            DeductionsLine deduction = new DeductionsLine();
-            deduction.setPayrollItem(payrollItem);
-            deduction.setAmount(BigDecimal.valueOf(1000));
-            deduction.setDeductionType(j == 0 ? DeductionType.SSS : DeductionType.PHILHEALTH);
-            deductions.add(deduction);
-        }
-        payrollItem.setDeductions(deductions);
-
-        // Create earnings
-        List<EarningsLine> earnings = new ArrayList<>();
-        for (int j = 0; j < 5; j++) {
-            EarningsLine earning = new EarningsLine();
-            earning.setPayrollItem(payrollItem);
-            earning.setAmount(BigDecimal.valueOf(1000));
-            earning.setEarningsDate(LocalDate.now().minusDays(j));
-            earning.setHours(BigDecimal.valueOf(5 + j));
-            earning.setOvertime(false);
-            earning.setRate(BigDecimal.valueOf(100));
-            earnings.add(earning);
-        }
-        payrollItem.setEarnings(earnings);
-
-        // Create dispute
-        DisputeRequest dispute = new DisputeRequest();
-        dispute.setSubject("Subject of Dispute " + i);
-        if (i % 2 == 0) {
-            dispute.setStatus(Status.PENDING);
-        } else if (i == 5) {
-            dispute.setStatus(Status.REJECTED);
-        } else {
-            dispute.setStatus(Status.APPROVED);
-        }
-        dispute.setCreatedAt(Instant.now());
-        dispute.setReason("Reason of Dispute " + i);
-        dispute.setUpdatedAt(null);
-        dispute.setStatusReason(null);
-        dispute.setPayrollItem(payrollItem);
-
-        List<DisputeRequest> disputes = new ArrayList<>();
-        disputes.add(dispute);
-        payrollItem.setDisputes(disputes);
-
-        return payrollItemRepository.save(payrollItem);
-    }
-
-    private CompanyCalendar calendarEvents(CompanyCalendar calendar, int i, Employee employee) {
-        calendar.setIsActive(true);
-        ZonedDateTime now = ZonedDateTime.now(ZoneOffset.UTC);
-        calendar.setEmployee(employee);
-        calendar.setCreatedAt(now.minusDays(i).toInstant());
-
-        if (i == 1) {
-            calendar.setStartDate(now.minusMonths(1).toInstant());
-            calendar.setEndDate(now.minusMonths(1).plusDays(2).toInstant());
-            calendar.setTitle("Teambuilding");
-            calendar.setDescription("Company-wide team building activities, workshops, and bonding sessions for all departments.");
-        } else {
-            calendar.setStartDate(now.minusMonths(i).toInstant());
-            calendar.setEndDate(now.minusMonths(i).plusDays(3).toInstant());
-            calendar.setTitle("Another event: " + i);
-            calendar.setDescription("Shared company calendar announcement for sample event " + i + ".");
-        }
-
-        return calendar;
-    }
-
-    private record SeedAttendancePair(LocalTime logIn, LocalTime logOut, long logOutDayOffset) {
-        private SeedAttendancePair(LocalTime logIn, LocalTime logOut) {
-            this(logIn, logOut, 0);
-        }
     }
 }
