@@ -45,7 +45,7 @@ public class EmployeeController {
     }
 
     //show all employees
-    @PreAuthorize("hasRole('MANAGEMENT')")
+    @PreAuthorize("hasAnyRole('MANAGEMENT',  'HR')")
     @GetMapping()
     @AuditLog
     public Page<EmployeeResponseDto> getAllEmployees(
