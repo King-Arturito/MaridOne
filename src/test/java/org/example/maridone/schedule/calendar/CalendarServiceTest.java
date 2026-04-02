@@ -8,6 +8,7 @@ import org.example.maridone.core.employee.Employee;
 import org.example.maridone.core.user.UserAccount;
 import org.example.maridone.core.user.UserAccountRepository;
 import org.example.maridone.schedule.dto.CalendarDto;
+import org.example.maridone.schedule.dto.CalendarEventResponseDto;
 import org.example.maridone.schedule.mapper.CalendarMapper;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
@@ -51,18 +52,23 @@ class CalendarServiceTest {
         UserAccount userAccount = new UserAccount();
         userAccount.setUsername("userName2");
         userAccount.setEmployee(employee);
+        CalendarEventResponseDto responseDto = new CalendarEventResponseDto();
+        responseDto.setTitle("Holiday");
+        responseDto.setDescription("Holiday description");
+        responseDto.setEmployeeId(2L);
+        responseDto.setEmployeeName("HR Poster");
 
         when(calendarMapper.toCompanyCalendar(dto)).thenReturn(entity);
         when(userAccountRepository.findByUsername("userName2")).thenReturn(Optional.of(userAccount));
         when(calendarRepository.save(any(CompanyCalendar.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(calendarMapper.toCalendarEventResponseDto(any(CompanyCalendar.class))).thenReturn(responseDto);
 
-        CompanyCalendar result = calendarService.createEvent(dto, "userName2");
+        CalendarEventResponseDto result = calendarService.createEvent(dto, "userName2");
 
         Assertions.assertEquals("Holiday", result.getTitle());
         Assertions.assertEquals("Holiday description", result.getDescription());
-        Assertions.assertTrue(result.getIsActive());
-        Assertions.assertSame(employee, result.getEmployee());
-        Assertions.assertNotNull(result.getCreatedAt());
+        Assertions.assertEquals(2L, result.getEmployeeId());
+        Assertions.assertEquals("HR Poster", result.getEmployeeName());
     }
 
     @Test
@@ -82,6 +88,11 @@ class CalendarServiceTest {
         employee.setFirstName("Management");
         employee.setLastName("Poster");
         Instant createdAt = Instant.now().minus(2, ChronoUnit.DAYS);
+        CalendarEventResponseDto responseDto = new CalendarEventResponseDto();
+        responseDto.setTitle("New Title");
+        responseDto.setDescription("Updated description");
+        responseDto.setEmployeeId(1L);
+        responseDto.setEmployeeName("Management Poster");
 
         ReflectionTestUtils.setField(existing, "calendarId", id);
         existing.setTitle("Old Title");
@@ -92,18 +103,23 @@ class CalendarServiceTest {
         existing.setEmployee(employee);
         existing.setCreatedAt(createdAt);
 
-        when(calendarRepository.findById(id)).thenReturn(Optional.of(existing));
+        when(calendarRepository.findByIdWithEmployee(id)).thenReturn(Optional.of(existing));
         when(calendarRepository.save(any(CompanyCalendar.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(calendarMapper.toCalendarEventResponseDto(any(CompanyCalendar.class))).thenReturn(responseDto);
 
-        CompanyCalendar result = calendarService.updateEvent(dto);
+        CalendarEventResponseDto result = calendarService.updateEvent(dto);
 
         Assertions.assertEquals("New Title", result.getTitle());
         Assertions.assertEquals("Updated description", result.getDescription());
-        Assertions.assertFalse(result.getIsActive());
-        Assertions.assertEquals(dto.getStartDate(), result.getStartDate());
-        Assertions.assertEquals(dto.getEndDate(), result.getEndDate());
-        Assertions.assertSame(employee, result.getEmployee());
-        Assertions.assertEquals(createdAt, result.getCreatedAt());
+        Assertions.assertEquals(1L, result.getEmployeeId());
+        Assertions.assertEquals("Management Poster", result.getEmployeeName());
+        Assertions.assertEquals("New Title", existing.getTitle());
+        Assertions.assertEquals("Updated description", existing.getDescription());
+        Assertions.assertFalse(existing.getIsActive());
+        Assertions.assertEquals(dto.getStartDate(), existing.getStartDate());
+        Assertions.assertEquals(dto.getEndDate(), existing.getEndDate());
+        Assertions.assertSame(employee, existing.getEmployee());
+        Assertions.assertEquals(createdAt, existing.getCreatedAt());
     }
 
     @Test
