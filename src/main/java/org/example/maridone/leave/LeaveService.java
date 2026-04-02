@@ -4,16 +4,18 @@ import org.example.maridone.annotation.*;
 import org.example.maridone.common.CommonCalculator;
 import org.example.maridone.common.CommonSpecs;
 import org.example.maridone.config.PayrollConfig;
-import org.example.maridone.enums.Position;
+import org.example.maridone.document.DocumentPathRepository;
+import org.example.maridone.document.NOCLOUD.LocalDocumentService;
+import org.example.maridone.document.path.DocumentPath;
+import org.example.maridone.document.spec.DocumentSpecs;
+import org.example.maridone.enums.*;
 import org.example.maridone.core.employee.Employee;
 import org.example.maridone.core.employee.EmployeeRepository;
 import org.example.maridone.core.user.UserAccount;
 import org.example.maridone.core.user.UserAccountRepository;
-import org.example.maridone.enums.EmploymentStatus;
-import org.example.maridone.enums.LeaveType;
-import org.example.maridone.enums.Status;
 import org.example.maridone.exception.conflict.OverlappingDatesException;
 import org.example.maridone.exception.notfound.*;
+import org.example.maridone.exception.toolarge.FileTooLargeException;
 import org.example.maridone.exception.unauthorized.DuplicateLeaveException;
 import org.example.maridone.exception.unauthorized.InsufficientBalanceException;
 import org.example.maridone.leave.balance.*;
@@ -24,12 +26,15 @@ import org.example.maridone.leave.spec.LeaveSpecs;
 import org.example.maridone.schedule.shift.TemplateShiftRepository;
 import org.example.maridone.schedule.shift.TemplateShiftSchedule;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -51,7 +56,9 @@ public class LeaveService {
     private final EmployeeRepository employeeRepository;
     private final UserAccountRepository userAccountRepository;
     private final TemplateShiftRepository templateShiftRepository;
+    private final DocumentPathRepository documentPathRepository;
     private final LeaveMapper leaveMapper;
+    private final LocalDocumentService localDocumentService;
     private final PayrollConfig payrollConfig;
 
     public LeaveService(
@@ -60,14 +67,19 @@ public class LeaveService {
             EmployeeRepository employeeRepository,
             UserAccountRepository userAccountRepository,
             TemplateShiftRepository templateShiftRepository,
+            DocumentPathRepository documentPathRepository,
             LeaveMapper leaveMapper,
+            //todo: change to Cloud
+            LocalDocumentService localDocumentService,
             PayrollConfig payrollConfig) {
         this.leaveBalanceRepository = leaveBalanceRepository;
         this.leaveRequestRepository = leaveRequestRepository;
         this.employeeRepository = employeeRepository;
         this.userAccountRepository = userAccountRepository;
         this.templateShiftRepository = templateShiftRepository;
+        this.documentPathRepository = documentPathRepository;
         this.leaveMapper = leaveMapper;
+        this.localDocumentService = localDocumentService;
         this.payrollConfig = payrollConfig;
     }
 
@@ -181,7 +193,7 @@ public class LeaveService {
     @Transactional
     @ExecutionTime
     @NotifyRole(message = "Leave Request Pending", targetRole = Position.HR, importance = "HIGH")
-    public List<LeaveRequest> createLeaveRequest(LeaveRequestDto payload, Long empId) {
+    public List<LeaveRequest> createLeaveRequest(LeaveRequestDto payload, Long empId, MultipartFile file) {
         Employee emp =  employeeRepository.findById(empId).orElseThrow(() -> new EmployeeNotFoundException(empId));
         List<LeaveRequest> requests = new ArrayList<>();
 
@@ -236,7 +248,13 @@ public class LeaveService {
                 requests.add(unpaidRequest);
             }
         }
-
+        if (file != null) {
+            //max file size = 10mb
+            if (file.getSize() > (10*1024*1024)) {
+                throw new FileTooLargeException("File size exceeded 10MB.");
+            }
+            localDocumentService.upload(file, emp.getUserAccount().getUsername(), Directories.LEAVE_REQUEST.getDisplayName());
+        }
         leaveRequestRepository.saveAll(requests);
         return requests;
     }
@@ -396,6 +414,24 @@ public class LeaveService {
         return payload.getEndDateTime();
     }
 
+
+    public LeaveDetails getLeaveRequestDetails(Long requestId) {
+        LeaveDetails details = leaveRequestRepository.getLeaveRequestDetails(requestId);
+        Specification<DocumentPath> spec = Specification.allOf(
+                CommonSpecs.fieldLike("filePath", "leave-request"),
+                DocumentSpecs.hasUsername(details.getUsername())
+        );
+        Page<DocumentPath> result = documentPathRepository.findAll(
+                spec,
+                PageRequest.of(0, 1, Sort.by(Sort.Direction.DESC, "pathId"))
+        );
+
+        details.setPathId(result.stream()
+                .findFirst()
+                .map(DocumentPath::getPathId)
+                .orElse(null));
+        return details;
+    }
 
 
     private record LeaveWindow(LocalDateTime startDateTime, LocalDateTime endDateTime) {}

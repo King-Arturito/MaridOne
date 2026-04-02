@@ -41,12 +41,12 @@ public class CloudStorageService implements StorageService {
     @Override
     @AuditLog
     @ExecutionTime
-    public String store(MultipartFile file, String username) {
+    public String store(MultipartFile file, String username, String subDir) {
         try {
             String originalName = file.getOriginalFilename() != null
                     ? file.getOriginalFilename() : "unnamed";
             String cleanedName = StringUtils.cleanPath(originalName);
-            String uniqueFileName = username + "/" + UUID.randomUUID() + "_" + cleanedName;
+            String uniqueFileName = username + "/" + subDir + "/" + UUID.randomUUID() + "_" + cleanedName; // ✅
 
             PutObjectRequest putObjectRequest = PutObjectRequest.builder()
                     .bucket(cloudConfig.getBucketName())

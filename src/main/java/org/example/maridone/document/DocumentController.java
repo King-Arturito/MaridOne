@@ -1,7 +1,6 @@
 package org.example.maridone.document;
 
 import org.example.maridone.document.dto.DocumentResponseDto;
-import org.example.maridone.document.path.DocumentPath;
 import org.springframework.context.annotation.Profile;
 import org.springframework.core.io.Resource;
 import org.springframework.http.HttpHeaders;
@@ -36,16 +35,18 @@ public class DocumentController {
     @PostMapping("/upload")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<DocumentResponseDto> upload(@RequestParam("file") MultipartFile file,
+                                                      @RequestParam("subDir") String subDir,
                                                       Authentication authentication) {
-        return ResponseEntity.ok(documentService.upload(file, authentication.getName()));
+        return ResponseEntity.ok(documentService.upload(file, authentication.getName(), subDir));
     }
 
     @PutMapping("/{id}/replace")
     @PreAuthorize("@documentOwnerCheck.isSelf(#pathId, authentication.name)")
     public ResponseEntity<DocumentResponseDto> replace(@PathVariable("id") Long pathId,
+                                                @RequestParam("subDir") String subDir,
                                                 @RequestParam("file") MultipartFile file,
                                                 Authentication authentication) {
-        return ResponseEntity.ok(documentService.replace(pathId, file, authentication.getName()));
+        return ResponseEntity.ok(documentService.replace(pathId, file, authentication.getName(), subDir));
     }
 
     @DeleteMapping("/{id}/delete")

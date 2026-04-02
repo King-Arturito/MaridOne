@@ -14,7 +14,6 @@ import java.util.UUID;
 
 //todo:  REMOVE AFTER DEFENSE
 @Service
-@Profile("dev")
 public class LocalStorageService implements StorageService {
 
     private final Path rootLocation = Paths.get("local-documents");
@@ -28,17 +27,16 @@ public class LocalStorageService implements StorageService {
     }
 
     @Override
-    public String store(MultipartFile file, String username) {
+    public String store(MultipartFile file, String username, String dirName) {
         try {
             if (file.isEmpty()) {
                 throw new RuntimeException("Failed to store empty file.");
             }
 
-            // Generate a unique filename so files with the same name don't overwrite each other
             String uniqueFileName = UUID.randomUUID() + "_" + file.getOriginalFilename();
 
-            // Group files by username in sub-folders
-            Path userDir = rootLocation.resolve(username);
+            // local-document/username/dirName/
+            Path userDir = rootLocation.resolve(username).resolve(dirName);
             Files.createDirectories(userDir);
 
             Path destinationFile = userDir.resolve(Paths.get(uniqueFileName))

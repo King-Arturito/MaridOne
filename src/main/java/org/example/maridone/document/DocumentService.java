@@ -46,11 +46,11 @@ public class DocumentService {
     @ExecutionTime
     @Transactional
     @AuditLog
-    public DocumentResponseDto upload(MultipartFile file, String username) {
+    public DocumentResponseDto upload(MultipartFile file, String username, String subDir) {
         UserAccount user = userAccountRepository.findByUsername(username)
                 .orElseThrow(() -> new AccountNotFoundException("User not found"));
 
-        String savedFilePath = cloudStorageService.store(file, username);
+        String savedFilePath = cloudStorageService.store(file, username, subDir);
 
         DocumentPath doc = new DocumentPath();
         doc.setFileName(file.getOriginalFilename() != null ? file.getOriginalFilename() : "unnamed");
@@ -65,13 +65,13 @@ public class DocumentService {
     @ExecutionTime
     @Transactional
     @AuditLog
-    public DocumentResponseDto replace(Long pathId, MultipartFile file, String username) {
+    public DocumentResponseDto replace(Long pathId, MultipartFile file, String username, String subDir) {
         DocumentPath document = documentPathRepository.findById(pathId)
                 .orElseThrow(() -> new RuntimeException("Document not found"));
 
         cloudStorageService.delete(document.getFilePath());
 
-        String newFilePath = cloudStorageService.store(file, username);
+        String newFilePath = cloudStorageService.store(file, username, subDir);
 
         document.setFileName(file.getOriginalFilename() != null ? file.getOriginalFilename() : "unnamed");
         document.setFileType(file.getContentType() != null ? file.getContentType() : "application/octet-stream");

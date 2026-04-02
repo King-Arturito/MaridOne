@@ -4,13 +4,20 @@ import org.example.maridone.annotation.NotifyRole;
 import org.example.maridone.annotation.ExecutionTime;
 import org.example.maridone.annotation.Notify;
 import org.example.maridone.common.CommonSpecs;
+import org.example.maridone.document.DocumentPathRepository;
+import org.example.maridone.document.NOCLOUD.LocalDocumentService;
+import org.example.maridone.document.path.DocumentPath;
+import org.example.maridone.document.spec.DocumentSpecs;
+import org.example.maridone.enums.Directories;
 import org.example.maridone.enums.PayrollStatus;
 import org.example.maridone.enums.Position;
 import org.example.maridone.enums.Status;
+import org.example.maridone.exception.toolarge.FileTooLargeException;
 import org.example.maridone.exception.unauthorized.DuplicateDisputeException;
 import org.example.maridone.exception.unauthorized.InvalidActionException;
 import org.example.maridone.exception.notfound.ItemNotFoundException;
 import org.example.maridone.exception.notfound.RequestNotFoundException;
+import org.example.maridone.payroll.dto.DisputeDetails;
 import org.example.maridone.payroll.item.PayrollItem;
 import org.example.maridone.payroll.dto.DisputeActionDto;
 import org.example.maridone.payroll.dto.DisputeRequestDto;
@@ -19,23 +26,34 @@ import org.example.maridone.payroll.mapper.PayrollMapper;
 import org.example.maridone.payroll.run.PayrollItemRepository;
 import org.example.maridone.payroll.spec.DisputeSpecs;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
+
 import java.time.Instant;
 
 @Service
 public class DisputeService {
     private final DisputeRequestRepository disputeRepository;
     private final PayrollItemRepository payrollItemRepository;
+    private final DocumentPathRepository documentPathRepository;
+    //todo: change to cloud
+    private final LocalDocumentService localDocumentService;
     private final PayrollMapper payrollMapper;
     public DisputeService
             (DisputeRequestRepository disputeRepository,
              PayrollItemRepository payrollItemRepository,
+             DocumentPathRepository documentPathRepository,
+             LocalDocumentService localDocumentService,
              PayrollMapper payrollMapper) {
         this.disputeRepository = disputeRepository;
         this.payrollItemRepository = payrollItemRepository;
+        this.documentPathRepository = documentPathRepository;
+        this.localDocumentService = localDocumentService;
         this.payrollMapper = payrollMapper;
     }
 
@@ -43,7 +61,7 @@ public class DisputeService {
     @Transactional
     @ExecutionTime
     @NotifyRole(message = "Dispute Requested", targetRole = Position.HR, importance = "HIGH")
-    public DisputeRequest createDisputeRequest(Long itemId, DisputeRequestDto payload) {
+    public DisputeRequest createDisputeRequest(Long itemId, DisputeRequestDto payload, MultipartFile file) {
         PayrollItem item = payrollItemRepository
                 .findByItemIdAndPayrollRun_PayrollStatus(itemId, PayrollStatus.POSTED)
                 .orElse(null);
@@ -58,10 +76,17 @@ public class DisputeService {
 
         DisputeRequest disputeRequest = new DisputeRequest();
         disputeRequest.setPayrollItem(item);
+
         disputeRequest.setCreatedAt(Instant.now());
         disputeRequest.setSubject(payload.getSubject());
         disputeRequest.setReason(payload.getReason());
         disputeRequest.setStatus(Status.PENDING);
+        if (file != null) {
+            if (file.getSize() > (10*1024*1024)) {
+                throw new FileTooLargeException("File exceeds 10MB");
+            }
+            localDocumentService.upload(file, item.getEmployee().getUserAccount().getUsername(), Directories.DISPUTE.getDisplayName());
+        }
         return disputeRepository.save(disputeRequest);
     }
 
@@ -98,6 +123,41 @@ public class DisputeService {
                 );
         Page<DisputeRequest> entityPage = disputeRepository.findAll(spec, pageable);
         return entityPage.map(this::toResponseDtoWithEmployeeId);
+    }
+
+    public DisputeDetails getDisputeRequestDetails(long disputeId) {
+        DisputeRequest request = disputeRepository.findById(disputeId)
+                .orElseThrow(() -> new RequestNotFoundException("Dispute Request", disputeId));
+        DisputeResponseDto responseDto =  toResponseDtoWithEmployeeId(request);
+
+        String username = request.getPayrollItem().getEmployee().getUserAccount().getUsername();
+
+        Specification<DocumentPath> spec = Specification.allOf(
+                CommonSpecs.fieldLike("filePath", Directories.DISPUTE.getDisplayName()),
+                DocumentSpecs.hasUsername(username)
+        );
+
+        DisputeDetails details = new DisputeDetails();
+        details.setId(responseDto.getId());
+        details.setSubject(request.getSubject());
+        details.setStatus(responseDto.getStatus());
+        details.setUpdatedAt(responseDto.getUpdatedAt());
+        details.setCreatedAt(responseDto.getCreatedAt());
+        details.setStatusReason(responseDto.getStatusReason());
+        details.setItemId(responseDto.getItemId());
+        details.setEmployeeId(responseDto.getEmployeeId());
+        details.setEmployeeName(responseDto.getEmployeeName());
+
+        Page<DocumentPath> result = documentPathRepository.findAll(
+                spec,
+                PageRequest.of(0, 1, Sort.by(Sort.Direction.DESC, "pathId"))
+        );
+
+        details.setPathId(result.stream()
+                .findFirst()
+                .map(DocumentPath::getPathId)
+                .orElse(null));
+        return details;
     }
 
     @ExecutionTime

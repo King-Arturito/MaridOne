@@ -12,6 +12,7 @@ import org.example.maridone.core.employee.Employee;
 import org.example.maridone.core.employee.EmployeeRepository;
 import org.example.maridone.core.user.UserAccountRepository;
 import org.example.maridone.config.PayrollConfig;
+import org.example.maridone.enums.Directories;
 import org.example.maridone.enums.LeaveType;
 import org.example.maridone.enums.Status;
 import org.example.maridone.leave.balance.LeaveBalance;
@@ -94,7 +95,7 @@ class LeaveServiceTest {
                 createSchedule(DayOfWeek.MONDAY, LocalTime.of(8, 0), LocalTime.of(17, 0), emp)
         ));
 
-        List<LeaveRequest> results = leaveService.createLeaveRequest(dto, empId);
+        List<LeaveRequest> results = leaveService.createLeaveRequest(dto, empId, null);
         Assertions.assertNotNull(results);
         results.forEach(result -> {
             Assertions.assertEquals(Status.PENDING, result.getRequestStatus());
@@ -129,7 +130,7 @@ class LeaveServiceTest {
                 createSchedule(DayOfWeek.FRIDAY, LocalTime.of(9, 0), LocalTime.of(17, 0), emp)
         ));
 
-        List<LeaveRequest> results = leaveService.createLeaveRequest(dto, empId);
+        List<LeaveRequest> results = leaveService.createLeaveRequest(dto, empId,null);
 
         Assertions.assertEquals(2, results.size());
 

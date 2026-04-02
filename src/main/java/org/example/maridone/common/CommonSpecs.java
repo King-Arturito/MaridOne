@@ -5,6 +5,15 @@ import org.springframework.data.jpa.domain.Specification;
 
 public class CommonSpecs {
 
+    public static <T> Specification<T> fieldLike(String fieldName, Object value) {
+        return ((root, query, cb) -> {
+            if (value == null) {
+                return cb.conjunction();
+            }
+            return cb.like(cb.lower(root.get(fieldName)), "%" + value.toString().toLowerCase() + "%");
+        });
+    }
+
     public static <T> Specification<T> fieldEquals(String fieldName, Object value) {
 
         return (root, query, cb) -> {
