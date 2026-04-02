@@ -190,11 +190,18 @@ public class SampleRows {
                 emp.setEmploymentStatus(EmploymentStatus.TERMINATED);
                 emp.setPosition(Position.EMPLOYEE);
                 break;
+            case 5:
+                emp.setEmploymentStatus(EmploymentStatus.REGULAR);
+                emp.setPosition(Position.MANAGER);
+                break;
             default:
                 emp.setEmploymentStatus(EmploymentStatus.REGULAR);
                 emp.setPosition(Position.EMPLOYEE);
         }
 
+        if (i > 5  && i <= 10) {
+            emp.setManager(employeeRepository.getReferenceById(5L));
+        }
         if(i == 1) {
             emp.setEmail("arthurjustin.evangelista.cics@ust.edu.ph");
         } else {
