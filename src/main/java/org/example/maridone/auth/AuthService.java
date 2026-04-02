@@ -6,13 +6,14 @@ import org.example.maridone.auth.token.RefreshToken;
 import org.example.maridone.auth.token.RefreshTokenRepository;
 import org.example.maridone.auth.twofactor.TotpService;
 import org.example.maridone.config.JwtConfig;
-import org.example.maridone.core.employee.Employee;
 import org.example.maridone.core.user.UserAccount;
 import org.example.maridone.core.user.UserAccountRepository;
 import org.example.maridone.core.user.UserLoginService;
+import org.example.maridone.enums.EmploymentStatus;
 import org.example.maridone.exception.notfound.AccountNotFoundException;
 import org.example.maridone.exception.badrequest.InvalidRefreshTokenException;
 import org.example.maridone.exception.badrequest.UnauthorizedAccessException;
+import org.example.maridone.exception.notfound.EmployeeNotFoundException;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -64,6 +65,13 @@ public class AuthService {
 
             UserAccount userAccount = userAccountRepository.findByUsername(authentication.getName())
                     .orElseThrow(() -> new AccountNotFoundException("username of: " + loginRequest.getUsername() + " not found"));
+
+            EmploymentStatus status = userAccount.getEmployee().getEmploymentStatus();
+            if (status.equals(EmploymentStatus.TERMINATED)) {
+                throw new UnauthorizedAccessException("You many not login. Your account has been terminated.");
+            } else if (status.equals(EmploymentStatus.SUSPENDED)) {
+                throw new UnauthorizedAccessException("You are currently suspended.");
+            }
 
             if (userAccount.getTwoFactorEnabled()) {
                 String preAuthToken = jwtService.generatePreAuthToken(userDetails);

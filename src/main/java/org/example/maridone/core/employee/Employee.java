@@ -78,7 +78,7 @@ public class Employee {
     @Embedded
     private Address address;
 
-    @OneToOne(mappedBy = "employee", cascade = CascadeType.ALL)
+    @OneToOne(mappedBy = "employee", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     private UserAccount userAccount;
 
     /*
