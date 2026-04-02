@@ -63,29 +63,64 @@ public class EmployeeService {
     @ExecutionTime
     public EmployeeResponseDto updateEmployee(Long id, EmployeeRequestDto updated) {
         Employee emp = employeeRepository.findById(id).orElseThrow(() -> new EmployeeNotFoundException(id));
-        Optional.ofNullable(updated.getFirstName()).ifPresent(emp::setFirstName);
-        Optional.ofNullable(updated.getMiddleName()).ifPresent(emp::setMiddleName);
-        Optional.ofNullable(updated.getLastName()).ifPresent(emp::setLastName);
-        Optional.ofNullable(updated.getBirthDate()).ifPresent(emp::setBirthDate);
-        if (updated.getEmail() != null) {
-            emp.setEmail(updated.getEmail());
-            emp.setIsVerified(false);
-        }
-        Optional.ofNullable(updated.getPhoneNumber()).ifPresent(emp::setPhoneNumber);
-        Optional.ofNullable(updated.getAddress()).ifPresent(
-                newAddr -> {
-                    Address existing = Optional.ofNullable(emp.getAddress()).orElseGet(() -> {
-                        Address a = new Address();
-                        emp.setAddress(a);
-                        return a;
+
+        Optional.ofNullable(updated.getFirstName())
+                .filter(v -> !v.equals(emp.getFirstName()))
+                .ifPresent(emp::setFirstName);
+
+        Optional.ofNullable(updated.getMiddleName())
+                .filter(v -> !v.equals(emp.getMiddleName()))
+                .ifPresent(emp::setMiddleName);
+
+        Optional.ofNullable(updated.getLastName())
+                .filter(v -> !v.equals(emp.getLastName()))
+                .ifPresent(emp::setLastName);
+
+        Optional.ofNullable(updated.getBirthDate())
+                .filter(v -> !v.equals(emp.getBirthDate()))
+                .ifPresent(emp::setBirthDate);
+
+        Optional.ofNullable(updated.getEmail())
+                .filter(v -> !v.equals(emp.getEmail()))
+                .ifPresent(newEmail -> {
+                    emp.setEmail(newEmail);
+                    emp.setIsVerified(false);
+                });
+
+        Optional.ofNullable(updated.getPhoneNumber())
+                .filter(v -> !v.equals(emp.getPhoneNumber()))
+                .ifPresent(emp::setPhoneNumber);
+
+        Optional.ofNullable(updated.getAddress()).ifPresent(newAddr -> {
+            Address existing = Optional.ofNullable(emp.getAddress()).orElseGet(() -> {
+                Address a = new Address();
+                emp.setAddress(a);
+                return a;
             });
 
-            Optional.ofNullable(newAddr.getPermanentAddress()).ifPresent(existing::setPermanentAddress);
-            Optional.ofNullable(newAddr.getTemporaryAddress()).ifPresent(existing::setTemporaryAddress);
-            Optional.ofNullable(newAddr.getCity()).ifPresent(existing::setCity);
-            Optional.ofNullable(newAddr.getState()).ifPresent(existing::setState);
-            Optional.ofNullable(newAddr.getCountry()).ifPresent(existing::setCountry);
-            Optional.ofNullable(newAddr.getZipCode()).ifPresent(existing::setZipCode);
+            Optional.ofNullable(newAddr.getPermanentAddress())
+                    .filter(v -> !v.equals(existing.getPermanentAddress()))
+                    .ifPresent(existing::setPermanentAddress);
+
+            Optional.ofNullable(newAddr.getTemporaryAddress())
+                    .filter(v -> !v.equals(existing.getTemporaryAddress()))
+                    .ifPresent(existing::setTemporaryAddress);
+
+            Optional.ofNullable(newAddr.getCity())
+                    .filter(v -> !v.equals(existing.getCity()))
+                    .ifPresent(existing::setCity);
+
+            Optional.ofNullable(newAddr.getState())
+                    .filter(v -> !v.equals(existing.getState()))
+                    .ifPresent(existing::setState);
+
+            Optional.ofNullable(newAddr.getCountry())
+                    .filter(v -> !v.equals(existing.getCountry()))
+                    .ifPresent(existing::setCountry);
+
+            Optional.ofNullable(newAddr.getZipCode())
+                    .filter(v -> !v.equals(existing.getZipCode()))
+                    .ifPresent(existing::setZipCode);
         });
 
         employeeRepository.save(emp);
@@ -94,15 +129,6 @@ public class EmployeeService {
     }
 
 
-    @Transactional
-    @ExecutionTime
-    public void batchUpdateEmploymentStatus(List<Long> employeeIds) {
-        List<Employee> employees = new ArrayList<>();
-
-        //update only employmentStatus
-
-        employeeRepository.saveAll(employees);
-    }
 
     @Transactional
     @ExecutionTime
