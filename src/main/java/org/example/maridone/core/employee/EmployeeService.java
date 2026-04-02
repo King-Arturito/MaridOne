@@ -186,8 +186,8 @@ public class EmployeeService {
         if (digitsOnly.isEmpty()) {
             throw new IllegalArgumentException("Phone number must contain digits only.");
         }
-        if (digitsOnly.length() > 11) {
-            throw new IllegalArgumentException("Phone number must be at most 11 digits.");
+        if (digitsOnly.length() != 11) {
+            throw new IllegalArgumentException("Phone number must be exactly 11 digits.");
         }
         return digitsOnly;
     }

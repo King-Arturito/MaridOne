@@ -14,6 +14,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import static org.mockito.ArgumentMatchers.any;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -89,5 +90,27 @@ class EmployeeServiceTest {
         Assertions.assertThrows(EmployeeNotFoundException.class, () -> {
             employeeService.getEmployee(empId);
         });
+    }
+
+    @Test
+    void createEmployee_ShouldThrow_WhenPhoneNumberIsNotExactly11Digits() {
+        EmployeeRequestDto requestDto = new EmployeeRequestDto();
+        Employee employee = new Employee();
+        employee.setFirstName("Frieren");
+        employee.setLastName("Test");
+        employee.setEmail("frieren@example.com");
+        employee.setPhoneNumber("0917123456");
+        employee.setBirthDate(java.time.LocalDate.of(2000, 1, 1));
+        employee.setPosition(Position.EMPLOYEE);
+
+        when(coreMapper.toEmployee(any(EmployeeRequestDto.class))).thenReturn(employee);
+
+        IllegalArgumentException error = Assertions.assertThrows(
+                IllegalArgumentException.class,
+                () -> employeeService.createEmployee(requestDto)
+        );
+
+        Assertions.assertEquals("Phone number must be exactly 11 digits.", error.getMessage());
+        verify(employeeRepository, never()).save(any(Employee.class));
     }
 }
