@@ -48,7 +48,7 @@ class DisputeServiceTest {
                 .thenReturn(Optional.of(item));
         when(disputeRepository.save(any(DisputeRequest.class))).thenAnswer(i -> i.getArgument(0));
 
-        DisputeRequest result = disputeService.createDisputeRequest(itemId, dto);
+        DisputeRequest result = disputeService.createDisputeRequest(itemId, dto, null);
 
         Assertions.assertNotNull(result);
         Assertions.assertEquals(Status.PENDING, result.getStatus());
@@ -65,7 +65,7 @@ class DisputeServiceTest {
                 .thenReturn(Optional.empty());
 
         Assertions.assertThrows(ItemNotFoundException.class, () -> {
-            disputeService.createDisputeRequest(itemId, dto);
+            disputeService.createDisputeRequest(itemId, dto, null);
         });
     }
 

@@ -2,6 +2,9 @@ package org.example.maridone.schedule.calendar;
 
 import org.example.maridone.annotation.ExecutionTime;
 import org.example.maridone.common.CommonSpecs;
+import org.example.maridone.core.user.UserAccount;
+import org.example.maridone.core.user.UserAccountRepository;
+import org.example.maridone.exception.notfound.AccountNotFoundException;
 import org.example.maridone.exception.notfound.CalendarEventNotFound;
 import org.example.maridone.schedule.dto.CalendarDto;
 import org.example.maridone.schedule.mapper.CalendarMapper;
@@ -10,6 +13,7 @@ import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
 import java.util.List;
 
 @Service
@@ -17,22 +21,34 @@ public class CalendarService {
 
     private final CalendarRepository calendarRepository;
     private final CalendarMapper calendarMapper;
+    private final UserAccountRepository userAccountRepository;
 
     public CalendarService(
             CalendarRepository calendarRepository,
-            CalendarMapper calendarMapper)
+            CalendarMapper calendarMapper,
+            UserAccountRepository userAccountRepository)
     {
         this.calendarRepository = calendarRepository;
         this.calendarMapper = calendarMapper;
+        this.userAccountRepository = userAccountRepository;
     }
 
-        @Transactional
-        public CompanyCalendar createEvent(CalendarDto calendar) {
-            if (calendar.getIsActive() == null) {
-                calendar.setIsActive(Boolean.TRUE);
-            }
-            return calendarRepository.save(calendarMapper.toCompanyCalendar(calendar));
+    @Transactional
+    public CompanyCalendar createEvent(CalendarDto calendar, String username) {
+        if (calendar.getIsActive() == null) {
+            calendar.setIsActive(Boolean.TRUE);
         }
+
+        UserAccount userAccount = userAccountRepository.findByUsername(username).orElseThrow(
+                () -> new AccountNotFoundException("username of: " + username)
+        );
+
+        CompanyCalendar companyCalendar = calendarMapper.toCompanyCalendar(calendar);
+        companyCalendar.setIsActive(calendar.getIsActive());
+        companyCalendar.setEmployee(userAccount.getEmployee());
+        companyCalendar.setCreatedAt(Instant.now());
+        return calendarRepository.save(companyCalendar);
+    }
 
 
     @Transactional
@@ -40,7 +56,12 @@ public class CalendarService {
     public CompanyCalendar updateEvent(CalendarDto calendar) {
         CompanyCalendar cal = calendarRepository.findById(calendar.getCalendarId()).orElseThrow(
                 () -> new CalendarEventNotFound("Event of ID:" + calendar.getCalendarId() + " not found."));
-        return calendarRepository.save(calendarMapper.toCompanyCalendar(calendar));
+        cal.setTitle(calendar.getTitle());
+        cal.setDescription(calendar.getDescription());
+        cal.setStartDate(calendar.getStartDate());
+        cal.setEndDate(calendar.getEndDate());
+        cal.setIsActive(calendar.getIsActive());
+        return calendarRepository.save(cal);
     }
 
     @Transactional

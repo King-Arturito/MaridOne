@@ -1,6 +1,7 @@
 package org.example.maridone.schedule.calendar;
 
 import jakarta.persistence.*;
+import org.example.maridone.core.employee.Employee;
 
 import java.time.Instant;
 
@@ -26,6 +27,13 @@ public class CompanyCalendar {
 
     @Column(name = "is_active", nullable = false)
     private Boolean isActive;
+
+    @ManyToOne(fetch = FetchType.EAGER, optional = false)
+    @JoinColumn(name = "emp_id", nullable = false)
+    private Employee employee;
+
+    @Column(name = "created_at", nullable = false)
+    private Instant createdAt;
 
     public Long getCalendarId() {
         return calendarId;
@@ -69,5 +77,21 @@ public class CompanyCalendar {
 
     public void setIsActive(Boolean active) {
         isActive = active;
+    }
+
+    public Employee getEmployee() {
+        return employee;
+    }
+
+    public void setEmployee(Employee employee) {
+        this.employee = employee;
+    }
+
+    public Instant getCreatedAt() {
+        return createdAt;
+    }
+
+    public void setCreatedAt(Instant createdAt) {
+        this.createdAt = createdAt;
     }
 }

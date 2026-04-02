@@ -4,5 +4,9 @@ CREATE TABLE company_calendar (
     description VARCHAR(500),
     start_date  TIMESTAMPTZ     NOT NULL,
     end_date    TIMESTAMPTZ     NOT NULL,
-    is_active   BOOLEAN         NOT NULL
+    is_active   BOOLEAN         NOT NULL,
+    emp_id      BIGINT          NOT NULL,
+    created_at  TIMESTAMPTZ     NOT NULL,
+
+    CONSTRAINT fk_company_calendar_employee FOREIGN KEY (emp_id) REFERENCES employee (emp_id)
 );

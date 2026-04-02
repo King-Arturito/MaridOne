@@ -108,13 +108,6 @@ public class SampleRows {
     }
 
     public void sampleData() {
-        // Create calendar events
-        CompanyCalendar companyEvent = calendarEvents(new CompanyCalendar(), 1);
-        CompanyCalendar companyEvent2 = calendarEvents(new CompanyCalendar(), 2);
-        calendarRepository.save(companyEvent);
-        calendarRepository.save(companyEvent2);
-
-
         PayrollRun payrollRun = new PayrollRun();
         payrollRun.setPayrollStatus(PayrollStatus.IN_PROGRESS);
         payrollRun.setRunType(RunType.REGULAR);
@@ -124,12 +117,21 @@ public class SampleRows {
         payrollRun = payrollRunRepository.save(payrollRun);
 
         List<PayrollItem> items = new ArrayList<>();
+        Employee managementAnnouncementAuthor = null;
+        Employee hrAnnouncementAuthor = null;
 
         // Create 10 sample employees
         for (int i = 1; i <= 10; i++) {
             // 1. Create and save employee first
             Employee emp = createEmployee(i);
             emp = employeeRepository.save(emp);
+
+            if (managementAnnouncementAuthor == null && emp.getPosition() == Position.MANAGEMENT) {
+                managementAnnouncementAuthor = emp;
+            }
+            if (hrAnnouncementAuthor == null && emp.getPosition() == Position.HR) {
+                hrAnnouncementAuthor = emp;
+            }
 
             // 2. Create and save child entities, linking back to employee
             createAndSaveBankAccounts(emp, i);
@@ -148,6 +150,13 @@ public class SampleRows {
         // Save payroll run with all items
         payrollRun.setItems(items);
         payrollRunRepository.save(payrollRun);
+
+        if (managementAnnouncementAuthor != null) {
+            calendarRepository.save(calendarEvents(new CompanyCalendar(), 1, managementAnnouncementAuthor));
+        }
+        if (hrAnnouncementAuthor != null) {
+            calendarRepository.save(calendarEvents(new CompanyCalendar(), 2, hrAnnouncementAuthor));
+        }
     }
 
     private Employee createEmployee(int i) {
@@ -644,9 +653,11 @@ public class SampleRows {
         return payrollItemRepository.save(payrollItem);
     }
 
-    private CompanyCalendar calendarEvents(CompanyCalendar calendar, int i) {
+    private CompanyCalendar calendarEvents(CompanyCalendar calendar, int i, Employee employee) {
         calendar.setIsActive(true);
         ZonedDateTime now = ZonedDateTime.now(ZoneOffset.UTC);
+        calendar.setEmployee(employee);
+        calendar.setCreatedAt(now.minusDays(i).toInstant());
 
         if (i == 1) {
             calendar.setStartDate(now.minusMonths(1).toInstant());
