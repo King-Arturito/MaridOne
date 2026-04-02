@@ -35,7 +35,7 @@ public class PayrollController {
     }
 
     @GetMapping("/run/{payId}/items")
-    @PreAuthorize("hasAnyRole('HR', 'ACCOUNTING')")
+    @PreAuthorize("hasAnyRole('HR', 'MANAGEMENT', 'ACCOUNTING')")
     @AuditLog
     public Page<ItemViewDto> getRunItems(ItemFilter filter,
                                          @PathVariable Long payId,
@@ -50,13 +50,13 @@ public class PayrollController {
     }
 
     @GetMapping("/run")
-    @PreAuthorize("hasAnyRole('HR', 'ACCOUNTING')")
+    @PreAuthorize("hasAnyRole('HR', 'MANAGEMENT', 'ACCOUNTING')")
     public List<PayrollRunViewDto> getRuns() {
         return payrollService.getRuns();
     }
 
     @GetMapping("/run/{payId}")
-    @PreAuthorize("hasAnyRole('HR', 'ACCOUNTING')")
+    @PreAuthorize("hasAnyRole('HR', 'MANAGEMENT', 'ACCOUNTING')")
     public PayrollRunViewDto getRun(@PathVariable Long payId) {
         return payrollService.getRun(payId);
     }
