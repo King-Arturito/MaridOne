@@ -175,11 +175,11 @@ public class PayrollItemService {
         List<PayTypeSummaryDto> summaryDtos = new ArrayList<>();
 
         deductionsRepository.getSummarizedDeductions(payId).forEach(p ->
-                summaryDtos.add(new PayTypeSummaryDto(p.getType(), p.getTotalAmount()))
+                summaryDtos.add(new PayTypeSummaryDto(AdjustmentKind.DEDUCTION, p.getType(), p.getTotalAmount()))
         );
 
         earningsRepository.getSummarizedEarnings(payId).forEach(p ->
-                summaryDtos.add(new PayTypeSummaryDto(p.getType(), p.getTotalAmount()))
+                summaryDtos.add(new PayTypeSummaryDto(AdjustmentKind.EARNING,p.getType(), p.getTotalAmount()))
         );
 
         return summaryDtos;

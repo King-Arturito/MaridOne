@@ -1,10 +1,12 @@
 package org.example.maridone.payroll.dto;
 
+import org.example.maridone.enums.AdjustmentKind;
 import org.example.maridone.enums.DeductionType;
 
 import java.math.BigDecimal;
 
 public class PayTypeSummaryDto {
+    private AdjustmentKind adjustment;
     private String payType;
     private BigDecimal total;
 
@@ -12,9 +14,18 @@ public class PayTypeSummaryDto {
 
     }
 
-    public PayTypeSummaryDto(String payType, BigDecimal total) {
+    public PayTypeSummaryDto(AdjustmentKind adjustmentKind, String payType, BigDecimal total) {
+        this.adjustment = adjustmentKind;
         this.payType = payType;
         this.total = total;
+    }
+
+    public AdjustmentKind getAdjustment() {
+        return adjustment;
+    }
+
+    public void setAdjustment(AdjustmentKind adjustment) {
+        this.adjustment = adjustment;
     }
 
     public String getPayType() {
