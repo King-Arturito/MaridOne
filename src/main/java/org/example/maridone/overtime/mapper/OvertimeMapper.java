@@ -13,6 +13,8 @@ public interface OvertimeMapper {
     OvertimeRequest toOvertimeRequest(OvertimeRequestDto overtimeRequestDto);
 
     @Mapping(source = "employeeId", target = "employeeId")
+    @Mapping(source =  "employee.firstName", target = "firstName")
+    @Mapping(source = "employee.lastName", target = "lastName")
     OvertimeResponseDto toOvertimeResponseDto(OvertimeRequest overtimeRequest);
 
     List<OvertimeResponseDto> toOvertimeResponsesDto(List<OvertimeRequest> overtimeRequests);

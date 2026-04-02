@@ -19,6 +19,8 @@ public interface LeaveMapper {
     LeaveBalance toEntity(BalanceRequestDto balanceRequestDto, Employee employee);
 
     @Mapping(target = "empId", source  = "employee.employeeId")
+    @Mapping(target = "firstName", source = "employee.firstName")
+    @Mapping(target = "lastName", source = "employee.lastName")
     LeaveResponseDto toLeaveResponseDto(LeaveRequest leaveRequest);
 
     List<LeaveResponseDto> toLeaveResponseDtos(List<LeaveRequest> leaveRequests);

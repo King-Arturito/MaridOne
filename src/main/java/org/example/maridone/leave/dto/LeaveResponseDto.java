@@ -7,11 +7,29 @@ import java.time.LocalDateTime;
 public class LeaveResponseDto {
     private Long requestId;
     private Long empId;
+    private String firstName;
+    private String lastName;
     private LocalDateTime startDateTime;
     private LocalDateTime endDateTime;
     private Status requestStatus;
     private String reason;
     private Boolean isPaid;
+
+    public String getFirstName() {
+        return firstName;
+    }
+
+    public void setFirstName(String firstName) {
+        this.firstName = firstName;
+    }
+
+    public String getLastName() {
+        return lastName;
+    }
+
+    public void setLastName(String lastName) {
+        this.lastName = lastName;
+    }
 
     public Long getRequestId() {
         return requestId;

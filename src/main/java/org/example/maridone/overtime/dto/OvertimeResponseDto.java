@@ -9,6 +9,8 @@ import java.time.LocalTime;
 public class OvertimeResponseDto {
     private Long overtimeId;
     private Long employeeId;
+    private String firstName;
+    private String lastName;
     private Status requestStatus;
     private Instant requestAt;
     private LocalDate workDate;
@@ -19,6 +21,23 @@ public class OvertimeResponseDto {
     private String approver;
     private Instant approvedAt;
     private String approveReason;
+
+    public String getFirstName() {
+
+        return firstName;
+    }
+
+    public void setFirstName(String firstName) {
+        this.firstName = firstName;
+    }
+
+    public String getLastName() {
+        return lastName;
+    }
+
+    public void setLastName(String lastName) {
+        this.lastName = lastName;
+    }
 
     public Long getOvertimeId() {
         return overtimeId;
