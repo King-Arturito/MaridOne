@@ -179,7 +179,7 @@ public class PayrollItemService {
         );
 
         earningsRepository.getSummarizedEarnings(payId).forEach(p ->
-                summaryDtos.add(new PayTypeSummaryDto(AdjustmentKind.EARNING,p.getType(), p.getTotalAmount()))
+                summaryDtos.add(new PayTypeSummaryDto(AdjustmentKind.EARNING, p.getType(), p.getTotalAmount()))
         );
 
         return summaryDtos;

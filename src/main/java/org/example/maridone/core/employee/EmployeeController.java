@@ -32,7 +32,7 @@ public class EmployeeController {
 
     // ENDPOINT: /api/employees/create
     @PostMapping("/create")
-    @PreAuthorize("hasAnyRole('MANAGEMENT', 'HR')")
+    @PreAuthorize("hasAnyRole('MANAGEMENT',  'HR')")
     @AuditLog
     public ResponseEntity<EmployeeResponseDto> createEmployee(@RequestBody EmployeeRequestDto employeeRequestDto) {
         EmployeeResponseDto response = employeeService.createEmployee(employeeRequestDto);
@@ -45,7 +45,7 @@ public class EmployeeController {
     }
 
     //show all employees
-    @PreAuthorize("hasAnyRole('MANAGEMENT',  'HR')")
+    @PreAuthorize("hasAnyRole('MANAGEMENT', 'HR')")
     @GetMapping()
     @AuditLog
     public Page<EmployeeResponseDto> getAllEmployees(
@@ -56,7 +56,7 @@ public class EmployeeController {
 
     // for personal details check only
     @GetMapping("/{id}")
-    @PreAuthorize("@userCheck.isSelf(#id, authentication.getName())")
+    @PreAuthorize("hasRole('HR') or @userCheck.isSelf(#id, authentication.getName())")
     public EmployeeDetailsDto getSelfEmployee(@PathVariable Long id) {
         return employeeService.getSelfEmployee(id);
     }

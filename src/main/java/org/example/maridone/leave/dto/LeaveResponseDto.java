@@ -1,5 +1,6 @@
 package org.example.maridone.leave.dto;
 
+import org.example.maridone.enums.LeaveType;
 import org.example.maridone.enums.Status;
 
 import java.time.LocalDateTime;
@@ -13,6 +14,8 @@ public class LeaveResponseDto {
     private LocalDateTime endDateTime;
     private Status requestStatus;
     private String reason;
+    private LeaveType leaveType;
+    private String approverReason;
     private Boolean isPaid;
 
     public String getFirstName() {
@@ -77,6 +80,22 @@ public class LeaveResponseDto {
 
     public void setReason(String reason) {
         this.reason = reason;
+    }
+
+    public LeaveType getLeaveType() {
+        return leaveType;
+    }
+
+    public void setLeaveType(LeaveType leaveType) {
+        this.leaveType = leaveType;
+    }
+
+    public String getApproverReason() {
+        return approverReason;
+    }
+
+    public void setApproverReason(String approverReason) {
+        this.approverReason = approverReason;
     }
 
     public Boolean getPaid() {

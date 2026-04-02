@@ -3,6 +3,8 @@ package org.example.maridone.payroll.dispute;
 import org.example.maridone.enums.Status;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
@@ -14,7 +16,12 @@ import java.util.Optional;
 
 @Repository
 public interface DisputeRequestRepository extends JpaRepository<DisputeRequest, Long>, JpaSpecificationExecutor<DisputeRequest> {
+    @EntityGraph(attributePaths = {"payrollItem", "payrollItem.employee"})
     Page<DisputeRequest> findAllByStatus(Status status, Pageable pageable);
+
+    @Override
+    @EntityGraph(attributePaths = {"payrollItem", "payrollItem.employee"})
+    Page<DisputeRequest> findAll(Specification<DisputeRequest> spec, Pageable pageable);
 
     @Query("""
         select d from DisputeRequest d

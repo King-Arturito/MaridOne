@@ -285,6 +285,7 @@ public class SampleRows {
         leaveRequest.setEndDateTime(LocalDateTime.of(LocalDate.now().plusDays(1), LocalTime.of(0,30)));
         leaveRequest.setRequestStatus(i % 2 == 0 ? Status.APPROVED : Status.PENDING);
         leaveRequest.setReason("Vacation request #" + i);
+        leaveRequest.setLeaveType(LeaveType.VACATION_LEAVE);
         leaveRequests.add(leaveRequest);
 
         if (i == 6) {
@@ -593,6 +594,7 @@ public class SampleRows {
         request.setEndDateTime(workDate.atTime(endTime));
         request.setRequestStatus(Status.APPROVED);
         request.setReason(reason);
+        request.setLeaveType(LeaveType.VACATION_LEAVE);
         request.setApprover("seed-admin");
         request.setApproverReason("Seeded approved leave");
         return request;

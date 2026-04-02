@@ -231,6 +231,7 @@ public class LeaveService {
                         payload.getStartDateTime(),
                         splitPoint,
                         emp,
+                        payload.getLeaveType(),
                         payload.getReason(),
                         true
                 );
@@ -242,6 +243,7 @@ public class LeaveService {
                         splitPoint,
                         payload.getEndDateTime(),
                         emp,
+                        payload.getLeaveType(),
                         payload.getReason(),
                         false
                 );
@@ -281,12 +283,16 @@ public class LeaveService {
 
         //update leave balance:
         if (request.getPaid() && payload.getRequestStatus().equals(Status.APPROVED)) {
+            LeaveType leaveType = Optional.ofNullable(request.getLeaveType()).orElse(payload.getLeaveType());
+            if (leaveType == null) {
+                throw new IllegalStateException("Leave type is required before approving this request.");
+            }
             updateLeaveBalance(requestEmpId,
                     new UpdateBalanceDto(
                             calculateRequestHours(request.getStartDateTime(),
                                     request.getEndDateTime(),
-                                    user.getEmployeeId()),
-                            payload.getLeaveType(),
+                                    requestEmpId),
+                            leaveType,
                             "subtract"));
         }
 
@@ -314,6 +320,7 @@ public class LeaveService {
                 payload.getStartDateTime(),
                 payload.getEndDateTime(),
                 emp,
+                payload.getLeaveType(),
                 payload.getReason(),
                 isPaid
         );
@@ -323,6 +330,7 @@ public class LeaveService {
             LocalDateTime startDateTime,
             LocalDateTime endDateTime,
             Employee emp,
+            LeaveType leaveType,
             String reason,
             boolean isPaid
     ) {
@@ -331,6 +339,7 @@ public class LeaveService {
         request.setStartDateTime(startDateTime);
         request.setEndDateTime(endDateTime);
         request.setEmployee(emp);
+        request.setLeaveType(leaveType);
         request.setReason(reason);
         request.setPaid(isPaid);
         return request;

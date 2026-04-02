@@ -1,7 +1,6 @@
 package org.example.maridone.payroll.dto;
 
 import org.example.maridone.enums.AdjustmentKind;
-import org.example.maridone.enums.DeductionType;
 
 import java.math.BigDecimal;
 

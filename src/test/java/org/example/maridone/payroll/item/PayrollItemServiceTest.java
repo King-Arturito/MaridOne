@@ -12,6 +12,7 @@ import org.example.maridone.log.ActivityLogRepository;
 import org.example.maridone.log.activity.ActivityLog;
 import org.example.maridone.payroll.dto.EarningsDto;
 import org.example.maridone.payroll.dto.ItemDetailsDto;
+import org.example.maridone.payroll.dto.PayTypeSummaryDto;
 import org.example.maridone.payroll.dto.PayrollItemDto;
 import org.example.maridone.payroll.dto.PayrollLineCorrectionDto;
 import org.example.maridone.payroll.item.component.DeductionsLine;
@@ -21,6 +22,7 @@ import org.example.maridone.payroll.item.component.EarningsLine;
 import org.example.maridone.payroll.item.component.EarningsRepository;
 import org.example.maridone.payroll.item.component.EarningsService;
 import org.example.maridone.payroll.mapper.PayrollMapper;
+import org.example.maridone.payroll.projection.PayTypeSummaryProjection;
 import org.example.maridone.payroll.run.PayrollItemRepository;
 import org.example.maridone.payroll.run.PayrollRun;
 import org.example.maridone.payroll.run.PayrollRunRepository;
@@ -107,6 +109,26 @@ public class PayrollItemServiceTest {
         when(payrollRunRepository.findById(5L)).thenReturn(Optional.of(postedRun));
 
         Assertions.assertThrows(InvalidActionException.class, () -> payrollItemService.createItem(payload));
+    }
+
+    @Test
+    void getSummarizedRunItems_ShouldSeparateEarningsAndDeductionsByAdjustmentKind() {
+        when(deductionsRepository.getSummarizedDeductions(12L)).thenReturn(List.of(
+                summaryProjection("SSS", new BigDecimal("20000.00"))
+        ));
+        when(earningsRepository.getSummarizedEarnings(12L)).thenReturn(List.of(
+                summaryProjection("BASIC", new BigDecimal("50000.00"))
+        ));
+
+        List<PayTypeSummaryDto> result = payrollItemService.getSummarizedRunItems(12L);
+
+        Assertions.assertEquals(2, result.size());
+        Assertions.assertEquals("SSS", result.get(0).getPayType());
+        Assertions.assertEquals(AdjustmentKind.DEDUCTION, result.get(0).getAdjustment());
+        Assertions.assertEquals(new BigDecimal("20000.00"), result.get(0).getTotal());
+        Assertions.assertEquals("BASIC", result.get(1).getPayType());
+        Assertions.assertEquals(AdjustmentKind.EARNING, result.get(1).getAdjustment());
+        Assertions.assertEquals(new BigDecimal("50000.00"), result.get(1).getTotal());
     }
 
     @Test
@@ -205,5 +227,19 @@ public class PayrollItemServiceTest {
                         && !log.getMessage().startsWith("PAYCORR|")
                         && log.getMessage().contains("emp #10 item #21 Basic Pay line #77 800.00->650.00 in adj run #5")
         ));
+    }
+
+    private PayTypeSummaryProjection summaryProjection(String type, BigDecimal totalAmount) {
+        return new PayTypeSummaryProjection() {
+            @Override
+            public String getType() {
+                return type;
+            }
+
+            @Override
+            public BigDecimal getTotalAmount() {
+                return totalAmount;
+            }
+        };
     }
 }

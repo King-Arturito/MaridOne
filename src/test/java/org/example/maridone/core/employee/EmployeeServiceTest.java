@@ -5,6 +5,8 @@ import java.util.Optional;
 import org.example.maridone.core.dto.EmployeeRequestDto;
 import org.example.maridone.core.dto.EmployeeResponseDto;
 import org.example.maridone.core.mapper.CoreMapper;
+import org.example.maridone.enums.ExemptionStatus;
+import org.example.maridone.enums.Position;
 import org.example.maridone.exception.notfound.EmployeeNotFoundException;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
@@ -37,6 +39,11 @@ class EmployeeServiceTest {
         Employee employee = new Employee();
         ReflectionTestUtils.setField(employee, "employeeId", 1L);
         employee.setFirstName("Frieren");
+        employee.setLastName("Test");
+        employee.setEmail("frieren@example.com");
+        employee.setPhoneNumber("09171234567");
+        employee.setBirthDate(java.time.LocalDate.of(2000, 1, 1));
+        employee.setPosition(Position.EMPLOYEE);
 
         EmployeeResponseDto responseDto = new EmployeeResponseDto();
         responseDto.setId(1L);
@@ -51,6 +58,8 @@ class EmployeeServiceTest {
         Assertions.assertNotNull(result);
         Assertions.assertEquals(1L, result.getId()); 
         Assertions.assertEquals("Frieren", result.getFirstName());
+        Assertions.assertNotNull(employee.getEmploymentDateStart());
+        Assertions.assertEquals(ExemptionStatus.NON_EXEMPT, employee.getExemptionStatus());
         verify(employeeRepository).save(any(Employee.class));
     }
 

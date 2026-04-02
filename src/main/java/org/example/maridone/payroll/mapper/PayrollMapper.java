@@ -1,5 +1,6 @@
 package org.example.maridone.payroll.mapper;
 
+import org.example.maridone.core.employee.Employee;
 import org.example.maridone.payroll.dispute.DisputeRequest;
 import org.example.maridone.payroll.dto.*;
 import org.example.maridone.payroll.item.component.DeductionsLine;
@@ -9,6 +10,7 @@ import org.example.maridone.payroll.dto.RunResponseDto;
 import org.example.maridone.payroll.run.PayrollRun;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
+import org.mapstruct.Named;
 
 import java.util.List;
 
@@ -36,7 +38,8 @@ public interface PayrollMapper {
 
     @Mapping(source = "disputeId", target = "id")
     @Mapping(source = "payrollItem.itemId", target = "itemId")
-    @Mapping(target = "employeeId", ignore = true)
+    @Mapping(source = "payrollItem.employee.employeeId", target = "employeeId")
+    @Mapping(source = "payrollItem.employee", target = "employeeName", qualifiedByName = "employeeToFullName")
     DisputeResponseDto toResponseDto(DisputeRequest disputeRequest);
 
     List<DisputeResponseDto> toResponseDtos(List<DisputeRequest> disputeRequests);
@@ -49,5 +52,16 @@ public interface PayrollMapper {
     ItemSummaryDto toItemSummaryDto(PayrollItem payrollItem);
 
     List<ItemSummaryDto> toItemSummaryDtos(List<PayrollItem> payrollItems);
+
+    @Named("employeeToFullName")
+    default String employeeToFullName(Employee employee) {
+        if (employee == null) {
+            return null;
+        }
+        String safeFirstName = employee.getFirstName() == null ? "" : employee.getFirstName().trim();
+        String safeLastName = employee.getLastName() == null ? "" : employee.getLastName().trim();
+        String fullName = (safeFirstName + " " + safeLastName).trim();
+        return fullName.isEmpty() ? null : fullName;
+    }
 
 }

@@ -103,14 +103,14 @@ public class DisputeService {
         disputeRequest.setStatusReason(payload.getStatusReason());
         disputeRequest.setUpdatedAt(Instant.now());
         disputeRepository.save(disputeRequest);
-        return toResponseDtoWithEmployeeId(disputeRequest);
+        return payrollMapper.toResponseDto(disputeRequest);
     }
 
 
     @ExecutionTime
     public Page<DisputeResponseDto> getActiveDisputeRequests(Pageable paging) {
             Page<DisputeRequest> entityPage = disputeRepository.findAllByStatus(Status.PENDING, paging);
-            return entityPage.map(this::toResponseDtoWithEmployeeId);
+            return entityPage.map(payrollMapper::toResponseDto);
     }
 
 
@@ -122,13 +122,13 @@ public class DisputeService {
                 DisputeSpecs.hasEmployeeId(empId)
                 );
         Page<DisputeRequest> entityPage = disputeRepository.findAll(spec, pageable);
-        return entityPage.map(this::toResponseDtoWithEmployeeId);
+        return entityPage.map(payrollMapper::toResponseDto);
     }
 
     public DisputeDetails getDisputeRequestDetails(long disputeId) {
-        DisputeRequest request = disputeRepository.findById(disputeId)
+        DisputeRequest request = disputeRepository.findByIdWithEmployee(disputeId)
                 .orElseThrow(() -> new RequestNotFoundException("Dispute Request", disputeId));
-        DisputeResponseDto responseDto =  toResponseDtoWithEmployeeId(request);
+        DisputeResponseDto responseDto = payrollMapper.toResponseDto(request);
 
         String username = request.getPayrollItem().getEmployee().getUserAccount().getUsername();
 
@@ -170,24 +170,5 @@ public class DisputeService {
         }
         disputeRequest.setStatus(Status.CANCELLED);
         disputeRepository.save(disputeRequest);
-    }
-
-    private DisputeResponseDto toResponseDtoWithEmployeeId(DisputeRequest disputeRequest) {
-        DisputeResponseDto responseDto = payrollMapper.toResponseDto(disputeRequest);
-        if (disputeRequest.getPayrollItem() != null && disputeRequest.getPayrollItem().getEmployee() != null) {
-            responseDto.setEmployeeId(disputeRequest.getPayrollItem().getEmployee().getEmployeeId());
-            responseDto.setEmployeeName(buildEmployeeName(
-                    disputeRequest.getPayrollItem().getEmployee().getFirstName(),
-                    disputeRequest.getPayrollItem().getEmployee().getLastName()
-            ));
-        }
-        return responseDto;
-    }
-
-    private String buildEmployeeName(String firstName, String lastName) {
-        String safeFirstName = firstName == null ? "" : firstName.trim();
-        String safeLastName = lastName == null ? "" : lastName.trim();
-        String fullName = (safeFirstName + " " + safeLastName).trim();
-        return fullName.isEmpty() ? null : fullName;
     }
 }

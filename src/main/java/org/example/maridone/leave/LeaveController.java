@@ -51,7 +51,7 @@ public class LeaveController {
 
     @GetMapping("/request/{empId}")
     @PreAuthorize("@userCheck.isSelf(#empId, authentication.getName())")
-    public Page<LeaveResponseDto> getMyLeaveRequests(Long empId,
+    public Page<LeaveResponseDto> getMyLeaveRequests(@PathVariable Long empId,
                                                      @PageableDefault(sort = "requestId", direction = Sort.Direction.ASC, size = 10) Pageable pageable) {
         return leaveService.getMyLeaveRequests(empId, pageable);
     }
