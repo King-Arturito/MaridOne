@@ -67,7 +67,10 @@ public class EmployeeService {
         Optional.ofNullable(updated.getMiddleName()).ifPresent(emp::setMiddleName);
         Optional.ofNullable(updated.getLastName()).ifPresent(emp::setLastName);
         Optional.ofNullable(updated.getBirthDate()).ifPresent(emp::setBirthDate);
-        Optional.ofNullable(updated.getEmail()).ifPresent(emp::setEmail);
+        if (updated.getEmail() != null) {
+            emp.setEmail(updated.getEmail());
+            emp.setIsVerified(false);
+        }
         Optional.ofNullable(updated.getPhoneNumber()).ifPresent(emp::setPhoneNumber);
         Optional.ofNullable(updated.getAddress()).ifPresent(
                 newAddr -> {

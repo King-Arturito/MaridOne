@@ -21,6 +21,7 @@ public class EmployeeDetailsDto {
     private LocalDate employmentDateEnd;
     private BigDecimal yearlySalary;
     private String email;
+    private String isVerified;
     private String phoneNumber;
     private Position position;
     private String userAccountName;
@@ -49,6 +50,14 @@ public class EmployeeDetailsDto {
 
     public void setMiddleName(String middleName) {
         this.middleName = middleName;
+    }
+
+    public String getIsVerified() {
+        return isVerified;
+    }
+
+    public void setIsVerified(String isVerified) {
+        this.isVerified = isVerified;
     }
 
     public String getLastName() {
