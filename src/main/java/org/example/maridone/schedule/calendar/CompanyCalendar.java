@@ -12,8 +12,11 @@ public class CompanyCalendar {
     @Column(name = "calendar_id", nullable = false)
     private Long calendarId;
 
-    @Column(name = "title", nullable = false)
+    @Column(name = "title", nullable = false, length = 120)
     private String title;
+
+    @Column(name = "description", length = 500)
+    private String description;
 
     @Column(name = "start_date", nullable = false)
     private Instant startDate;
@@ -34,6 +37,14 @@ public class CompanyCalendar {
 
     public void setTitle(String title) {
         this.title = title;
+    }
+
+    public String getDescription() {
+        return description;
+    }
+
+    public void setDescription(String description) {
+        this.description = description;
     }
 
     public Instant getStartDate() {

@@ -652,10 +652,12 @@ public class SampleRows {
             calendar.setStartDate(now.minusMonths(1).toInstant());
             calendar.setEndDate(now.minusMonths(1).plusDays(2).toInstant());
             calendar.setTitle("Teambuilding");
+            calendar.setDescription("Company-wide team building activities, workshops, and bonding sessions for all departments.");
         } else {
             calendar.setStartDate(now.minusMonths(i).toInstant());
             calendar.setEndDate(now.minusMonths(i).plusDays(3).toInstant());
             calendar.setTitle("Another event: " + i);
+            calendar.setDescription("Shared company calendar announcement for sample event " + i + ".");
         }
 
         return calendar;

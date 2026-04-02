@@ -29,9 +29,11 @@ class CalendarServiceTest {
     void createEvent_ShouldSave() {
         CalendarDto dto = new CalendarDto();
         dto.setTitle("Holiday");
+        dto.setDescription("Holiday description");
         
         CompanyCalendar entity = new CompanyCalendar();
         entity.setTitle("Holiday");
+        entity.setDescription("Holiday description");
 
         when(calendarMapper.toCompanyCalendar(dto)).thenReturn(entity);
         when(calendarRepository.save(any(CompanyCalendar.class))).thenReturn(entity);
@@ -39,6 +41,7 @@ class CalendarServiceTest {
         CompanyCalendar result = calendarService.createEvent(dto);
         
         Assertions.assertEquals("Holiday", result.getTitle());
+        Assertions.assertEquals("Holiday description", result.getDescription());
     }
 
     @Test
@@ -47,6 +50,7 @@ class CalendarServiceTest {
         CalendarDto dto = new CalendarDto();
         dto.setCalendarId(id);
         dto.setTitle("New Title");
+        dto.setDescription("Updated description");
         dto.setIsActive(true);
         dto.setStartDate(Instant.now());
         dto.setEndDate(Instant.now().plus(5, ChronoUnit.DAYS));
@@ -54,6 +58,7 @@ class CalendarServiceTest {
         CompanyCalendar existing = new CompanyCalendar();
         ReflectionTestUtils.setField(existing, "calendarId", id);
         existing.setTitle(dto.getTitle());
+        existing.setDescription(dto.getDescription());
         existing.setIsActive(true);
         existing.setStartDate(dto.getStartDate());
         existing.setEndDate(dto.getStartDate());
@@ -65,5 +70,6 @@ class CalendarServiceTest {
         CompanyCalendar result = calendarService.updateEvent(dto);
 
         Assertions.assertEquals("New Title", result.getTitle());
+        Assertions.assertEquals("Updated description", result.getDescription());
     }
 }
