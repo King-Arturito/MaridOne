@@ -1,6 +1,7 @@
 package org.example.maridone.core.employee;
 
 import org.example.maridone.annotation.ExecutionTime;
+import org.example.maridone.config.PayrollConfig;
 import org.example.maridone.core.dto.EmployeeDetailsDto;
 import org.example.maridone.core.dto.EmployeeRequestDto;
 import org.example.maridone.core.dto.EmployeeResponseDto;
@@ -14,6 +15,9 @@ import org.example.maridone.enums.EmploymentStatus;
 import org.example.maridone.enums.ExemptionStatus;
 import org.example.maridone.enums.ManagerTitle;
 import org.example.maridone.enums.Position;
+import org.example.maridone.schedule.dto.ShiftResponseDto;
+import org.example.maridone.schedule.mapper.ScheduleMapper;
+import org.example.maridone.schedule.shift.TemplateShiftRepository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
@@ -22,7 +26,11 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.Collection;
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 @Service
 public class EmployeeService {
@@ -30,13 +38,22 @@ public class EmployeeService {
     private final EmployeeRepository employeeRepository;
     private final CoreMapper coreMapper;
     private final UserAccountRepository userAccountRepository;
+    private final TemplateShiftRepository templateShiftRepository;
+    private final ScheduleMapper scheduleMapper;
+    private final PayrollConfig payrollConfig;
 
     EmployeeService(EmployeeRepository employeeRepository,
                     CoreMapper coreMapper,
-                    UserAccountRepository userAccountRepository) {
+                    UserAccountRepository userAccountRepository,
+                    TemplateShiftRepository templateShiftRepository,
+                    ScheduleMapper scheduleMapper,
+                    PayrollConfig payrollConfig) {
         this.employeeRepository = employeeRepository;
         this.coreMapper = coreMapper;
         this.userAccountRepository = userAccountRepository;
+        this.templateShiftRepository = templateShiftRepository;
+        this.scheduleMapper = scheduleMapper;
+        this.payrollConfig = payrollConfig;
     }
 
 
@@ -60,12 +77,13 @@ public class EmployeeService {
     public Page<EmployeeResponseDto> getAllEmployees(EmployeeFilter employeeFilter, Pageable pageable) {
         Specification<Employee> specs = EmployeeSpecs.hasFilters(employeeFilter);
         Page<Employee> employeePage = employeeRepository.findAll(specs, pageable);
-        return employeePage.map(this::toEmployeeResponse);
+        Map<Long, List<ShiftResponseDto>> schedulesByEmployeeId =
+                findSchedulesByEmployeeId(employeePage.stream().map(Employee::getEmployeeId).toList());
+        return employeePage.map(employee -> toEmployeeResponse(employee, schedulesByEmployeeId));
     }
 
     @ExecutionTime
     public EmployeeResponseDto getEmployee(Long id) {
-
         Employee emp = employeeRepository.findById(id).orElseThrow(() -> new EmployeeNotFoundException(id));
         return toEmployeeResponse(emp);
     }
@@ -173,8 +191,6 @@ public class EmployeeService {
         return toEmployeeResponse(emp);
     }
 
-
-
     @Transactional
     @ExecutionTime
     public EmployeeResponseDto updateStatus(Long id, EmployeeRequestDto updated) {
@@ -186,10 +202,34 @@ public class EmployeeService {
     }
 
     private EmployeeResponseDto toEmployeeResponse(Employee employee) {
+        return toEmployeeResponse(employee, findSchedulesByEmployeeId(List.of(employee.getEmployeeId())));
+    }
+
+    private EmployeeResponseDto toEmployeeResponse(Employee employee, Map<Long, List<ShiftResponseDto>> schedulesByEmployeeId) {
         EmployeeResponseDto response = coreMapper.toEmployeeResponse(employee);
         response.setDepartment(resolveDepartment(employee));
         response.setUserAccountName(findUsername(employee.getEmployeeId()));
+        response.setShiftSchedules(resolveShiftSchedules(employee.getEmployeeId(), schedulesByEmployeeId));
+        response.setGracePeriodMinutes(resolveGracePeriodMinutes());
         return response;
+    }
+
+    private Map<Long, List<ShiftResponseDto>> findSchedulesByEmployeeId(Collection<Long> employeeIds) {
+        if (employeeIds == null || employeeIds.isEmpty()) {
+            return Map.of();
+        }
+
+        return templateShiftRepository.findAllByEmployeeIdIn(employeeIds).stream()
+                .map(scheduleMapper::toResponseDto)
+                .collect(Collectors.groupingBy(ShiftResponseDto::getEmployeeId));
+    }
+
+    private List<ShiftResponseDto> resolveShiftSchedules(Long employeeId, Map<Long, List<ShiftResponseDto>> schedulesByEmployeeId) {
+        return schedulesByEmployeeId.getOrDefault(employeeId, List.of());
+    }
+
+    private Long resolveGracePeriodMinutes() {
+        return Math.max(payrollConfig.getGracePeriod().toMinutes(), 0L);
     }
 
     private EmployeeDetailsDto toEmployeeDetails(Employee employee) {

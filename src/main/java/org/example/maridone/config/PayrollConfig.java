@@ -15,7 +15,7 @@ import java.util.List;
 @ConfigurationProperties("payroll")
 @Validated
 public class PayrollConfig {
-    private Duration gracePeriod = Duration.of(0, ChronoUnit.MINUTES);
+    private Duration gracePeriod = Duration.of(15, ChronoUnit.MINUTES);
     private BigDecimal overtimeMultiplier = BigDecimal.valueOf(1.25);
     private BigDecimal nightDifferentialMultiplier = BigDecimal.valueOf(0.10);
     private BigDecimal restDayWorkMultiplier = BigDecimal.valueOf(0.30);

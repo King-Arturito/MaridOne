@@ -1,9 +1,11 @@
 package org.example.maridone.core.dto;
 import java.time.LocalDate;
+import java.util.List;
 
 import org.example.maridone.enums.EmploymentStatus;
 import org.example.maridone.enums.ExemptionStatus;
 import org.example.maridone.enums.Position;
+import org.example.maridone.schedule.dto.ShiftResponseDto;
 
 public class EmployeeResponseDto {
 
@@ -19,7 +21,8 @@ public class EmployeeResponseDto {
     private Position position;
     private String department;
     private String userAccountName;
-
+    private List<ShiftResponseDto> shiftSchedules = List.of();
+    private Long gracePeriodMinutes;
 
     public Long getId() {
         return id;
@@ -115,5 +118,21 @@ public class EmployeeResponseDto {
 
     public void setUserAccountName(String userAccountName) {
         this.userAccountName = userAccountName;
+    }
+
+    public List<ShiftResponseDto> getShiftSchedules() {
+        return shiftSchedules;
+    }
+
+    public void setShiftSchedules(List<ShiftResponseDto> shiftSchedules) {
+        this.shiftSchedules = shiftSchedules;
+    }
+
+    public Long getGracePeriodMinutes() {
+        return gracePeriodMinutes;
+    }
+
+    public void setGracePeriodMinutes(Long gracePeriodMinutes) {
+        this.gracePeriodMinutes = gracePeriodMinutes;
     }
 }
