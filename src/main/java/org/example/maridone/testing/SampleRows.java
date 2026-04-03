@@ -252,8 +252,8 @@ public class SampleRows {
 
     private void createAndSaveAttendanceLogs(List<Employee> employees) {
         List<AttendanceLog> attendanceLogs = new ArrayList<>();
-        LocalDate startDate = LocalDate.of(2026, 4, 1);
-        LocalDate endDate = LocalDate.of(2026, 5, 1);
+        LocalDate startDate = LocalDate.of(2026, 2, 1);
+        LocalDate endDate = LocalDate.of(2026, 3, 28);
         List<LocalDate> workDates = new ArrayList<>();
 
         for (LocalDate currentDate = startDate; !currentDate.isAfter(endDate); currentDate = currentDate.plusDays(1)) {
