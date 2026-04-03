@@ -18,6 +18,7 @@ import org.example.maridone.enums.Status;
 import org.example.maridone.leave.balance.LeaveBalance;
 import org.example.maridone.leave.balance.LeaveBalanceRepository;
 import org.example.maridone.leave.dto.BalanceRequestDto;
+import org.example.maridone.leave.dto.LeaveResponseDto;
 import org.example.maridone.leave.dto.LeaveRequestDto;
 import org.example.maridone.leave.request.LeaveRequest;
 import org.example.maridone.leave.request.LeaveRequestRepository;
@@ -31,6 +32,9 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import static org.mockito.Mockito.when;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.test.util.ReflectionTestUtils;
 
@@ -152,5 +156,23 @@ class LeaveServiceTest {
         schedule.setEndTime(end);
         schedule.setEmployee(employee);
         return schedule;
+    }
+
+    @Test
+    void getTeamLeaveRequests_ShouldReturnHandledEmployeesOnly() {
+        String username = "manager1";
+        LeaveRequest request = new LeaveRequest();
+        LeaveResponseDto responseDto = new LeaveResponseDto();
+        Page<LeaveRequest> page = new PageImpl<>(List.of(request));
+
+        when(userAccountRepository.findEmployeeIdByUsername(username)).thenReturn(2L);
+        when(employeeRepository.findHandledEmployeeIds(2L)).thenReturn(List.of(3L, 4L));
+        when(leaveRequestRepository.findAll(any(Specification.class), any(Pageable.class))).thenReturn(page);
+        when(leaveMapper.toLeaveResponseDto(request)).thenReturn(responseDto);
+
+        Page<LeaveResponseDto> result =
+                leaveService.getTeamLeaveRequests(new LeaveFilter(null, null, null, null, null), username, Pageable.ofSize(20));
+
+        Assertions.assertEquals(1, result.getTotalElements());
     }
 }

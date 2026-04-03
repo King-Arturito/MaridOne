@@ -20,6 +20,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 import java.net.URI;
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/employees")
@@ -55,6 +56,16 @@ public class EmployeeController {
             EmployeeFilter employeeFilter,
             @PageableDefault(sort = "employeeId", direction = Sort.Direction.ASC) Pageable pageable) {
         return employeeService.getAllEmployees(employeeFilter,pageable);
+    }
+
+    @GetMapping("/team")
+    @PreAuthorize("hasRole('MANAGER')")
+    public List<EmployeeResponseDto> getTeamEmployees(@RequestParam(required = false) Integer page,
+                                                      @RequestParam(required = false) Integer size,
+                                                      @RequestParam(required = false) Sort.Direction direction,
+                                                      @RequestParam(required = false) String sort,
+                                                      org.springframework.security.core.Authentication authentication) {
+        return employeeService.getTeamEmployees(authentication.getName());
     }
 
     // for personal details check only

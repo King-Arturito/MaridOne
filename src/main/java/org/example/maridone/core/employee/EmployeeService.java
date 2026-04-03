@@ -10,6 +10,7 @@ import org.example.maridone.core.filter.EmployeeFilter;
 import org.example.maridone.core.spec.EmployeeSpecs;
 import org.example.maridone.core.user.UserAccountRepository;
 import org.example.maridone.embeddable.Address;
+import org.example.maridone.exception.notfound.AccountNotFoundException;
 import org.example.maridone.exception.notfound.EmployeeNotFoundException;
 import org.example.maridone.enums.EmploymentStatus;
 import org.example.maridone.enums.ExemptionStatus;
@@ -80,6 +81,19 @@ public class EmployeeService {
         Map<Long, List<ShiftResponseDto>> schedulesByEmployeeId =
                 findSchedulesByEmployeeId(employeePage.stream().map(Employee::getEmployeeId).toList());
         return employeePage.map(employee -> toEmployeeResponse(employee, schedulesByEmployeeId));
+    }
+
+    @ExecutionTime
+    public List<EmployeeResponseDto> getTeamEmployees(String username) {
+        Long managerId = resolveCurrentEmployeeId(username);
+        return employeeRepository
+                .findByManager_EmployeeIdAndEmploymentStatusNotOrderByLastNameAscFirstNameAsc(
+                        managerId,
+                        EmploymentStatus.TERMINATED
+                )
+                .stream()
+                .map(this::toEmployeeResponse)
+                .toList();
     }
 
     @ExecutionTime
@@ -281,6 +295,14 @@ public class EmployeeService {
         }
         return employeeRepository.findById(managerId)
                 .orElseThrow(() -> new EmployeeNotFoundException(managerId));
+    }
+
+    private Long resolveCurrentEmployeeId(String username) {
+        Long employeeId = userAccountRepository.findEmployeeIdByUsername(username);
+        if (employeeId == null) {
+            throw new AccountNotFoundException(username);
+        }
+        return employeeId;
     }
 
 }

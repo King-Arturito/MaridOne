@@ -117,6 +117,22 @@ public class LeaveService {
     }
 
     @ExecutionTime
+    public Page<LeaveResponseDto> getTeamLeaveRequests(LeaveFilter filter, String username, Pageable pageable) {
+        List<Long> handledEmployeeIds = resolveHandledEmployeeIds(username);
+        if (handledEmployeeIds.isEmpty()) {
+            return Page.empty(pageable);
+        }
+
+        Specification<LeaveRequest> spec = Specification.allOf(
+                LeaveSpecs.hasFilters(filter),
+                CommonSpecs.fieldEquals("requestId", filter.requestId()),
+                LeaveSpecs.hasEmployeeIds(handledEmployeeIds)
+        );
+
+        return leaveRequestRepository.findAll(spec, pageable).map(leaveMapper::toLeaveResponseDto);
+    }
+
+    @ExecutionTime
     @Transactional
     @AuditLog
     @NotifyRole(message = "Leave Request has been cancelled", targetRole = Position.HR)
@@ -421,6 +437,14 @@ public class LeaveService {
         }
 
         return payload.getEndDateTime();
+    }
+
+    private List<Long> resolveHandledEmployeeIds(String username) {
+        Long employeeId = userAccountRepository.findEmployeeIdByUsername(username);
+        if (employeeId == null) {
+            throw new AccountNotFoundException(username);
+        }
+        return employeeRepository.findHandledEmployeeIds(employeeId);
     }
 
 

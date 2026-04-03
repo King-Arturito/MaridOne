@@ -43,6 +43,14 @@ public class LeaveController {
         return leaveService.getLeaveRequests(filter, pageable);
     }
 
+    @GetMapping("/request/team")
+    @PreAuthorize("hasRole('MANAGER')")
+    public Page<LeaveResponseDto> getTeamLeaveRequests(LeaveFilter filter,
+                                                       org.springframework.security.core.Authentication authentication,
+                                                       @PageableDefault(sort = "requestId", direction = Sort.Direction.ASC, size = 20) Pageable pageable) {
+        return leaveService.getTeamLeaveRequests(filter, authentication.getName(), pageable);
+    }
+
     @GetMapping("/request/details/{requestId}")
     @PreAuthorize("hasRole('HR')")
     public LeaveDetails getLeaveRequestDetails(@PathVariable Long requestId){

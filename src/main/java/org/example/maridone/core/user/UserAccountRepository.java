@@ -21,7 +21,8 @@ public interface UserAccountRepository extends JpaRepository<UserAccount,Long> {
     @Query("select u.employee.position from UserAccount u where u.username = :username")
     Optional<Position> findPositionByUsername(@Param("username") String username);
 
-    Long findEmployeeIdByUsername(String username);
+    @Query("select u.employee.employeeId from UserAccount u where u.username = :username")
+    Long findEmployeeIdByUsername(@Param("username") String username);
 
     @Query("select u.username from UserAccount u where u.employee.employeeId = :employeeId")
     Optional<String> findUsernameByEmployeeEmployeeId(@Param("employeeId") Long employeeId);

@@ -56,6 +56,16 @@ public class OvertimeController {
         OvertimeResponseDto request = overtimeService.updateOvertimeRequest(updateDto, authentication.getName());
         return ResponseEntity.ok(request);
     }
+
+    @GetMapping("/team")
+    @PreAuthorize("hasRole('MANAGER')")
+    public Page<OvertimeResponseDto> getTeamOvertimeRequests(
+            OvertimeFilter overtimeFilter,
+            Authentication authentication,
+            @PageableDefault(sort = "requestAt", direction = Sort.Direction.ASC) Pageable pageable
+    ) {
+        return overtimeService.getTeamOvertimeRequests(overtimeFilter, authentication.getName(), pageable);
+    }
     //get all overtimes for HR
     @GetMapping("/all")
     @PreAuthorize("hasRole('HR')")

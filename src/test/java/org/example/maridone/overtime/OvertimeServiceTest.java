@@ -4,6 +4,7 @@ import java.util.Optional;
 
 import org.example.maridone.core.employee.Employee;
 import org.example.maridone.core.employee.EmployeeRepository;
+import org.example.maridone.core.user.UserAccountRepository;
 import org.example.maridone.enums.Status;
 import org.example.maridone.overtime.dto.OvertimeRequestDto;
 import org.example.maridone.overtime.dto.OvertimeResponseDto;
@@ -17,6 +18,9 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import static org.mockito.Mockito.when;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.test.util.ReflectionTestUtils;
 
@@ -26,6 +30,7 @@ class OvertimeServiceTest {
     @Mock private OvertimeRequestRepository overtimeRequestRepository;
     @Mock private EmployeeRepository employeeRepository;
     @Mock private OvertimeMapper overtimeMapper;
+    @Mock private UserAccountRepository userAccountRepository;
 
     @InjectMocks
     private OvertimeService overtimeService;
@@ -72,5 +77,23 @@ class OvertimeServiceTest {
         OvertimeResponseDto result = overtimeService.updateOvertimeRequest(updateDto, approver);
         
         Assertions.assertNotNull(result);
+    }
+
+    @Test
+    void getTeamOvertimeRequests_ShouldReturnHandledEmployeesOnly() {
+        String username = "manager1";
+        OvertimeRequest request = new OvertimeRequest();
+        OvertimeResponseDto responseDto = new OvertimeResponseDto();
+        Page<OvertimeRequest> page = new PageImpl<>(java.util.List.of(request));
+
+        when(userAccountRepository.findEmployeeIdByUsername(username)).thenReturn(2L);
+        when(employeeRepository.findHandledEmployeeIds(2L)).thenReturn(java.util.List.of(3L, 4L));
+        when(overtimeRequestRepository.findAll(any(Specification.class), any(Pageable.class))).thenReturn(page);
+        when(overtimeMapper.toOvertimeResponseDto(request)).thenReturn(responseDto);
+
+        Page<OvertimeResponseDto> result =
+                overtimeService.getTeamOvertimeRequests(new OvertimeFilter(null, null, null, null, null, null), username, Pageable.ofSize(20));
+
+        Assertions.assertEquals(1, result.getTotalElements());
     }
 }
