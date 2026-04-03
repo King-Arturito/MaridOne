@@ -8,6 +8,7 @@ import org.example.maridone.document.path.DocumentPath;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -35,6 +36,16 @@ public class UserAccountController {
         URI location = ServletUriComponentsBuilder
                 .fromCurrentRequest().build().toUri();
         return ResponseEntity.created(location).body(user);
+    }
+
+    @PatchMapping("/{employeeId}")
+    @PreAuthorize("hasRole('HR')")
+    @AuditLog
+    public ResponseEntity<UserAccount> updateUserAccount(
+            @PathVariable Long employeeId,
+            @RequestBody CreateUserAccountDto payload) {
+        payload.setEmployeeId(employeeId);
+        return ResponseEntity.ok(userAccountService.updateUserAccount(payload));
     }
 
     //view your own UserAccount

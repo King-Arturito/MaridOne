@@ -7,6 +7,7 @@ import org.example.maridone.core.dto.EmployeeResponseDto;
 import org.example.maridone.core.mapper.CoreMapper;
 import org.example.maridone.core.filter.EmployeeFilter;
 import org.example.maridone.core.spec.EmployeeSpecs;
+import org.example.maridone.core.user.UserAccountRepository;
 import org.example.maridone.embeddable.Address;
 import org.example.maridone.exception.notfound.EmployeeNotFoundException;
 import org.example.maridone.enums.EmploymentStatus;
@@ -27,11 +28,14 @@ public class EmployeeService {
 
     private final EmployeeRepository employeeRepository;
     private final CoreMapper coreMapper;
+    private final UserAccountRepository userAccountRepository;
 
     EmployeeService(EmployeeRepository employeeRepository,
-                    CoreMapper coreMapper) {
+                    CoreMapper coreMapper,
+                    UserAccountRepository userAccountRepository) {
         this.employeeRepository = employeeRepository;
         this.coreMapper = coreMapper;
+        this.userAccountRepository = userAccountRepository;
     }
 
 
@@ -49,30 +53,32 @@ public class EmployeeService {
         employee.setPosition(Optional.ofNullable(employee.getPosition()).orElse(Position.EMPLOYEE));
         employee.setEmploymentStatus(Optional.ofNullable(employee.getEmploymentStatus()).orElse(EmploymentStatus.REGULAR));
         employee.setEmploymentDateStart(Optional.ofNullable(employee.getEmploymentDateStart()).orElse(LocalDate.now()));
-        employee.setExemptionStatus(Optional.ofNullable(employee.getExemptionStatus()).orElse(resolveExemptionStatus(employee.getPosition())));
+        employee.setEmploymentDateEnd(employeeRequestDto.getEmploymentDateEnd());
+        employee.setExemptionStatus(Optional.ofNullable(employeeRequestDto.getExemptionStatus()).orElse(resolveExemptionStatus(employee.getPosition())));
         employee.setYearlySalary(Optional.ofNullable(employee.getYearlySalary()).orElse(BigDecimal.ZERO));
+        employee.setManager(resolveManager(employeeRequestDto.getManagerId(), null));
         employeeRepository.save(employee);
-        return coreMapper.toEmployeeResponse(employee);
+        return toEmployeeResponse(employee);
     }
 
     @ExecutionTime
     public Page<EmployeeResponseDto> getAllEmployees(EmployeeFilter employeeFilter, Pageable pageable) {
         Specification<Employee> specs = EmployeeSpecs.hasFilters(employeeFilter);
         Page<Employee> employeePage = employeeRepository.findAll(specs, pageable);
-        return employeePage.map(coreMapper::toEmployeeResponse);
+        return employeePage.map(this::toEmployeeResponse);
     }
 
     @ExecutionTime
     public EmployeeResponseDto getEmployee(Long id) {
 
         Employee emp = employeeRepository.findById(id).orElseThrow(() -> new EmployeeNotFoundException(id));
-        return coreMapper.toEmployeeResponse(emp);
+        return toEmployeeResponse(emp);
     }
 
     @ExecutionTime
     public EmployeeDetailsDto getSelfEmployee(Long id) {
         Employee emp = employeeRepository.findById(id).orElseThrow(() -> new EmployeeNotFoundException(id));
-        return coreMapper.toEmployeeDetailsDto(emp);
+        return toEmployeeDetails(emp);
     }
 
     @Transactional
@@ -113,14 +119,27 @@ public class EmployeeService {
 
         Optional.ofNullable(updated.getPosition())
                 .filter(v -> !v.equals(emp.getPosition()))
-                .ifPresent(position -> {
-                    emp.setPosition(position);
-                    emp.setExemptionStatus(resolveExemptionStatus(position));
-                });
+                .ifPresent(emp::setPosition);
+
+        Optional.ofNullable(updated.getExemptionStatus())
+                .filter(v -> !v.equals(emp.getExemptionStatus()))
+                .ifPresent(emp::setExemptionStatus);
 
         Optional.ofNullable(updated.getEmploymentDateStart())
                 .filter(v -> !v.equals(emp.getEmploymentDateStart()))
                 .ifPresent(emp::setEmploymentDateStart);
+
+        Optional.ofNullable(updated.getEmploymentDateEnd())
+                .filter(v -> !v.equals(emp.getEmploymentDateEnd()))
+                .ifPresent(emp::setEmploymentDateEnd);
+
+        Optional.ofNullable(updated.getYearlySalary())
+                .filter(v -> !v.equals(emp.getYearlySalary()))
+                .ifPresent(emp::setYearlySalary);
+
+        Optional.ofNullable(updated.getManagerId())
+                .filter(v -> emp.getManager() == null || !v.equals(emp.getManager().getEmployeeId()))
+                .ifPresent(managerId -> emp.setManager(resolveManager(managerId, id)));
 
         Optional.ofNullable(updated.getAddress()).ifPresent(newAddr -> {
             Address existing = Optional.ofNullable(emp.getAddress()).orElseGet(() -> {
@@ -156,7 +175,7 @@ public class EmployeeService {
 
         employeeRepository.save(emp);
 
-        return coreMapper.toEmployeeResponse(emp);
+        return toEmployeeResponse(emp);
     }
 
 
@@ -168,7 +187,23 @@ public class EmployeeService {
 
         emp.setEmploymentStatus(updated.getEmploymentStatus());
         employeeRepository.save(emp);
-        return coreMapper.toEmployeeResponse(emp);
+        return toEmployeeResponse(emp);
+    }
+
+    private EmployeeResponseDto toEmployeeResponse(Employee employee) {
+        EmployeeResponseDto response = coreMapper.toEmployeeResponse(employee);
+        response.setUserAccountName(findUsername(employee.getEmployeeId()));
+        return response;
+    }
+
+    private EmployeeDetailsDto toEmployeeDetails(Employee employee) {
+        EmployeeDetailsDto response = coreMapper.toEmployeeDetailsDto(employee);
+        response.setUserAccountName(findUsername(employee.getEmployeeId()));
+        return response;
+    }
+
+    private String findUsername(Long employeeId) {
+        return userAccountRepository.findUsernameByEmployeeEmployeeId(employeeId).orElse(null);
     }
 
     private String requireText(String value, String fieldName) {
@@ -194,9 +229,20 @@ public class EmployeeService {
 
     private ExemptionStatus resolveExemptionStatus(Position position) {
         return switch (position) {
-            case EMPLOYEE, UNKNOWN -> ExemptionStatus.NON_EXEMPT;
+            case EMPLOYEE, ACCOUNTING, UNKNOWN -> ExemptionStatus.NON_EXEMPT;
             default -> ExemptionStatus.EXEMPT;
         };
+    }
+
+    private Employee resolveManager(Long managerId, Long employeeId) {
+        if (managerId == null) {
+            return null;
+        }
+        if (employeeId != null && employeeId.equals(managerId)) {
+            throw new IllegalArgumentException("Employee cannot be their own manager.");
+        }
+        return employeeRepository.findById(managerId)
+                .orElseThrow(() -> new EmployeeNotFoundException(managerId));
     }
 
 }

@@ -32,7 +32,7 @@ public class EmployeeController {
 
     // ENDPOINT: /api/employees/create
     @PostMapping("/create")
-    @PreAuthorize("hasAnyRole('MANAGEMENT',  'HR')")
+    @PreAuthorize("hasRole('HR')")
     @AuditLog
     public ResponseEntity<EmployeeResponseDto> createEmployee(@RequestBody EmployeeRequestDto employeeRequestDto) {
         EmployeeResponseDto response = employeeService.createEmployee(employeeRequestDto);
@@ -65,7 +65,7 @@ public class EmployeeController {
     // id is dynamic
     //returns a status code instead of automatically showing it in the HRIS
     @PatchMapping("/{id}")
-    @PreAuthorize("@userCheck.isSelf(#id, authentication.getName())")
+    @PreAuthorize("hasRole('HR') or @userCheck.isSelf(#id, authentication.getName())")
     @AuditLog
     public ResponseEntity<EmployeeResponseDto> updateEmployee(@PathVariable Long id, @RequestBody EmployeeRequestDto employeeRequestDto) {
         EmployeeResponseDto response =  employeeService.updateEmployee(id, employeeRequestDto);

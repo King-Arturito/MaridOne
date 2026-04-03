@@ -17,6 +17,7 @@ public class EmployeeResponseDto {
     private String email;
     private String phoneNumber;
     private Position position;
+    private String userAccountName;
 
 
     public Long getId() {
@@ -97,5 +98,13 @@ public class EmployeeResponseDto {
 
     public void setPosition(Position position) {
         this.position = position;
+    }
+
+    public String getUserAccountName() {
+        return userAccountName;
+    }
+
+    public void setUserAccountName(String userAccountName) {
+        this.userAccountName = userAccountName;
     }
 }

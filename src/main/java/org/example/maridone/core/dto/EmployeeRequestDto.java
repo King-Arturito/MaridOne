@@ -3,9 +3,11 @@ package org.example.maridone.core.dto;
 import jakarta.validation.constraints.NotNull;
 import org.example.maridone.embeddable.Address;
 import org.example.maridone.enums.EmploymentStatus;
+import org.example.maridone.enums.ExemptionStatus;
 import org.example.maridone.enums.Position;
 import org.example.maridone.marker.HrUpdate;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 
 public class EmployeeRequestDto {
@@ -16,10 +18,14 @@ public class EmployeeRequestDto {
     private LocalDate birthDate;
     @NotNull(groups = HrUpdate.class)
     private EmploymentStatus employmentStatus;
+    private ExemptionStatus exemptionStatus;
     private LocalDate employmentDateStart;
+    private LocalDate employmentDateEnd;
     private String email;
     private String phoneNumber;
     private Position position;
+    private BigDecimal yearlySalary;
+    private Long managerId;
 
     private Address address;
 
@@ -63,12 +69,28 @@ public class EmployeeRequestDto {
         this.employmentStatus = employmentStatus;
     }
 
+    public ExemptionStatus getExemptionStatus() {
+        return exemptionStatus;
+    }
+
+    public void setExemptionStatus(ExemptionStatus exemptionStatus) {
+        this.exemptionStatus = exemptionStatus;
+    }
+
     public LocalDate getEmploymentDateStart() {
         return employmentDateStart;
     }
 
     public void setEmploymentDateStart(LocalDate employmentDateStart) {
         this.employmentDateStart = employmentDateStart;
+    }
+
+    public LocalDate getEmploymentDateEnd() {
+        return employmentDateEnd;
+    }
+
+    public void setEmploymentDateEnd(LocalDate employmentDateEnd) {
+        this.employmentDateEnd = employmentDateEnd;
     }
 
     public String getEmail() {
@@ -93,6 +115,22 @@ public class EmployeeRequestDto {
 
     public void setPosition(Position position) {
         this.position = position;
+    }
+
+    public BigDecimal getYearlySalary() {
+        return yearlySalary;
+    }
+
+    public void setYearlySalary(BigDecimal yearlySalary) {
+        this.yearlySalary = yearlySalary;
+    }
+
+    public Long getManagerId() {
+        return managerId;
+    }
+
+    public void setManagerId(Long managerId) {
+        this.managerId = managerId;
     }
 
     public Address getAddress() {

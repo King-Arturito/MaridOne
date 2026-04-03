@@ -5,14 +5,14 @@ import org.example.maridone.schedule.calendar.CompanyCalendar;
 import org.springframework.data.jpa.domain.Specification;
 
 import java.time.Instant;
-import java.time.ZoneOffset;
+import java.time.ZoneId;
 import java.time.ZonedDateTime;
 
 public class CalendarSpecs {
 
     public static Specification<CompanyCalendar> isWithinMonth(int month, int year) {
         return (root, query, cb) -> {
-            ZonedDateTime startOfMonth = ZonedDateTime.of(year, month, 1, 0, 0, 0, 0, ZoneOffset.UTC);
+            ZonedDateTime startOfMonth = ZonedDateTime.of(year, month, 1, 0, 0, 0, 0, ZoneId.systemDefault());
             ZonedDateTime endOfMonth = startOfMonth.plusMonths(1);
 
             Instant start = startOfMonth.toInstant();
