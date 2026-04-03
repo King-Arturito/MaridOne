@@ -5,6 +5,8 @@ import java.util.Optional;
 import org.example.maridone.core.dto.EmployeeRequestDto;
 import org.example.maridone.core.dto.EmployeeResponseDto;
 import org.example.maridone.core.mapper.CoreMapper;
+import org.example.maridone.enums.ExemptionStatus;
+import org.example.maridone.enums.Position;
 import org.example.maridone.exception.notfound.EmployeeNotFoundException;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
@@ -12,6 +14,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import static org.mockito.ArgumentMatchers.any;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -37,6 +40,11 @@ class EmployeeServiceTest {
         Employee employee = new Employee();
         ReflectionTestUtils.setField(employee, "employeeId", 1L);
         employee.setFirstName("Frieren");
+        employee.setLastName("Test");
+        employee.setEmail("frieren@example.com");
+        employee.setPhoneNumber("09171234567");
+        employee.setBirthDate(java.time.LocalDate.of(2000, 1, 1));
+        employee.setPosition(Position.EMPLOYEE);
 
         EmployeeResponseDto responseDto = new EmployeeResponseDto();
         responseDto.setId(1L);
@@ -51,6 +59,8 @@ class EmployeeServiceTest {
         Assertions.assertNotNull(result);
         Assertions.assertEquals(1L, result.getId()); 
         Assertions.assertEquals("Frieren", result.getFirstName());
+        Assertions.assertNotNull(employee.getEmploymentDateStart());
+        Assertions.assertEquals(ExemptionStatus.NON_EXEMPT, employee.getExemptionStatus());
         verify(employeeRepository).save(any(Employee.class));
     }
 
@@ -80,5 +90,27 @@ class EmployeeServiceTest {
         Assertions.assertThrows(EmployeeNotFoundException.class, () -> {
             employeeService.getEmployee(empId);
         });
+    }
+
+    @Test
+    void createEmployee_ShouldThrow_WhenPhoneNumberIsNotExactly11Digits() {
+        EmployeeRequestDto requestDto = new EmployeeRequestDto();
+        Employee employee = new Employee();
+        employee.setFirstName("Frieren");
+        employee.setLastName("Test");
+        employee.setEmail("frieren@example.com");
+        employee.setPhoneNumber("0917123456");
+        employee.setBirthDate(java.time.LocalDate.of(2000, 1, 1));
+        employee.setPosition(Position.EMPLOYEE);
+
+        when(coreMapper.toEmployee(any(EmployeeRequestDto.class))).thenReturn(employee);
+
+        IllegalArgumentException error = Assertions.assertThrows(
+                IllegalArgumentException.class,
+                () -> employeeService.createEmployee(requestDto)
+        );
+
+        Assertions.assertEquals("Phone number must be exactly 11 digits.", error.getMessage());
+        verify(employeeRepository, never()).save(any(Employee.class));
     }
 }

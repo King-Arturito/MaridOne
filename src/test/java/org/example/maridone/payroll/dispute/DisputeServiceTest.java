@@ -2,7 +2,6 @@ package org.example.maridone.payroll.dispute;
 
 import java.util.Optional;
 
-import org.example.maridone.core.employee.Employee;
 import org.example.maridone.enums.Status;
 import org.example.maridone.exception.notfound.ItemNotFoundException;
 import org.example.maridone.payroll.dto.DisputeResponseDto;
@@ -48,7 +47,7 @@ class DisputeServiceTest {
                 .thenReturn(Optional.of(item));
         when(disputeRepository.save(any(DisputeRequest.class))).thenAnswer(i -> i.getArgument(0));
 
-        DisputeRequest result = disputeService.createDisputeRequest(itemId, dto);
+        DisputeRequest result = disputeService.createDisputeRequest(itemId, dto, null);
 
         Assertions.assertNotNull(result);
         Assertions.assertEquals(Status.PENDING, result.getStatus());
@@ -65,23 +64,16 @@ class DisputeServiceTest {
                 .thenReturn(Optional.empty());
 
         Assertions.assertThrows(ItemNotFoundException.class, () -> {
-            disputeService.createDisputeRequest(itemId, dto);
+            disputeService.createDisputeRequest(itemId, dto, null);
         });
     }
 
     @Test
     void getActiveDisputeRequests_ShouldPopulateEmployeeId() {
-        Long employeeId = 6L;
-        Employee employee = new Employee();
-        PayrollItem item = new PayrollItem();
         DisputeRequest disputeRequest = new DisputeRequest();
         DisputeResponseDto dto = new DisputeResponseDto();
-
-        ReflectionTestUtils.setField(employee, "employeeId", employeeId);
-        employee.setFirstName("Juan");
-        employee.setLastName("Dela Cruz");
-        item.setEmployee(employee);
-        disputeRequest.setPayrollItem(item);
+        dto.setEmployeeId(6L);
+        dto.setEmployeeName("Juan Dela Cruz");
 
         when(disputeRepository.findAllByStatus(Status.PENDING, Pageable.unpaged()))
                 .thenReturn(new PageImpl<>(java.util.List.of(disputeRequest)));
@@ -90,7 +82,7 @@ class DisputeServiceTest {
         Page<DisputeResponseDto> result = disputeService.getActiveDisputeRequests(Pageable.unpaged());
 
         Assertions.assertEquals(1, result.getTotalElements());
-        Assertions.assertEquals(employeeId, result.getContent().get(0).getEmployeeId());
+        Assertions.assertEquals(6L, result.getContent().get(0).getEmployeeId());
         Assertions.assertEquals("Juan Dela Cruz", result.getContent().get(0).getEmployeeName());
         verify(payrollMapper).toResponseDto(disputeRequest);
     }

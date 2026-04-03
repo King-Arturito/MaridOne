@@ -14,6 +14,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 import java.net.URI;
@@ -42,9 +43,15 @@ public class LeaveController {
         return leaveService.getLeaveRequests(filter, pageable);
     }
 
+    @GetMapping("/request/details/{requestId}")
+    @PreAuthorize("hasRole('HR')")
+    public LeaveDetails getLeaveRequestDetails(@PathVariable Long requestId){
+        return leaveService.getLeaveRequestDetails(requestId);
+    }
+
     @GetMapping("/request/{empId}")
     @PreAuthorize("@userCheck.isSelf(#empId, authentication.getName())")
-    public Page<LeaveResponseDto> getMyLeaveRequests(Long empId,
+    public Page<LeaveResponseDto> getMyLeaveRequests(@PathVariable Long empId,
                                                      @PageableDefault(sort = "requestId", direction = Sort.Direction.ASC, size = 10) Pageable pageable) {
         return leaveService.getMyLeaveRequests(empId, pageable);
     }
@@ -87,15 +94,15 @@ public class LeaveController {
         return ResponseEntity.noContent().build();
     }
 
-
     //create leave request
     @PostMapping("/create/{empId}")
     @PreAuthorize("isAuthenticated()")
     @AuditLog
     public ResponseEntity<List<LeaveRequest>> createLeaveRequest(
             @Valid @RequestBody LeaveRequestDto payload,
-            @PathVariable Long empId) {
-        List<LeaveRequest> requests = leaveService.createLeaveRequest(payload, empId);
+            @PathVariable Long empId,
+            @RequestParam(required = false) MultipartFile file) {
+        List<LeaveRequest> requests = leaveService.createLeaveRequest(payload, empId, file);
         return ResponseEntity.ok(requests);
     }
 

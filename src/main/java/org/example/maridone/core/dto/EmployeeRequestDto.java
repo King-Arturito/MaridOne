@@ -16,6 +16,7 @@ public class EmployeeRequestDto {
     private LocalDate birthDate;
     @NotNull(groups = HrUpdate.class)
     private EmploymentStatus employmentStatus;
+    private LocalDate employmentDateStart;
     private String email;
     private String phoneNumber;
     private Position position;
@@ -60,6 +61,14 @@ public class EmployeeRequestDto {
 
     public void setEmploymentStatus(EmploymentStatus employmentStatus) {
         this.employmentStatus = employmentStatus;
+    }
+
+    public LocalDate getEmploymentDateStart() {
+        return employmentDateStart;
+    }
+
+    public void setEmploymentDateStart(LocalDate employmentDateStart) {
+        this.employmentDateStart = employmentDateStart;
     }
 
     public String getEmail() {

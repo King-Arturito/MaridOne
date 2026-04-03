@@ -4,6 +4,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
+import org.example.maridone.leave.dto.LeaveDetails;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -50,4 +51,23 @@ public interface LeaveRequestRepository extends JpaRepository<LeaveRequest,Long>
 
     @Query("select lr.employee.employeeId from LeaveRequest lr where lr.requestId = :requestId")
     Optional<Long> findEmployeeIdByRequestId(@Param("requestId") Long requestId);
+
+    @Query("""
+    SELECT new org.example.maridone.leave.dto.LeaveDetails(
+        lr.requestId,
+        e.firstName,
+        e.lastName,
+        e.userAccount.username,
+        lr.startDateTime,
+        lr.endDateTime,
+        lr.requestStatus,
+        lr.reason,
+        lr.approverReason,
+        lr.isPaid
+    )
+    FROM LeaveRequest lr
+    JOIN lr.employee e
+    WHERE lr.requestId = :requestId
+""")
+    LeaveDetails getLeaveRequestDetails(@Param("requestId") Long requestId);
 }

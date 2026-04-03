@@ -5,6 +5,7 @@ import org.example.maridone.annotation.AuditLog;
 import org.example.maridone.enums.Status;
 import org.example.maridone.marker.OnUpdate;
 import org.example.maridone.payroll.dto.DisputeActionDto;
+import org.example.maridone.payroll.dto.DisputeDetails;
 import org.example.maridone.payroll.dto.DisputeRequestDto;
 import org.example.maridone.payroll.dto.DisputeResponseDto;
 import org.springframework.data.domain.Page;
@@ -15,6 +16,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 @RestController
 @RequestMapping("/api/payroll/item/dispute")
@@ -33,6 +35,12 @@ public class DisputeController {
             return disputeService.getActiveDisputeRequests(pageable);
     }
 
+    @GetMapping("/details/{disputeId}")
+    @PreAuthorize("hasRole('HR')")
+    public DisputeDetails getDisputeRequestDetails(@PathVariable Long disputeId) {
+        return disputeService.getDisputeRequestDetails(disputeId);
+    }
+
     @GetMapping("/self")
     @PreAuthorize("@userCheck.isSelf(#empId, authentication.getName())")
     public Page<DisputeResponseDto> getMyDisputeRequests(
@@ -47,9 +55,10 @@ public class DisputeController {
     @PreAuthorize("@itemOwnerCheck.isSelf(#itemId, authentication.getName())")
     public DisputeRequest createDisputeRequest
             (@PathVariable Long itemId,
-             @RequestBody @Valid DisputeRequestDto payload)
+             @RequestBody @Valid DisputeRequestDto payload,
+            @RequestParam(required = false) MultipartFile file)
     {
-        return disputeService.createDisputeRequest(itemId, payload);
+        return disputeService.createDisputeRequest(itemId, payload,file);
     }
 
     @PatchMapping("/update/{disputeId}")

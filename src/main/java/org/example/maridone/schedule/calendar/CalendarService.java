@@ -1,15 +1,19 @@
 package org.example.maridone.schedule.calendar;
 
 import org.example.maridone.annotation.ExecutionTime;
-import org.example.maridone.common.CommonSpecs;
+import org.example.maridone.core.user.UserAccount;
+import org.example.maridone.core.user.UserAccountRepository;
+import org.example.maridone.exception.notfound.AccountNotFoundException;
 import org.example.maridone.exception.notfound.CalendarEventNotFound;
 import org.example.maridone.schedule.dto.CalendarDto;
+import org.example.maridone.schedule.dto.CalendarEventResponseDto;
 import org.example.maridone.schedule.mapper.CalendarMapper;
-import org.example.maridone.schedule.spec.CalendarSpecs;
-import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
+import java.time.YearMonth;
+import java.time.ZoneOffset;
 import java.util.List;
 
 @Service
@@ -17,30 +21,49 @@ public class CalendarService {
 
     private final CalendarRepository calendarRepository;
     private final CalendarMapper calendarMapper;
+    private final UserAccountRepository userAccountRepository;
 
     public CalendarService(
             CalendarRepository calendarRepository,
-            CalendarMapper calendarMapper)
+            CalendarMapper calendarMapper,
+            UserAccountRepository userAccountRepository)
     {
         this.calendarRepository = calendarRepository;
         this.calendarMapper = calendarMapper;
+        this.userAccountRepository = userAccountRepository;
     }
 
-        @Transactional
-        public CompanyCalendar createEvent(CalendarDto calendar) {
-            if (calendar.getIsActive() == null) {
-                calendar.setIsActive(Boolean.TRUE);
-            }
-            return calendarRepository.save(calendarMapper.toCompanyCalendar(calendar));
+    @Transactional
+    public CalendarEventResponseDto createEvent(CalendarDto calendar, String username) {
+        if (calendar.getIsActive() == null) {
+            calendar.setIsActive(Boolean.TRUE);
         }
+
+        UserAccount userAccount = userAccountRepository.findByUsername(username).orElseThrow(
+                () -> new AccountNotFoundException("username of: " + username)
+        );
+
+        CompanyCalendar companyCalendar = calendarMapper.toCompanyCalendar(calendar);
+        companyCalendar.setIsActive(calendar.getIsActive());
+        companyCalendar.setEmployee(userAccount.getEmployee());
+        companyCalendar.setCreatedAt(Instant.now());
+        CompanyCalendar savedCalendar = calendarRepository.save(companyCalendar);
+        return calendarMapper.toCalendarEventResponseDto(savedCalendar);
+    }
 
 
     @Transactional
     @ExecutionTime
-    public CompanyCalendar updateEvent(CalendarDto calendar) {
-        CompanyCalendar cal = calendarRepository.findById(calendar.getCalendarId()).orElseThrow(
+    public CalendarEventResponseDto updateEvent(CalendarDto calendar) {
+        CompanyCalendar cal = calendarRepository.findByIdWithEmployee(calendar.getCalendarId()).orElseThrow(
                 () -> new CalendarEventNotFound("Event of ID:" + calendar.getCalendarId() + " not found."));
-        return calendarRepository.save(calendarMapper.toCompanyCalendar(calendar));
+        cal.setTitle(calendar.getTitle());
+        cal.setDescription(calendar.getDescription());
+        cal.setStartDate(calendar.getStartDate());
+        cal.setEndDate(calendar.getEndDate());
+        cal.setIsActive(calendar.getIsActive());
+        CompanyCalendar savedCalendar = calendarRepository.save(cal);
+        return calendarMapper.toCalendarEventResponseDto(savedCalendar);
     }
 
     @Transactional
@@ -54,11 +77,14 @@ public class CalendarService {
     }
 
     @ExecutionTime
-    public List<CompanyCalendar> getAllEvents(int month, int year) {
-        Specification<CompanyCalendar> spec = Specification.allOf(
-                CalendarSpecs.isWithinMonth(month, year),
-                CommonSpecs.fieldEquals("isActive", Boolean.TRUE)
+    @Transactional(readOnly = true)
+    public List<CalendarEventResponseDto> getAllEvents(int month, int year) {
+        YearMonth selectedMonth = YearMonth.of(year, month);
+        Instant periodStart = selectedMonth.atDay(1).atStartOfDay(ZoneOffset.UTC).toInstant();
+        Instant periodEnd = selectedMonth.atEndOfMonth().plusDays(1).atStartOfDay(ZoneOffset.UTC).minusNanos(1).toInstant();
+
+        return calendarMapper.toCalendarEventResponseDtos(
+                calendarRepository.findActiveEventsOverlappingPeriod(periodStart, periodEnd)
         );
-        return calendarRepository.findAll(spec);
     }
 }

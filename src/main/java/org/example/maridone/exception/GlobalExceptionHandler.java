@@ -6,6 +6,7 @@ import org.example.maridone.exception.badrequest.NoRoleAssignedException;
 import org.example.maridone.exception.badrequest.UnauthorizedAccessException;
 import org.example.maridone.exception.conflict.OverlappingDatesException;
 import org.example.maridone.exception.notfound.*;
+import org.example.maridone.exception.toolarge.FileTooLargeException;
 import org.example.maridone.exception.unauthorized.*;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -71,6 +72,15 @@ public class GlobalExceptionHandler {
     })
     public ResponseEntity<Map<String, String>> handleConflictExceptions(RuntimeException ex) {
         return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(Map.of("error", ex.getMessage()));
+    }
+
+    //413 Payload too large
+    @ExceptionHandler({
+            FileTooLargeException.class
+    })
+    public ResponseEntity<Map<String, String>> handleLargePayloadExceptions(RuntimeException ex) {
+        return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE)
                 .body(Map.of("error", ex.getMessage()));
     }
 }

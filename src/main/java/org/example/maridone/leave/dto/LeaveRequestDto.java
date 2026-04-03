@@ -5,10 +5,8 @@ import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.NotNull;
 import org.example.maridone.enums.LeaveType;
 import org.example.maridone.enums.Status;
-import org.example.maridone.marker.OnCreate;
 import org.example.maridone.marker.OnUpdate;
 
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 public class LeaveRequestDto {

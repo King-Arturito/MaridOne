@@ -5,12 +5,15 @@ import org.example.maridone.core.dto.CreateUserAccountDto;
 import org.example.maridone.core.employee.Employee;
 import org.example.maridone.core.employee.EmployeeRepository;
 import org.example.maridone.core.mapper.CoreMapper;
+import org.example.maridone.document.path.DocumentPath;
 import org.example.maridone.exception.notfound.AccountNotFoundException;
 import org.example.maridone.exception.unauthorized.DuplicateAccountException;
 import org.example.maridone.exception.notfound.EmployeeNotFoundException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.util.List;
 
 
 @Service
@@ -57,5 +60,11 @@ public class UserAccountService {
         user.setAccountStatus(payload.getAccountStatus());
         userAccountRepository.save(user);
         return user;
+    }
+
+    @ExecutionTime
+    public List<DocumentPath> getDocuments(String username) {
+        UserAccount userAccount = getUserAccount(username);
+        return userAccount.getDocumentPaths();
     }
 }

@@ -6,6 +6,7 @@ import org.example.maridone.core.employee.Employee;
 import org.example.maridone.core.employee.EmployeeRepository;
 import org.example.maridone.core.user.UserAccount;
 import org.example.maridone.document.NOCLOUD.LocalDocumentService;
+import org.example.maridone.enums.Directories;
 import org.example.maridone.enums.ManagerTitle;
 import org.example.maridone.log.AttendanceLogRepository;
 import org.example.maridone.log.attendance.AttendanceLog;
@@ -34,7 +35,7 @@ import java.util.stream.Collectors;
 
 @Service
 //todo: modify localDocumentService after defense, use Cloud
-@Profile("dev")
+
 public class PayslipService {
 
     private final EmployeeRepository employeeRepository;
@@ -101,7 +102,7 @@ public class PayslipService {
                     "application/pdf",
                     pdfBytes
             );
-            batchRequests.add(new FileUploadBatchRequest(multipartFile, block.userAccountName()));
+            batchRequests.add(new FileUploadBatchRequest(multipartFile, block.userAccountName(), Directories.PAYSLIP.getDisplayName()));
         }
         localDocumentService.batchUpload(batchRequests);
     }

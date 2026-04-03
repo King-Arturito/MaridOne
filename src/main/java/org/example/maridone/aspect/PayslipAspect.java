@@ -13,7 +13,6 @@ import org.springframework.stereotype.Component;
 @Aspect
 @Order
 @Component
-@Profile("dev")
 public class PayslipAspect {
     private final PayslipService payslipService;
     private static final Logger logger =  LoggerFactory.getLogger(PayslipAspect.class);

@@ -8,18 +8,29 @@ import org.example.maridone.payroll.item.ItemFilter;
 import org.example.maridone.payroll.item.PayrollItemService;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.GrantedAuthority;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 import java.net.URI;
 import java.util.List;
+import java.util.Set;
 
 @RestController
 @RequestMapping("/api/payroll")
 public class PayrollController {
+    private static final Set<String> PAYROLL_REPORT_AUTHORITIES = Set.of(
+            "ROLE_HR",
+            "ROLE_MANAGEMENT",
+            "ROLE_ACCOUNTING"
+    );
+
     private final PayrollService payrollService;
     private final PayrollItemService payrollItemService;
 
@@ -35,11 +46,13 @@ public class PayrollController {
     }
 
     @GetMapping("/run/{payId}/items")
-    @PreAuthorize("hasAnyRole('HR', 'MANAGEMENT', 'ACCOUNTING')")
+    @PreAuthorize("isAuthenticated()")
     @AuditLog
     public Page<ItemViewDto> getRunItems(ItemFilter filter,
                                          @PathVariable Long payId,
+                                         Authentication authentication,
                                          Pageable pageable) {
+        assertCanViewPayrollReports(authentication);
         return payrollItemService.getRunItems(payId, filter, pageable);
     }
 
@@ -127,5 +140,13 @@ public class PayrollController {
                 .buildAndExpand(item.getId())
                 .toUri();
         return ResponseEntity.created(location).body(item);
+    }
+
+    private void assertCanViewPayrollReports(Authentication authentication) {
+        if (authentication == null || authentication.getAuthorities().stream()
+                .map(GrantedAuthority::getAuthority)
+                .noneMatch(PAYROLL_REPORT_AUTHORITIES::contains)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You do not have permission to view payroll reports.");
+        }
     }
 }

@@ -17,14 +17,14 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 import org.example.maridone.payroll.payslip.FileUploadBatchRequest;
 
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
-@Profile("dev")
+//todo: remove after defense
 public class LocalDocumentService {
 
     private final LocalStorageService localStorageService;
@@ -52,16 +52,27 @@ public class LocalDocumentService {
     }
 
     @ExecutionTime
+    public DocumentViewResult viewLibraryDocument(String subDir, String fileName) {
+        Resource file = localStorageService.loadLibraryDocument(subDir, fileName);
+        String contentType = localStorageService.probeContentType(subDir, fileName);
+        return new DocumentViewResult(file, fileName, contentType);
+    }
+
+    @ExecutionTime
     @Transactional
     @AuditLog
-    public DocumentResponseDto upload(MultipartFile file, String username) {
+    public DocumentResponseDto upload(MultipartFile file, String username, String subDir) {
         UserAccount user = userAccountRepository.findByUsername(username)
                 .orElseThrow(() -> new AccountNotFoundException("User not found"));
 
-        String savedFilePath = localStorageService.store(file, username);
+        String savedFilePath = localStorageService.store(file, username, subDir);
 
         DocumentPath doc = new DocumentPath();
-        doc.setFileName(file.getOriginalFilename() != null ? file.getOriginalFilename() : "unnamed");
+        String originalName = file.getOriginalFilename() != null ? file.getOriginalFilename() : "unnamed";
+        String extension = originalName.contains(".")
+                ? originalName.substring(originalName.lastIndexOf("."))
+                : "";
+        doc.setFileName(subDir + "_" + LocalDate.now() + extension);
         doc.setFileType(file.getContentType() != null ? file.getContentType() : "application/octet-stream");
         doc.setFilePath(savedFilePath);
         doc.setUsername(user);
@@ -96,10 +107,14 @@ public class LocalDocumentService {
                 throw new AccountNotFoundException("User not found: " + username);
             }
 
-            String savedFilePath = localStorageService.store(request.file(), username);
+            String savedFilePath = localStorageService.store(request.file(), username, request.subDir());
 
             DocumentPath doc = new DocumentPath();
-            doc.setFileName(request.file().getOriginalFilename() != null ? request.file().getOriginalFilename() : "unnamed");
+            String originalName = request.file().getOriginalFilename() != null ? request.file().getOriginalFilename() : "unnamed";
+            String extension = originalName.contains(".")
+                    ? originalName.substring(originalName.lastIndexOf("."))
+                    : "";
+            doc.setFileName(request.subDir() + "_" + LocalDate.now() + extension);
             doc.setFileType(request.file().getContentType() != null ? request.file().getContentType() : "application/octet-stream");
             doc.setFilePath(savedFilePath);
             doc.setUsername(user);
@@ -113,13 +128,13 @@ public class LocalDocumentService {
     @ExecutionTime
     @Transactional
     @AuditLog
-    public DocumentResponseDto replace(Long pathId, MultipartFile file, String username) {
+    public DocumentResponseDto replace(Long pathId, MultipartFile file, String username, String subDir) {
         DocumentPath document = documentPathRepository.findById(pathId)
                 .orElseThrow(() -> new RuntimeException("Document not found"));
 
         localStorageService.delete(document.getFilePath());
 
-        String newFilePath = localStorageService.store(file, username);
+        String newFilePath = localStorageService.store(file, username, subDir);
 
         document.setFileName(file.getOriginalFilename() != null ? file.getOriginalFilename() : "unnamed");
         document.setFileType(file.getContentType() != null ? file.getContentType() : "application/octet-stream");

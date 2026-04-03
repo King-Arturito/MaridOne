@@ -3,6 +3,7 @@ package org.example.maridone.leave.request;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import org.example.maridone.core.employee.Employee;
+import org.example.maridone.enums.LeaveType;
 import org.example.maridone.enums.Status;
 import org.hibernate.annotations.Check;
 
@@ -38,6 +39,10 @@ public class LeaveRequest {
 
     @Column(name = "reason", nullable = false)
     private String reason;
+
+    @Column(name = "leave_type", nullable = false)
+    @Enumerated(EnumType.STRING)
+    private LeaveType leaveType;
 
     @Column(name = "approver_reason", nullable = true)
     private String approverReason;
@@ -95,6 +100,14 @@ public class LeaveRequest {
 
     public void setReason(String reason) {
         this.reason = reason;
+    }
+
+    public LeaveType getLeaveType() {
+        return leaveType;
+    }
+
+    public void setLeaveType(LeaveType leaveType) {
+        this.leaveType = leaveType;
     }
 
     public String getApproverReason() {

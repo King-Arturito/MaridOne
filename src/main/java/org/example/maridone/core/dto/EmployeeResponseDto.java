@@ -1,4 +1,6 @@
 package org.example.maridone.core.dto;
+import java.time.LocalDate;
+
 import org.example.maridone.enums.EmploymentStatus;
 import org.example.maridone.enums.ExemptionStatus;
 import org.example.maridone.enums.Position;
@@ -11,6 +13,9 @@ public class EmployeeResponseDto {
     private String lastName;
     private EmploymentStatus employmentStatus;
     private ExemptionStatus exemptionStatus;
+    private LocalDate employmentDateStart;
+    private String email;
+    private String phoneNumber;
     private Position position;
 
 
@@ -60,6 +65,30 @@ public class EmployeeResponseDto {
 
     public void setExemptionStatus(ExemptionStatus exemptionStatus) {
         this.exemptionStatus = exemptionStatus;
+    }
+
+    public LocalDate getEmploymentDateStart() {
+        return employmentDateStart;
+    }
+
+    public void setEmploymentDateStart(LocalDate employmentDateStart) {
+        this.employmentDateStart = employmentDateStart;
+    }
+
+    public String getEmail() {
+        return email;
+    }
+
+    public void setEmail(String email) {
+        this.email = email;
+    }
+
+    public String getPhoneNumber() {
+        return phoneNumber;
+    }
+
+    public void setPhoneNumber(String phoneNumber) {
+        this.phoneNumber = phoneNumber;
     }
 
     public Position getPosition() {
