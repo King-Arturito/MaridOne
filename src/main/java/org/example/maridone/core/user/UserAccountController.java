@@ -4,7 +4,7 @@ import java.net.URI;
 
 import org.example.maridone.annotation.AuditLog;
 import org.example.maridone.core.dto.CreateUserAccountDto;
-import org.example.maridone.document.path.DocumentPath;
+import org.example.maridone.document.dto.DocumentResponseDto;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -55,9 +55,10 @@ public class UserAccountController {
         return userAccountService.getUserAccount(username);
     }
 
-    @GetMapping("/documents")
+    @GetMapping("/documents/{username}")
     @PreAuthorize("#username == authentication.getName()")
-    public List<DocumentPath> getDocuments(@PathVariable String username) {
-        return userAccountService.getDocuments(username);
+    public List<DocumentResponseDto> getDocuments(@PathVariable String username,
+                                                  @org.springframework.web.bind.annotation.RequestParam(required = false) String subDir) {
+        return userAccountService.getDocuments(username, subDir);
     }
 }

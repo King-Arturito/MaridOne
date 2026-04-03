@@ -4,10 +4,14 @@ import org.example.maridone.annotation.ExecutionTime;
 import org.example.maridone.core.dto.CreateUserAccountDto;
 import org.example.maridone.core.employee.Employee;
 import org.example.maridone.core.employee.EmployeeRepository;
-import org.example.maridone.document.path.DocumentPath;
+import org.example.maridone.document.DocumentPathRepository;
+import org.example.maridone.document.dto.DocumentResponseDto;
+import org.example.maridone.document.mapper.DocumentMapper;
+import org.example.maridone.document.spec.DocumentSpecs;
 import org.example.maridone.exception.notfound.AccountNotFoundException;
 import org.example.maridone.exception.unauthorized.DuplicateAccountException;
 import org.example.maridone.exception.notfound.EmployeeNotFoundException;
+import org.springframework.data.domain.Sort;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -21,14 +25,20 @@ public class UserAccountService {
     private final UserAccountRepository userAccountRepository;
     private final PasswordEncoder passwordEncoder;
     private final EmployeeRepository employeeRepository;
+    private final DocumentPathRepository documentPathRepository;
+    private final DocumentMapper documentMapper;
 
     public UserAccountService
             (UserAccountRepository userAccountRepository,
              PasswordEncoder passwordEncoder,
-             EmployeeRepository employeeRepository) {
+             EmployeeRepository employeeRepository,
+             DocumentPathRepository documentPathRepository,
+             DocumentMapper documentMapper) {
         this.userAccountRepository = userAccountRepository;
         this.passwordEncoder = passwordEncoder;
         this.employeeRepository = employeeRepository;
+        this.documentPathRepository = documentPathRepository;
+        this.documentMapper = documentMapper;
     }
 
     @ExecutionTime
@@ -89,9 +99,28 @@ public class UserAccountService {
     }
 
     @ExecutionTime
-    public List<DocumentPath> getDocuments(String username) {
-        UserAccount userAccount = getUserAccount(username);
-        return userAccount.getDocumentPaths();
+    public List<DocumentResponseDto> getDocuments(String username, String subDir) {
+        getUserAccount(username);
+        return documentPathRepository.findAll(
+                        DocumentSpecs.hasUsername(username),
+                        Sort.by(Sort.Direction.DESC, "pathId")
+                ).stream()
+                .filter(document -> matchesSubDirectory(document.getFilePath(), subDir))
+                .map(documentMapper::toDocumentResponseDto)
+                .toList();
+    }
+
+    private boolean matchesSubDirectory(String filePath, String subDir) {
+        if (subDir == null || subDir.trim().isEmpty()) {
+            return true;
+        }
+        if (filePath == null || filePath.isBlank()) {
+            return false;
+        }
+
+        String normalizedPath = filePath.replace('\\', '/').toLowerCase();
+        String normalizedSubDir = "/" + subDir.trim().toLowerCase() + "/";
+        return normalizedPath.contains(normalizedSubDir);
     }
 
     private String requireUsername(String username) {
