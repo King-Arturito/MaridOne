@@ -52,6 +52,13 @@ public class LocalDocumentService {
     }
 
     @ExecutionTime
+    public DocumentViewResult viewLibraryDocument(String subDir, String fileName) {
+        Resource file = localStorageService.loadLibraryDocument(subDir, fileName);
+        String contentType = localStorageService.probeContentType(subDir, fileName);
+        return new DocumentViewResult(file, fileName, contentType);
+    }
+
+    @ExecutionTime
     @Transactional
     @AuditLog
     public DocumentResponseDto upload(MultipartFile file, String username, String subDir) {

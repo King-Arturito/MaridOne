@@ -36,6 +36,17 @@ public class LocalDocumentController {
                 .body(result.file());
     }
 
+    @GetMapping("/library/{subDir}/{fileName:.+}")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<Resource> viewLibraryDocument(@PathVariable String subDir,
+                                                        @PathVariable String fileName) {
+        DocumentViewResult result = localDocumentService.viewLibraryDocument(subDir, fileName);
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + result.fileName() + "\"")
+                .contentType(MediaType.parseMediaType(result.fileType()))
+                .body(result.file());
+    }
+
     @PostMapping("/upload")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<DocumentResponseDto> upload(@RequestParam("file") MultipartFile file,
