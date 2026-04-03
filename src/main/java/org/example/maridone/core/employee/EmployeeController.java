@@ -1,11 +1,13 @@
 package org.example.maridone.core.employee;
 
+import jakarta.validation.groups.Default;
 import org.example.maridone.annotation.AuditLog;
 import org.example.maridone.core.dto.EmployeeDetailsDto;
 import org.example.maridone.core.dto.EmployeeRequestDto;
 import org.example.maridone.core.dto.EmployeeResponseDto;
 import org.example.maridone.core.filter.EmployeeFilter;
 import org.example.maridone.marker.HrUpdate;
+import org.example.maridone.marker.OnCreate;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
@@ -34,7 +36,8 @@ public class EmployeeController {
     @PostMapping("/create")
     @PreAuthorize("hasRole('HR')")
     @AuditLog
-    public ResponseEntity<EmployeeResponseDto> createEmployee(@RequestBody EmployeeRequestDto employeeRequestDto) {
+    public ResponseEntity<EmployeeResponseDto> createEmployee(
+            @Validated({Default.class, OnCreate.class}) @RequestBody EmployeeRequestDto employeeRequestDto) {
         EmployeeResponseDto response = employeeService.createEmployee(employeeRequestDto);
         URI location = ServletUriComponentsBuilder
                 .fromCurrentRequest()
@@ -67,7 +70,9 @@ public class EmployeeController {
     @PatchMapping("/{id}")
     @PreAuthorize("hasRole('HR') or @userCheck.isSelf(#id, authentication.getName())")
     @AuditLog
-    public ResponseEntity<EmployeeResponseDto> updateEmployee(@PathVariable Long id, @RequestBody EmployeeRequestDto employeeRequestDto) {
+    public ResponseEntity<EmployeeResponseDto> updateEmployee(
+            @PathVariable Long id,
+            @Validated @RequestBody EmployeeRequestDto employeeRequestDto) {
         EmployeeResponseDto response =  employeeService.updateEmployee(id, employeeRequestDto);
         return ResponseEntity.ok(response);
     }

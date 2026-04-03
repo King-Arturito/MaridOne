@@ -43,13 +43,7 @@ public class EmployeeService {
     @ExecutionTime
     public EmployeeResponseDto createEmployee(EmployeeRequestDto employeeRequestDto) {
         Employee employee = coreMapper.toEmployee(employeeRequestDto);
-        employee.setFirstName(requireText(employee.getFirstName(), "First name"));
-        employee.setLastName(requireText(employee.getLastName(), "Last name"));
-        employee.setEmail(requireText(employee.getEmail(), "Email"));
-        employee.setPhoneNumber(requirePhoneNumber(employee.getPhoneNumber()));
-        if (employee.getBirthDate() == null) {
-            throw new IllegalArgumentException("Birth date is required.");
-        }
+        employee.setPhoneNumber(normalizePhoneNumber(employee.getPhoneNumber()));
         employee.setPosition(Optional.ofNullable(employee.getPosition()).orElse(Position.EMPLOYEE));
         employee.setEmploymentStatus(Optional.ofNullable(employee.getEmploymentStatus()).orElse(EmploymentStatus.REGULAR));
         employee.setEmploymentDateStart(Optional.ofNullable(employee.getEmploymentDateStart()).orElse(LocalDate.now()));
@@ -115,7 +109,7 @@ public class EmployeeService {
 
         Optional.ofNullable(updated.getPhoneNumber())
                 .filter(v -> !v.equals(emp.getPhoneNumber()))
-                .ifPresent(phone -> emp.setPhoneNumber(requirePhoneNumber(phone)));
+                .ifPresent(phone -> emp.setPhoneNumber(normalizePhoneNumber(phone)));
 
         Optional.ofNullable(updated.getPosition())
                 .filter(v -> !v.equals(emp.getPosition()))
@@ -206,21 +200,11 @@ public class EmployeeService {
         return userAccountRepository.findUsernameByEmployeeEmployeeId(employeeId).orElse(null);
     }
 
-    private String requireText(String value, String fieldName) {
-        if (value == null || value.trim().isEmpty()) {
-            throw new IllegalArgumentException(fieldName + " is required.");
-        }
-        return value.trim();
-    }
-
-    private String requirePhoneNumber(String value) {
+    private String normalizePhoneNumber(String value) {
         if (value == null || value.trim().isEmpty()) {
             throw new IllegalArgumentException("Phone number is required.");
         }
         String digitsOnly = value.replaceAll("\\D", "");
-        if (digitsOnly.isEmpty()) {
-            throw new IllegalArgumentException("Phone number must contain digits only.");
-        }
         if (digitsOnly.length() != 11) {
             throw new IllegalArgumentException("Phone number must be exactly 11 digits.");
         }

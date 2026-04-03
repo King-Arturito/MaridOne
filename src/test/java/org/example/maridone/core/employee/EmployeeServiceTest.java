@@ -5,6 +5,7 @@ import java.util.Optional;
 import org.example.maridone.core.dto.EmployeeRequestDto;
 import org.example.maridone.core.dto.EmployeeResponseDto;
 import org.example.maridone.core.mapper.CoreMapper;
+import org.example.maridone.core.user.UserAccountRepository;
 import org.example.maridone.enums.ExemptionStatus;
 import org.example.maridone.enums.Position;
 import org.example.maridone.exception.notfound.EmployeeNotFoundException;
@@ -17,6 +18,7 @@ import org.mockito.Mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.ArgumentMatchers.anyLong;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
@@ -28,6 +30,9 @@ class EmployeeServiceTest {
 
     @Mock
     private CoreMapper coreMapper;
+
+    @Mock
+    private UserAccountRepository userAccountRepository;
 
     @InjectMocks
     private EmployeeService employeeService;
@@ -53,6 +58,7 @@ class EmployeeServiceTest {
         when(coreMapper.toEmployee(any(EmployeeRequestDto.class))).thenReturn(employee);
         when(employeeRepository.save(any(Employee.class))).thenReturn(employee);
         when(coreMapper.toEmployeeResponse(any(Employee.class))).thenReturn(responseDto);
+        when(userAccountRepository.findUsernameByEmployeeEmployeeId(anyLong())).thenReturn(Optional.empty());
 
         EmployeeResponseDto result = employeeService.createEmployee(requestDto);
 
@@ -75,6 +81,7 @@ class EmployeeServiceTest {
 
         when(employeeRepository.findById(empId)).thenReturn(Optional.of(employee));
         when(coreMapper.toEmployeeResponse(employee)).thenReturn(responseDto);
+        when(userAccountRepository.findUsernameByEmployeeEmployeeId(anyLong())).thenReturn(Optional.empty());
 
         EmployeeResponseDto result = employeeService.getEmployee(empId);
 
