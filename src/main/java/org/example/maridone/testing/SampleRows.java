@@ -37,11 +37,11 @@ import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Locale;
 import java.util.Objects;
+import java.util.Set;
 
 @Component
 @Profile("dev")
@@ -50,6 +50,20 @@ public class SampleRows {
     private static final ZoneId SEED_TIME_ZONE = ZoneId.of("Asia/Manila");
     private static final LocalTime SHIFT_START = LocalTime.of(8, 0);
     private static final LocalTime SHIFT_END = LocalTime.of(17, 0);
+    private static final LocalDate ATTENDANCE_START_DATE = LocalDate.of(2026, 2, 1);
+    private static final LocalDate ATTENDANCE_END_DATE = LocalDate.of(2026, 4, 4);
+    private static final List<DayOfWeek> STANDARD_WORK_DAYS = List.of(
+            DayOfWeek.MONDAY,
+            DayOfWeek.TUESDAY,
+            DayOfWeek.WEDNESDAY,
+            DayOfWeek.THURSDAY,
+            DayOfWeek.FRIDAY,
+            DayOfWeek.SATURDAY
+    );
+    private static final List<Integer> SEEDED_LATE_MONTHS = List.of(2, 3);
+    private static final int SEEDED_LATE_DAYS_PER_MONTH = 2;
+    private static final int MIN_LATE_OFFSET_MINUTES = 18;
+    private static final int LATE_OFFSET_VARIATION_MINUTES = 15;
 
     @Autowired
     private EmployeeRepository employeeRepository;
@@ -201,7 +215,7 @@ public class SampleRows {
     private void createAndSaveShiftSchedules(List<Employee> employees) {
         List<TemplateShiftSchedule> schedules = new ArrayList<>();
         for (Employee employee : employees) {
-            for (DayOfWeek dayOfWeek : DayOfWeek.values()) {
+            for (DayOfWeek dayOfWeek : STANDARD_WORK_DAYS) {
                 TemplateShiftSchedule schedule = new TemplateShiftSchedule();
                 schedule.setEmployee(employee);
                 schedule.setDayOfWeek(dayOfWeek);
@@ -252,23 +266,27 @@ public class SampleRows {
 
     private void createAndSaveAttendanceLogs(List<Employee> employees) {
         List<AttendanceLog> attendanceLogs = new ArrayList<>();
-        LocalDate startDate = LocalDate.of(2026, 2, 1);
-        LocalDate endDate = LocalDate.of(2026, 3, 28);
-        List<LocalDate> workDates = new ArrayList<>();
-
-        for (LocalDate currentDate = startDate; !currentDate.isAfter(endDate); currentDate = currentDate.plusDays(1)) {
-            workDates.add(currentDate);
-        }
+        List<LocalDate> allWorkDates = buildWorkDates(ATTENDANCE_START_DATE, ATTENDANCE_END_DATE);
 
         for (Employee employee : employees) {
-            if (employee.getEmploymentStatus() == EmploymentStatus.TERMINATED
-                    || employee.getEmploymentStatus() == EmploymentStatus.SUSPENDED) {
+            if (employee.getEmploymentStatus() == EmploymentStatus.SUSPENDED) {
                 continue;
             }
 
-            Map<LocalDate, AttendanceVariance> varianceByDate = buildAttendanceVarianceByDate(employee, workDates);
-            for (LocalDate workDate : workDates) {
-                AttendanceVariance variance = varianceByDate.getOrDefault(workDate, AttendanceVariance.ON_TIME);
+            List<LocalDate> employeeWorkDates = allWorkDates.stream()
+                    .filter(date -> !date.isBefore(employee.getEmploymentDateStart()))
+                    .filter(date -> employee.getEmploymentDateEnd() == null || !date.isAfter(employee.getEmploymentDateEnd()))
+                    .toList();
+
+            if (employeeWorkDates.isEmpty()) {
+                continue;
+            }
+
+            Set<LocalDate> lateDates = buildLateDates(employee, employeeWorkDates);
+            for (LocalDate workDate : employeeWorkDates) {
+                AttendanceVariance variance = lateDates.contains(workDate)
+                        ? AttendanceVariance.LATE_IN
+                        : AttendanceVariance.ON_TIME;
                 attendanceLogs.add(createAttendanceLog(employee, workDate, "IN", variance));
                 attendanceLogs.add(createAttendanceLog(employee, workDate, "OUT", variance));
             }
@@ -277,22 +295,27 @@ public class SampleRows {
         attendanceLogRepository.saveAll(attendanceLogs);
     }
 
-    private Map<LocalDate, AttendanceVariance> buildAttendanceVarianceByDate(Employee employee, List<LocalDate> workDates) {
-        int anomalyCount = 1 + Math.floorMod(employee.getEmployeeId().intValue(), 4);
-        Map<LocalDate, AttendanceVariance> varianceByDate = new HashMap<>();
+    private List<LocalDate> buildWorkDates(LocalDate startDate, LocalDate endDate) {
+        List<LocalDate> workDates = new ArrayList<>();
+        for (LocalDate currentDate = startDate; !currentDate.isAfter(endDate); currentDate = currentDate.plusDays(1)) {
+            if (STANDARD_WORK_DAYS.contains(currentDate.getDayOfWeek())) {
+                workDates.add(currentDate);
+            }
+        }
+        return workDates;
+    }
 
-        workDates.stream()
-                .sorted(Comparator.comparingInt(date ->
-                        Math.floorMod(Objects.hash(employee.getEmployeeId(), date, "attendance-variance"), Integer.MAX_VALUE)))
-                .limit(anomalyCount)
-                .forEach(date -> varianceByDate.put(
-                        date,
-                        Math.floorMod(Objects.hash(employee.getEmployeeId(), date, "attendance-variance-type"), 2) == 0
-                                ? AttendanceVariance.LATE_IN
-                                : AttendanceVariance.EARLY_OUT
-                ));
-
-        return varianceByDate;
+    private Set<LocalDate> buildLateDates(Employee employee, List<LocalDate> workDates) {
+        Set<LocalDate> lateDates = new LinkedHashSet<>();
+        for (int month : SEEDED_LATE_MONTHS) {
+            workDates.stream()
+                    .filter(date -> date.getMonthValue() == month)
+                    .sorted(Comparator.comparingInt(date ->
+                            Math.floorMod(Objects.hash(employee.getEmployeeId(), date, "seeded-late-day"), Integer.MAX_VALUE)))
+                    .limit(SEEDED_LATE_DAYS_PER_MONTH)
+                    .forEach(lateDates::add);
+        }
+        return lateDates;
     }
 
     private AttendanceLog createAttendanceLog(Employee employee, LocalDate workDate, String direction, AttendanceVariance variance) {
@@ -316,9 +339,9 @@ public class SampleRows {
     }
 
     private int lateOffsetMinutes(Employee employee, LocalDate workDate) {
-        return 5 + Math.floorMod(
+        return MIN_LATE_OFFSET_MINUTES + Math.floorMod(
                 Objects.hash(employee.getEmployeeId(), workDate, "late-minutes"),
-                14
+                LATE_OFFSET_VARIATION_MINUTES
         );
     }
 
