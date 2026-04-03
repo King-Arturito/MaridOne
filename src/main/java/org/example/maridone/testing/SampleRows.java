@@ -11,6 +11,7 @@ import org.example.maridone.enums.AccountStatus;
 import org.example.maridone.enums.EmploymentStatus;
 import org.example.maridone.enums.ExemptionStatus;
 import org.example.maridone.enums.LeaveType;
+import org.example.maridone.enums.ManagerTitle;
 import org.example.maridone.enums.Position;
 import org.example.maridone.leave.balance.LeaveBalance;
 import org.example.maridone.leave.balance.LeaveBalanceRepository;
@@ -132,6 +133,7 @@ public class SampleRows {
         employee.setEmploymentStatus(seed.employmentStatus());
         employee.setExemptionStatus(seed.exemptionStatus());
         employee.setPosition(seed.position());
+        employee.setEmpTitle(seed.empTitle());
         employee.setAddress(toAddress(seed));
         return employee;
     }
@@ -148,16 +150,31 @@ public class SampleRows {
     }
 
     private void assignManagers(List<Employee> employees) {
+        Employee john = employees.get(0);
+        Employee jane = employees.get(1);
         Employee cecilia = employees.get(10);
         Employee daniel = employees.get(11);
 
+        cecilia.setManager(john);
+        daniel.setManager(jane);
+
+        employees.get(2).setManager(cecilia);
+        employees.get(3).setManager(cecilia);
         employees.get(4).setManager(cecilia);
         employees.get(7).setManager(cecilia);
+        employees.get(5).setManager(daniel);
+        employees.get(6).setManager(daniel);
         employees.get(8).setManager(daniel);
         employees.get(9).setManager(daniel);
 
         employeeRepository.saveAll(List.of(
+                cecilia,
+                daniel,
+                employees.get(2),
+                employees.get(3),
                 employees.get(4),
+                employees.get(5),
+                employees.get(6),
                 employees.get(7),
                 employees.get(8),
                 employees.get(9)
@@ -360,51 +377,51 @@ public class SampleRows {
         return List.of(
                 new EmployeeSeed("John", null, "Doe", LocalDate.of(1985, 1, 15), LocalDate.of(2024, 1, 8), null,
                         BigDecimal.valueOf(1_500_000.00), "john.doe@maridone.test", true, "09170000001",
-                        EmploymentStatus.REGULAR, ExemptionStatus.EXEMPT, Position.MANAGEMENT,
+                        EmploymentStatus.REGULAR, ExemptionStatus.EXEMPT, Position.MANAGEMENT, ManagerTitle.HEAD_OF_PEOPLE_OPERATIONS,
                         "101 Executive Ave", null, "Makati", "Metro Manila", "Philippines", "1200"),
                 new EmployeeSeed("Jane", null, "Smith", LocalDate.of(1988, 3, 22), LocalDate.of(2024, 2, 12), null,
                         BigDecimal.valueOf(1_200_000.00), "jane.smith@maridone.test", true, "09170000002",
-                        EmploymentStatus.REGULAR, ExemptionStatus.EXEMPT, Position.MANAGEMENT,
+                        EmploymentStatus.REGULAR, ExemptionStatus.EXEMPT, Position.MANAGEMENT, ManagerTitle.HEAD_OF_PROCUREMENT,
                         "102 Executive Ave", null, "Taguig", "Metro Manila", "Philippines", "1630"),
                 new EmployeeSeed("Robert", null, "Brown", LocalDate.of(1990, 5, 9), LocalDate.of(2025, 1, 6), null,
                         BigDecimal.valueOf(600_000.00), "robert.brown@maridone.test", true, "09170000003",
-                        EmploymentStatus.REGULAR, ExemptionStatus.EXEMPT, Position.HR,
+                        EmploymentStatus.REGULAR, ExemptionStatus.EXEMPT, Position.HR, null,
                         "201 People Ops St", null, "Pasig", "Metro Manila", "Philippines", "1600"),
                 new EmployeeSeed("Emily", "Anne", "Davis", LocalDate.of(1992, 7, 11), LocalDate.of(2025, 2, 3), null,
                         BigDecimal.valueOf(550_000.00), "emily.davis@maridone.test", true, "09170000004",
-                        EmploymentStatus.REGULAR, ExemptionStatus.EXEMPT, Position.HR,
+                        EmploymentStatus.REGULAR, ExemptionStatus.EXEMPT, Position.HR, null,
                         "202 People Ops St", null, "Quezon City", "Metro Manila", "Philippines", "1100"),
                 new EmployeeSeed("Michael", null, "Wilson", LocalDate.of(1995, 9, 17), LocalDate.of(2026, 1, 15), null,
                         BigDecimal.valueOf(300_000.00), "michael.wilson@maridone.test", false, "09170000005",
-                        EmploymentStatus.NEW_HIRE, ExemptionStatus.EXEMPT, Position.EMPLOYEE,
+                        EmploymentStatus.NEW_HIRE, ExemptionStatus.EXEMPT, Position.EMPLOYEE, null,
                         "301 Operations Rd", null, "Mandaluyong", "Metro Manila", "Philippines", "1550"),
                 new EmployeeSeed("Linda", null, "Jones", LocalDate.of(1991, 4, 28), LocalDate.of(2024, 6, 10), null,
                         BigDecimal.valueOf(500_000.00), "linda.jones@maridone.test", true, "09170000006",
-                        EmploymentStatus.REGULAR, ExemptionStatus.NON_EXEMPT, Position.ACCOUNTING,
+                        EmploymentStatus.REGULAR, ExemptionStatus.NON_EXEMPT, Position.ACCOUNTING, null,
                         "401 Finance Blvd", null, "Pasay", "Metro Manila", "Philippines", "1300"),
                 new EmployeeSeed("William", null, "Garcia", LocalDate.of(1998, 12, 3), LocalDate.of(2026, 2, 2), null,
                         BigDecimal.valueOf(320_000.00), "william.garcia@maridone.test", false, "09170000007",
-                        EmploymentStatus.NEW_HIRE, ExemptionStatus.NON_EXEMPT, Position.ACCOUNTING,
+                        EmploymentStatus.NEW_HIRE, ExemptionStatus.NON_EXEMPT, Position.ACCOUNTING, null,
                         "402 Finance Blvd", null, "Paranaque", "Metro Manila", "Philippines", "1700"),
                 new EmployeeSeed("Susan", null, "Miller", LocalDate.of(1999, 10, 20), LocalDate.of(2025, 11, 3), null,
                         BigDecimal.valueOf(150_000.00), "susan.miller@maridone.test", true, "09170000008",
-                        EmploymentStatus.PART_TIME, ExemptionStatus.NON_EXEMPT, Position.EMPLOYEE,
+                        EmploymentStatus.PART_TIME, ExemptionStatus.NON_EXEMPT, Position.EMPLOYEE, null,
                         "501 Support Lane", null, "Manila", "Metro Manila", "Philippines", "1000"),
                 new EmployeeSeed("Joseph", null, "Taylor", LocalDate.of(1987, 8, 13), LocalDate.of(2024, 4, 1), LocalDate.of(2026, 3, 20),
                         BigDecimal.valueOf(100_000.00), "joseph.taylor@maridone.test", true, "09170000009",
-                        EmploymentStatus.TERMINATED, ExemptionStatus.NON_EXEMPT, Position.EMPLOYEE,
+                        EmploymentStatus.TERMINATED, ExemptionStatus.NON_EXEMPT, Position.EMPLOYEE, null,
                         "502 Support Lane", "Temp Housing Block A", "Caloocan", "Metro Manila", "Philippines", "1400"),
                 new EmployeeSeed("Richard", null, "Moore", LocalDate.of(1993, 11, 30), LocalDate.of(2025, 8, 18), null,
                         BigDecimal.valueOf(200_000.00), "richard.moore@maridone.test", true, "09170000010",
-                        EmploymentStatus.SUSPENDED, ExemptionStatus.NON_EXEMPT, Position.EMPLOYEE,
+                        EmploymentStatus.SUSPENDED, ExemptionStatus.NON_EXEMPT, Position.EMPLOYEE, null,
                         "503 Support Lane", null, "Las Pinas", "Metro Manila", "Philippines", "1740"),
                 new EmployeeSeed("Cecilia", null, "Reyes", LocalDate.of(1989, 6, 18), LocalDate.of(2024, 3, 11), null,
                         BigDecimal.valueOf(720_000.00), "cecilia.reyes@maridone.test", true, "09170000011",
-                        EmploymentStatus.REGULAR, ExemptionStatus.EXEMPT, Position.MANAGER,
+                        EmploymentStatus.REGULAR, ExemptionStatus.EXEMPT, Position.MANAGER, ManagerTitle.HEAD_OF_PEOPLE_OPERATIONS,
                         "601 Leadership Row", null, "San Juan", "Metro Manila", "Philippines", "1502"),
                 new EmployeeSeed("Daniel", null, "Cruz", LocalDate.of(1991, 2, 25), LocalDate.of(2024, 5, 20), null,
                         BigDecimal.valueOf(710_000.00), "daniel.cruz@maridone.test", true, "09170000012",
-                        EmploymentStatus.REGULAR, ExemptionStatus.EXEMPT, Position.MANAGER,
+                        EmploymentStatus.REGULAR, ExemptionStatus.EXEMPT, Position.MANAGER, ManagerTitle.HEAD_OF_PROCUREMENT,
                         "602 Leadership Row", null, "Marikina", "Metro Manila", "Philippines", "1800")
         );
     }
@@ -488,6 +505,7 @@ public class SampleRows {
             EmploymentStatus employmentStatus,
             ExemptionStatus exemptionStatus,
             Position position,
+            ManagerTitle empTitle,
             String permanentAddress,
             String temporaryAddress,
             String city,

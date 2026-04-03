@@ -12,6 +12,7 @@ import org.example.maridone.embeddable.Address;
 import org.example.maridone.exception.notfound.EmployeeNotFoundException;
 import org.example.maridone.enums.EmploymentStatus;
 import org.example.maridone.enums.ExemptionStatus;
+import org.example.maridone.enums.ManagerTitle;
 import org.example.maridone.enums.Position;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -186,6 +187,7 @@ public class EmployeeService {
 
     private EmployeeResponseDto toEmployeeResponse(Employee employee) {
         EmployeeResponseDto response = coreMapper.toEmployeeResponse(employee);
+        response.setDepartment(resolveDepartment(employee));
         response.setUserAccountName(findUsername(employee.getEmployeeId()));
         return response;
     }
@@ -216,6 +218,18 @@ public class EmployeeService {
             case EMPLOYEE, ACCOUNTING, UNKNOWN -> ExemptionStatus.NON_EXEMPT;
             default -> ExemptionStatus.EXEMPT;
         };
+    }
+
+    private String resolveDepartment(Employee employee) {
+        Employee current = employee;
+        while (current != null) {
+            ManagerTitle title = current.getEmpTitle();
+            if (title != null) {
+                return title.getDisplayName();
+            }
+            current = current.getManager();
+        }
+        return null;
     }
 
     private Employee resolveManager(Long managerId, Long employeeId) {

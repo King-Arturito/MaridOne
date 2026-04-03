@@ -7,6 +7,7 @@ import org.example.maridone.core.dto.EmployeeResponseDto;
 import org.example.maridone.core.mapper.CoreMapper;
 import org.example.maridone.core.user.UserAccountRepository;
 import org.example.maridone.enums.ExemptionStatus;
+import org.example.maridone.enums.ManagerTitle;
 import org.example.maridone.enums.Position;
 import org.example.maridone.exception.notfound.EmployeeNotFoundException;
 import org.junit.jupiter.api.Assertions;
@@ -75,6 +76,9 @@ class EmployeeServiceTest {
         Long empId = 1L;
         Employee employee = new Employee();
         ReflectionTestUtils.setField(employee, "employeeId", empId);
+        Employee manager = new Employee();
+        manager.setEmpTitle(ManagerTitle.HEAD_OF_PEOPLE_OPERATIONS);
+        employee.setManager(manager);
 
         EmployeeResponseDto responseDto = new EmployeeResponseDto();
         responseDto.setId(empId); 
@@ -87,6 +91,7 @@ class EmployeeServiceTest {
 
         Assertions.assertNotNull(result);
         Assertions.assertEquals(empId, result.getId()); 
+        Assertions.assertEquals("People Operations Department", result.getDepartment());
     }
 
     @Test

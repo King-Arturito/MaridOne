@@ -17,6 +17,7 @@ public class EmployeeResponseDto {
     private String email;
     private String phoneNumber;
     private Position position;
+    private String department;
     private String userAccountName;
 
 
@@ -98,6 +99,14 @@ public class EmployeeResponseDto {
 
     public void setPosition(Position position) {
         this.position = position;
+    }
+
+    public String getDepartment() {
+        return department;
+    }
+
+    public void setDepartment(String department) {
+        this.department = department;
     }
 
     public String getUserAccountName() {
