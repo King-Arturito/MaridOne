@@ -2,8 +2,11 @@ package org.example.maridone.log;
 
 import org.example.maridone.annotation.ExecutionTime;
 import org.example.maridone.common.CommonSpecs;
+import org.example.maridone.core.employee.Employee;
 import org.example.maridone.core.employee.EmployeeRepository;
 import org.example.maridone.core.user.UserAccountRepository;
+import org.example.maridone.enums.EmploymentStatus;
+import org.example.maridone.exception.badrequest.UnauthorizedAccessException;
 import org.example.maridone.exception.notfound.EmployeeNotFoundException;
 import org.example.maridone.log.activity.ActivityLog;
 import org.example.maridone.log.attendance.AttendanceLog;
@@ -42,8 +45,13 @@ public class LogService {
 
     @Transactional
     public void attendance(Long empId) {
-        if (!employeeRepository.existsById(empId)) {
-            throw new EmployeeNotFoundException(empId);
+        Employee employee = employeeRepository.findById(empId)
+                .orElseThrow(() -> new EmployeeNotFoundException(empId));
+        if (employee.getEmploymentStatus() == EmploymentStatus.SUSPENDED) {
+            throw new UnauthorizedAccessException("You are currently suspended and cannot log attendance.");
+        }
+        if (employee.getEmploymentStatus() == EmploymentStatus.TERMINATED) {
+            throw new UnauthorizedAccessException("You may not log attendance. Your account has been terminated.");
         }
         AttendanceLog attendanceLog = new AttendanceLog();
         AttendanceLog recent = attendanceLogRepository.findTopByEmployeeIdOrderByAttendanceIdDesc(empId);

@@ -68,12 +68,7 @@ public class AuthService {
             UserAccount userAccount = userAccountRepository.findByUsername(authentication.getName())
                     .orElseThrow(() -> new AccountNotFoundException("username of: " + loginRequest.getUsername() + " not found"));
 
-            EmploymentStatus status = userAccount.getEmployee().getEmploymentStatus();
-            if (status.equals(EmploymentStatus.TERMINATED)) {
-                throw new UnauthorizedAccessException("You may not login. Your account has been terminated.");
-            } else if (status.equals(EmploymentStatus.SUSPENDED)) {
-                throw new UnauthorizedAccessException("You are currently suspended.");
-            }
+            ensureLoginAllowed(userAccount);
 
             if (userAccount.getTwoFactorEnabled()) {
                 String preAuthToken = jwtService.generatePreAuthToken(userDetails);
@@ -134,6 +129,7 @@ public class AuthService {
         }
 
         UserAccount userAccount = refreshTokenEntity.getUserAccount();
+        ensureLoginAllowed(userAccount);
         UserDetails userDetails = userLoginService.loadUserByUsername(userAccount.getUsername());
 
         String newAccessToken = jwtService.generateToken(userDetails);
@@ -170,6 +166,7 @@ public class AuthService {
         String username = jwtService.extractUsername(preAuthToken);
         UserAccount userAccount = userAccountRepository.findByUsername(username)
                 .orElseThrow(() -> new AccountNotFoundException("Account not found"));
+        ensureLoginAllowed(userAccount);
 
         // Verify the 6-digit code
         boolean isCodeValid = totpService.verifyCode(userAccount.getTwoFactorSecret(), code);
@@ -199,6 +196,16 @@ public class AuthService {
 
         userAccount.getEmployee().setIsVerified(true);
         userAccountRepository.save(userAccount);
+    }
+
+    private void ensureLoginAllowed(UserAccount userAccount) {
+        EmploymentStatus status = userAccount.getEmployee().getEmploymentStatus();
+        if (status == EmploymentStatus.TERMINATED) {
+            throw new UnauthorizedAccessException("You may not login. Your account has been terminated.");
+        }
+        if (status == EmploymentStatus.SUSPENDED) {
+            throw new UnauthorizedAccessException("You are currently suspended.");
+        }
     }
 
 }
