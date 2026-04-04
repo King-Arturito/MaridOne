@@ -1,5 +1,7 @@
 package org.example.maridone.payroll.item.component;
 
+import java.util.List;
+
 import org.example.maridone.annotation.AuditLog;
 import org.example.maridone.payroll.dto.DeductionsDto;
 import org.example.maridone.payroll.dto.EarningsDto;
@@ -10,8 +12,6 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-
-import java.util.List;
 
 @RestController
 @RequestMapping("/api/payroll/item")
@@ -25,13 +25,13 @@ public class ItemComponentController {
     }
 
     @GetMapping("/earnings/{itemId}")
-    @PreAuthorize("hasRole('HR') or @itemOwnerCheck.isSelf(#itemId, authentication.getName())")
+    @PreAuthorize("hasAnyRole('HR', 'ACCOUNTING') or @itemOwnerCheck.isSelf(#itemId, authentication.getName())")
     public List<EarningsDto> getEarnings(@PathVariable Long itemId) {
         return earningsService.getEarnings(itemId);
     }
 
     @GetMapping("/deductions/{itemId}")
-    @PreAuthorize("hasRole('HR') or @itemOwnerCheck.isSelf(#itemId, authentication.getName())")
+    @PreAuthorize("hasAnyRole('HR', 'ACCOUNTING') or @itemOwnerCheck.isSelf(#itemId, authentication.getName())")
     public List<DeductionsDto> getDeductions(@PathVariable Long itemId) {
         return deductionsService.getDeductions(itemId);
     }
