@@ -14,6 +14,8 @@ import org.example.maridone.exception.notfound.AccountNotFoundException;
 import org.example.maridone.exception.badrequest.InvalidRefreshTokenException;
 import org.example.maridone.exception.badrequest.UnauthorizedAccessException;
 import org.example.maridone.exception.notfound.EmployeeNotFoundException;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -98,6 +100,28 @@ public class AuthService {
         return null;
     }
 
+    public ResponseEntity<Object> sendTwoFactorLoginCode(String authHeader) {
+
+        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+
+        String preAuthToken = authHeader.substring(7);
+
+        if (!jwtService.isValidPreAuthToken(preAuthToken)) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+
+        String username = jwtService.extractUsername(preAuthToken);
+
+        UserAccount account = userAccountRepository.findByUsername(username)
+                .orElseThrow(() -> new AccountNotFoundException("username of: " + username));
+
+        String tokenToSend = totpService.generateCurrentCode(account.getTwoFactorSecret());
+        String email = account.getEmployee().getEmail();
+        emailService.sendVerificationCode(email, tokenToSend);
+        return null;
+    }
     @Transactional
     public AuthResponse refreshToken(RefreshRequest request) {
 
@@ -176,6 +200,5 @@ public class AuthService {
         userAccount.getEmployee().setIsVerified(true);
         userAccountRepository.save(userAccount);
     }
-
 
 }

@@ -1,9 +1,7 @@
 package org.example.maridone.auth.twofactor;
 
-import dev.samstevens.totp.code.CodeVerifier;
-import dev.samstevens.totp.code.DefaultCodeGenerator;
-import dev.samstevens.totp.code.DefaultCodeVerifier;
-import dev.samstevens.totp.code.HashingAlgorithm;
+import dev.samstevens.totp.code.*;
+import dev.samstevens.totp.exceptions.CodeGenerationException;
 import dev.samstevens.totp.exceptions.QrGenerationException;
 import dev.samstevens.totp.qr.QrData;
 import dev.samstevens.totp.qr.QrGenerator;
@@ -21,12 +19,16 @@ public class TotpService {
     private final SecretGenerator secretGenerator;
     private final QrGenerator qrGenerator;
     private final CodeVerifier codeVerifier;
+    private final CodeGenerator codeGenerator;
+    private final TimeProvider timeProvider;
 
     public TotpService() {
         this.secretGenerator = new DefaultSecretGenerator();
         this.qrGenerator = new ZxingPngQrGenerator();
-        TimeProvider timeProvider = new SystemTimeProvider();
-        this.codeVerifier = new DefaultCodeVerifier(new DefaultCodeGenerator(), timeProvider);
+        this.timeProvider = new SystemTimeProvider();
+        this.codeGenerator = new DefaultCodeGenerator();
+
+        this.codeVerifier = new DefaultCodeVerifier(this.codeGenerator, this.timeProvider);
     }
 
     public String generateSecret() {
@@ -48,6 +50,16 @@ public class TotpService {
             return Utils.getDataUriForImage(imageData, qrGenerator.getImageMimeType());
         } catch (QrGenerationException e) {
             throw new RuntimeException("Error generating 2FA QR code", e);
+        }
+    }
+
+    public String generateCurrentCode(String secret) {
+        try {
+            long currentBucket = Math.floorDiv(timeProvider.getTime(), 30);
+
+            return codeGenerator.generate(secret, currentBucket);
+        } catch (CodeGenerationException e) {
+            throw new RuntimeException("Error generating the 6-digit TOTP code", e);
         }
     }
 

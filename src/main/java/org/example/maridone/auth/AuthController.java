@@ -3,7 +3,6 @@ package org.example.maridone.auth;
 import org.example.maridone.auth.twofactor.TwoFactorService;
 import org.example.maridone.auth.twofactor.TwoFactorSetupResponse;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
@@ -55,6 +54,10 @@ public class AuthController {
         return ResponseEntity.ok(authService.sendEmailVerification(authentication.getName()));
     }
 
+    @PostMapping("/auth/2fa/send-login-code")
+    public ResponseEntity<?> sendTwoFactorLoginCode(@RequestHeader("Authorization") String authHeader) {
+        return ResponseEntity.ok(authService.sendTwoFactorLoginCode(authHeader));
+    }
     @PostMapping("/settings/2fa/disable")
     public ResponseEntity<Void> disable2fa(Authentication authentication) {
         return ResponseEntity.ok(twoFactorService.disable2fa(authentication.getName()));

@@ -27,13 +27,21 @@ public class EmailService {
 
         SimpleMailMessage message = new SimpleMailMessage();
         message.setTo(toEmail);
-        message.setSubject("Verify your MaridOne Account");
-        message.setText("Welcome to MaridOne!\n\n" +
+        message.setSubject("Verify your MaridOne Email Address");
+        message.setText(
                 "Please click the link below to verify your email address. " +
                 "This link will expire in 24 hours.\n\n" +
                 verifyUrl + "\n\n" +
                 "If you did not request this, please ignore this email.");
 
+        mailSender.send(message);
+    }
+
+    public void sendVerificationCode(String email, String tokenToSend) {
+        SimpleMailMessage message = new SimpleMailMessage();
+        message.setTo(email);
+        message.setSubject("Two Factor Authentication");
+        message.setText("2FA code: " + tokenToSend +"\n\nThis code expires in 30 seconds.");
         mailSender.send(message);
     }
 }
