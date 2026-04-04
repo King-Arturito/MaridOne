@@ -1,11 +1,13 @@
 package org.example.maridone.core.employee;
 
+import jakarta.validation.groups.Default;
 import org.example.maridone.annotation.AuditLog;
 import org.example.maridone.core.dto.EmployeeDetailsDto;
 import org.example.maridone.core.dto.EmployeeRequestDto;
 import org.example.maridone.core.dto.EmployeeResponseDto;
 import org.example.maridone.core.filter.EmployeeFilter;
 import org.example.maridone.marker.HrUpdate;
+import org.example.maridone.marker.OnCreate;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
@@ -18,6 +20,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 import java.net.URI;
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/employees")
@@ -32,9 +35,10 @@ public class EmployeeController {
 
     // ENDPOINT: /api/employees/create
     @PostMapping("/create")
-    @PreAuthorize("hasAnyRole('MANAGEMENT',  'HR')")
+    @PreAuthorize("hasRole('HR')")
     @AuditLog
-    public ResponseEntity<EmployeeResponseDto> createEmployee(@RequestBody EmployeeRequestDto employeeRequestDto) {
+    public ResponseEntity<EmployeeResponseDto> createEmployee(
+            @Validated({Default.class, OnCreate.class}) @RequestBody EmployeeRequestDto employeeRequestDto) {
         EmployeeResponseDto response = employeeService.createEmployee(employeeRequestDto);
         URI location = ServletUriComponentsBuilder
                 .fromCurrentRequest()
@@ -54,6 +58,16 @@ public class EmployeeController {
         return employeeService.getAllEmployees(employeeFilter,pageable);
     }
 
+    @GetMapping("/team")
+    @PreAuthorize("hasRole('MANAGER')")
+    public List<EmployeeResponseDto> getTeamEmployees(@RequestParam(required = false) Integer page,
+                                                      @RequestParam(required = false) Integer size,
+                                                      @RequestParam(required = false) Sort.Direction direction,
+                                                      @RequestParam(required = false) String sort,
+                                                      org.springframework.security.core.Authentication authentication) {
+        return employeeService.getTeamEmployees(authentication.getName());
+    }
+
     // for personal details check only
     @GetMapping("/{id}")
     @PreAuthorize("hasRole('HR') or @userCheck.isSelf(#id, authentication.getName())")
@@ -65,9 +79,11 @@ public class EmployeeController {
     // id is dynamic
     //returns a status code instead of automatically showing it in the HRIS
     @PatchMapping("/{id}")
-    @PreAuthorize("@userCheck.isSelf(#id, authentication.getName())")
+    @PreAuthorize("hasRole('HR') or @userCheck.isSelf(#id, authentication.getName())")
     @AuditLog
-    public ResponseEntity<EmployeeResponseDto> updateEmployee(@PathVariable Long id, @RequestBody EmployeeRequestDto employeeRequestDto) {
+    public ResponseEntity<EmployeeResponseDto> updateEmployee(
+            @PathVariable Long id,
+            @Validated @RequestBody EmployeeRequestDto employeeRequestDto) {
         EmployeeResponseDto response =  employeeService.updateEmployee(id, employeeRequestDto);
         return ResponseEntity.ok(response);
     }

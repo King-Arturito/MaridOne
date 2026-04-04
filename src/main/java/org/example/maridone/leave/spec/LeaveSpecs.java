@@ -30,6 +30,18 @@ public class LeaveSpecs {
             return cb.and(predicates.toArray(new Predicate[0]));
         };
     }
+
+    public static Specification<LeaveRequest> hasEmployeeIds(List<Long> employeeIds) {
+        return (root, query, cb) -> {
+            if (employeeIds == null || employeeIds.isEmpty()) {
+                return cb.disjunction();
+            }
+            if (query.getResultType() != Long.class && query.getResultType() != long.class) {
+                root.fetch("employee", JoinType.LEFT);
+            }
+            return root.join("employee", JoinType.INNER).get("employeeId").in(employeeIds);
+        };
+    }
     /*
         LocalDateTime startDateTime,
         LocalDateTime endDateTime,

@@ -7,6 +7,7 @@ import org.example.maridone.common.CommonSpecs;
 import org.example.maridone.core.employee.Employee;
 import org.example.maridone.core.employee.EmployeeRepository;
 import org.example.maridone.core.spec.EmployeeSpecs;
+import org.example.maridone.core.user.UserAccountRepository;
 import org.example.maridone.enums.Position;
 import org.example.maridone.enums.Status;
 import org.example.maridone.exception.conflict.OverlappingDatesException;
@@ -24,6 +25,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.util.List;
 
 @Service
 public class OvertimeService {
@@ -31,13 +33,16 @@ public class OvertimeService {
     private final OvertimeRequestRepository overtimeRequestRepository;
     private final EmployeeRepository employeeRepository;
     private final OvertimeMapper overtimeMapper;
+    private final UserAccountRepository userAccountRepository;
 
     public OvertimeService(OvertimeRequestRepository overtimeRequestRepository,
                            OvertimeMapper overtimeMapper,
-                           EmployeeRepository employeeRepository) {
+                           EmployeeRepository employeeRepository,
+                           UserAccountRepository userAccountRepository) {
         this.overtimeRequestRepository = overtimeRequestRepository;
         this.overtimeMapper = overtimeMapper;
         this.employeeRepository = employeeRepository;
+        this.userAccountRepository = userAccountRepository;
     }
 
     @Transactional
@@ -94,6 +99,20 @@ public class OvertimeService {
         return requests.map(overtimeMapper::toOvertimeResponseDto);
     }
 
+    @ExecutionTime
+    public Page<OvertimeResponseDto> getTeamOvertimeRequests(OvertimeFilter filter, String username, Pageable pageable) {
+        List<Long> handledEmployeeIds = resolveHandledEmployeeIds(username);
+        if (handledEmployeeIds.isEmpty()) {
+            return Page.empty(pageable);
+        }
+
+        Specification<OvertimeRequest> specs = Specification.allOf(
+                OvertimeSpecs.filtered(filter),
+                OvertimeSpecs.hasEmployeeIds(handledEmployeeIds)
+        );
+        return overtimeRequestRepository.findAll(specs, pageable).map(overtimeMapper::toOvertimeResponseDto);
+    }
+
 
     @ExecutionTime
     public Page<OvertimeResponseDto> getMyOvertimeRequests(Long empId, Pageable pageable) {
@@ -115,5 +134,13 @@ public class OvertimeService {
         overtimeRequest.setRequestStatus(Status.CANCELLED);
         overtimeRequestRepository.save(overtimeRequest);
 
+    }
+
+    private List<Long> resolveHandledEmployeeIds(String username) {
+        Long employeeId = userAccountRepository.findEmployeeIdByUsername(username);
+        if (employeeId == null) {
+            throw new AccountNotFoundException(username);
+        }
+        return employeeRepository.findHandledEmployeeIds(employeeId);
     }
 }

@@ -92,6 +92,10 @@ public class PayrollCalculator {
         return LocalDate.now();
     }
 
+    private long resolveGracePeriodMinutes() {
+        return Math.max(payrollConfig.getGracePeriod().toMinutes(), 0L);
+    }
+
 
     public List<EarningsLine> setEarnings(Employee emp, PayrollItem item) {
         List<EarningsLine> earnings =  new ArrayList<>();
@@ -404,7 +408,7 @@ public class PayrollCalculator {
         BigDecimal missingMinutes = missingHours.multiply(BigDecimal.valueOf(60));
         BigDecimal roundedMissingMinutes = missingMinutes.setScale(0, RoundingMode.HALF_UP);
         long lateMinutes = calculateLateMinutes(schedule, inLog, leave);
-        long graceMinutes = Math.max(payrollConfig.getGracePeriod().toMinutes(), 0L);
+        long graceMinutes = resolveGracePeriodMinutes();
         long coveredMinutes = Math.min(
                 roundedMissingMinutes.longValue(),
                 Math.min(lateMinutes, graceMinutes)

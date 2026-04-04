@@ -60,7 +60,10 @@ public class UploadDocumentAspect {
         }
 
         if (file != null)  {
-            String username = userAccountRepository.findByEmployeeId(empId).getUsername();
+            Long employeeId = empId;
+            String username = userAccountRepository.findByEmployee_EmployeeId(employeeId)
+                    .map(user -> user.getUsername())
+                    .orElseThrow(() -> new RuntimeException("User account not found for employee id " + employeeId));
             localDocumentService.upload(file, username, subDir);
         }
     }

@@ -1,6 +1,7 @@
 package org.example.maridone.schedule.calendar;
 
 import org.example.maridone.annotation.ExecutionTime;
+import org.example.maridone.config.DefaultConfig;
 import org.example.maridone.core.user.UserAccount;
 import org.example.maridone.core.user.UserAccountRepository;
 import org.example.maridone.exception.notfound.AccountNotFoundException;
@@ -13,7 +14,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.time.YearMonth;
-import java.time.ZoneOffset;
 import java.util.List;
 
 @Service
@@ -22,15 +22,18 @@ public class CalendarService {
     private final CalendarRepository calendarRepository;
     private final CalendarMapper calendarMapper;
     private final UserAccountRepository userAccountRepository;
+    private final DefaultConfig defaultConfig;
 
     public CalendarService(
             CalendarRepository calendarRepository,
             CalendarMapper calendarMapper,
-            UserAccountRepository userAccountRepository)
+            UserAccountRepository userAccountRepository,
+            DefaultConfig defaultConfig)
     {
         this.calendarRepository = calendarRepository;
         this.calendarMapper = calendarMapper;
         this.userAccountRepository = userAccountRepository;
+        this.defaultConfig = defaultConfig;
     }
 
     @Transactional
@@ -80,8 +83,8 @@ public class CalendarService {
     @Transactional(readOnly = true)
     public List<CalendarEventResponseDto> getAllEvents(int month, int year) {
         YearMonth selectedMonth = YearMonth.of(year, month);
-        Instant periodStart = selectedMonth.atDay(1).atStartOfDay(ZoneOffset.UTC).toInstant();
-        Instant periodEnd = selectedMonth.atEndOfMonth().plusDays(1).atStartOfDay(ZoneOffset.UTC).minusNanos(1).toInstant();
+        Instant periodStart = selectedMonth.atDay(1).atStartOfDay(defaultConfig.getTimeZone()).toInstant();
+        Instant periodEnd = selectedMonth.atEndOfMonth().plusDays(1).atStartOfDay(defaultConfig.getTimeZone()).minusNanos(1).toInstant();
 
         return calendarMapper.toCalendarEventResponseDtos(
                 calendarRepository.findActiveEventsOverlappingPeriod(periodStart, periodEnd)

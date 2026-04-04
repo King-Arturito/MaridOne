@@ -4,10 +4,11 @@ import java.net.URI;
 
 import org.example.maridone.annotation.AuditLog;
 import org.example.maridone.core.dto.CreateUserAccountDto;
-import org.example.maridone.document.path.DocumentPath;
+import org.example.maridone.document.dto.DocumentResponseDto;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -37,6 +38,16 @@ public class UserAccountController {
         return ResponseEntity.created(location).body(user);
     }
 
+    @PatchMapping("/{employeeId}")
+    @PreAuthorize("hasRole('HR')")
+    @AuditLog
+    public ResponseEntity<UserAccount> updateUserAccount(
+            @PathVariable Long employeeId,
+            @RequestBody CreateUserAccountDto payload) {
+        payload.setEmployeeId(employeeId);
+        return ResponseEntity.ok(userAccountService.updateUserAccount(payload));
+    }
+
     //view your own UserAccount
     @GetMapping("/details/{username}")
     @PreAuthorize("#username == authentication.getName()")
@@ -44,9 +55,10 @@ public class UserAccountController {
         return userAccountService.getUserAccount(username);
     }
 
-    @GetMapping("/documents")
+    @GetMapping("/documents/{username}")
     @PreAuthorize("#username == authentication.getName()")
-    public List<DocumentPath> getDocuments(@PathVariable String username) {
-        return userAccountService.getDocuments(username);
+    public List<DocumentResponseDto> getDocuments(@PathVariable String username,
+                                                  @org.springframework.web.bind.annotation.RequestParam(required = false) String subDir) {
+        return userAccountService.getDocuments(username, subDir);
     }
 }

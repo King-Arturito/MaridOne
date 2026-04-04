@@ -1,6 +1,21 @@
 package org.example.maridone.testing;
 
-import jakarta.annotation.PostConstruct;
+import java.math.BigDecimal;
+import java.time.DayOfWeek;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Locale;
+import java.util.Objects;
+import java.util.Set;
+
 import org.example.maridone.core.bank.BankAccount;
 import org.example.maridone.core.bank.BankAccountRepository;
 import org.example.maridone.core.employee.Employee;
@@ -11,6 +26,7 @@ import org.example.maridone.enums.AccountStatus;
 import org.example.maridone.enums.EmploymentStatus;
 import org.example.maridone.enums.ExemptionStatus;
 import org.example.maridone.enums.LeaveType;
+import org.example.maridone.enums.ManagerTitle;
 import org.example.maridone.enums.Position;
 import org.example.maridone.leave.balance.LeaveBalance;
 import org.example.maridone.leave.balance.LeaveBalanceRepository;
@@ -27,21 +43,7 @@ import org.springframework.context.annotation.Profile;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 
-import java.math.BigDecimal;
-import java.time.DayOfWeek;
-import java.time.Instant;
-import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.time.LocalTime;
-import java.time.ZoneId;
-import java.time.ZonedDateTime;
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Locale;
-import java.util.Objects;
+import jakarta.annotation.PostConstruct;
 
 @Component
 @Profile("dev")
@@ -50,6 +52,22 @@ public class SampleRows {
     private static final ZoneId SEED_TIME_ZONE = ZoneId.of("Asia/Manila");
     private static final LocalTime SHIFT_START = LocalTime.of(8, 0);
     private static final LocalTime SHIFT_END = LocalTime.of(17, 0);
+    private static final LocalDate ATTENDANCE_START_DATE = LocalDate.of(2026, 2, 1);
+    private static final LocalDate ATTENDANCE_END_DATE = LocalDate.of(2026, 4, 4);
+    private static final List<DayOfWeek> STANDARD_WORK_DAYS = List.of(
+            DayOfWeek.MONDAY,
+            DayOfWeek.TUESDAY,
+            DayOfWeek.WEDNESDAY,
+            DayOfWeek.THURSDAY,
+            DayOfWeek.FRIDAY,
+            DayOfWeek.SATURDAY
+    );
+    private static final List<Integer> SEEDED_LATE_MONTHS = List.of(2, 3);
+    private static final int SEEDED_LATE_DAYS_PER_MONTH = 2;
+    private static final LocalDate TARGETED_LATE_DATE_ONE = LocalDate.of(2026, 4, 3);
+    private static final LocalDate TARGETED_LATE_DATE_TWO = LocalDate.of(2026, 4, 4);
+    private static final int MIN_LATE_OFFSET_MINUTES = 18;
+    private static final int LATE_OFFSET_VARIATION_MINUTES = 15;
 
     @Autowired
     private EmployeeRepository employeeRepository;
@@ -118,6 +136,7 @@ public class SampleRows {
         employee.setEmploymentStatus(seed.employmentStatus());
         employee.setExemptionStatus(seed.exemptionStatus());
         employee.setPosition(seed.position());
+        employee.setEmpTitle(seed.empTitle());
         employee.setAddress(toAddress(seed));
         return employee;
     }
@@ -134,20 +153,30 @@ public class SampleRows {
     }
 
     private void assignManagers(List<Employee> employees) {
-        Employee cecilia = employees.get(10);
-        Employee daniel = employees.get(11);
+        for (Employee employee : employees) {
+            employee.setManager(null);
+        }
 
-        employees.get(4).setManager(cecilia);
-        employees.get(7).setManager(cecilia);
-        employees.get(8).setManager(daniel);
-        employees.get(9).setManager(daniel);
+        List<Employee> managers = employees.stream()
+                .filter(employee -> employee.getPosition() == Position.MANAGER)
+                .toList();
 
-        employeeRepository.saveAll(List.of(
-                employees.get(4),
-                employees.get(7),
-                employees.get(8),
-                employees.get(9)
-        ));
+        if (managers.isEmpty()) {
+            employeeRepository.saveAll(employees);
+            return;
+        }
+
+        List<Employee> individualContributors = employees.stream()
+                .filter(employee -> employee.getPosition() == Position.EMPLOYEE)
+                .toList();
+
+        for (int index = 0; index < individualContributors.size(); index++) {
+            Employee employee = individualContributors.get(index);
+            Employee manager = managers.get(index % managers.size());
+            employee.setManager(manager);
+        }
+
+        employeeRepository.saveAll(employees);
     }
 
     private void createAndSaveCompanyCalendar(List<Employee> employees) {
@@ -201,7 +230,7 @@ public class SampleRows {
     private void createAndSaveShiftSchedules(List<Employee> employees) {
         List<TemplateShiftSchedule> schedules = new ArrayList<>();
         for (Employee employee : employees) {
-            for (DayOfWeek dayOfWeek : DayOfWeek.values()) {
+            for (DayOfWeek dayOfWeek : STANDARD_WORK_DAYS) {
                 TemplateShiftSchedule schedule = new TemplateShiftSchedule();
                 schedule.setEmployee(employee);
                 schedule.setDayOfWeek(dayOfWeek);
@@ -220,7 +249,7 @@ public class SampleRows {
                 LeaveBalance leaveBalance = new LeaveBalance();
                 leaveBalance.setEmployee(employee);
                 leaveBalance.setLeaveType(leaveType);
-                leaveBalance.setBalanceHours(BigDecimal.valueOf(6.00));
+                leaveBalance.setBalanceHours(BigDecimal.valueOf(60.00));
                 leaveBalances.add(leaveBalance);
             }
         }
@@ -252,23 +281,27 @@ public class SampleRows {
 
     private void createAndSaveAttendanceLogs(List<Employee> employees) {
         List<AttendanceLog> attendanceLogs = new ArrayList<>();
-        LocalDate startDate = LocalDate.of(2026, 2, 1);
-        LocalDate endDate = LocalDate.of(2026, 3, 28);
-        List<LocalDate> workDates = new ArrayList<>();
-
-        for (LocalDate currentDate = startDate; !currentDate.isAfter(endDate); currentDate = currentDate.plusDays(1)) {
-            workDates.add(currentDate);
-        }
+        List<LocalDate> allWorkDates = buildWorkDates(ATTENDANCE_START_DATE, ATTENDANCE_END_DATE);
 
         for (Employee employee : employees) {
-            if (employee.getEmploymentStatus() == EmploymentStatus.TERMINATED
-                    || employee.getEmploymentStatus() == EmploymentStatus.SUSPENDED) {
+            if (employee.getEmploymentStatus() == EmploymentStatus.SUSPENDED) {
                 continue;
             }
 
-            Map<LocalDate, AttendanceVariance> varianceByDate = buildAttendanceVarianceByDate(employee, workDates);
-            for (LocalDate workDate : workDates) {
-                AttendanceVariance variance = varianceByDate.getOrDefault(workDate, AttendanceVariance.ON_TIME);
+            List<LocalDate> employeeWorkDates = allWorkDates.stream()
+                    .filter(date -> !date.isBefore(employee.getEmploymentDateStart()))
+                    .filter(date -> employee.getEmploymentDateEnd() == null || !date.isAfter(employee.getEmploymentDateEnd()))
+                    .toList();
+
+            if (employeeWorkDates.isEmpty()) {
+                continue;
+            }
+
+            Set<LocalDate> lateDates = buildLateDates(employee, employeeWorkDates);
+            for (LocalDate workDate : employeeWorkDates) {
+                AttendanceVariance variance = lateDates.contains(workDate)
+                        ? AttendanceVariance.LATE_IN
+                        : AttendanceVariance.ON_TIME;
                 attendanceLogs.add(createAttendanceLog(employee, workDate, "IN", variance));
                 attendanceLogs.add(createAttendanceLog(employee, workDate, "OUT", variance));
             }
@@ -277,22 +310,39 @@ public class SampleRows {
         attendanceLogRepository.saveAll(attendanceLogs);
     }
 
-    private Map<LocalDate, AttendanceVariance> buildAttendanceVarianceByDate(Employee employee, List<LocalDate> workDates) {
-        int anomalyCount = 1 + Math.floorMod(employee.getEmployeeId().intValue(), 4);
-        Map<LocalDate, AttendanceVariance> varianceByDate = new HashMap<>();
+    private List<LocalDate> buildWorkDates(LocalDate startDate, LocalDate endDate) {
+        List<LocalDate> workDates = new ArrayList<>();
+        for (LocalDate currentDate = startDate; !currentDate.isAfter(endDate); currentDate = currentDate.plusDays(1)) {
+            if (STANDARD_WORK_DAYS.contains(currentDate.getDayOfWeek())) {
+                workDates.add(currentDate);
+            }
+        }
+        return workDates;
+    }
 
-        workDates.stream()
-                .sorted(Comparator.comparingInt(date ->
-                        Math.floorMod(Objects.hash(employee.getEmployeeId(), date, "attendance-variance"), Integer.MAX_VALUE)))
-                .limit(anomalyCount)
-                .forEach(date -> varianceByDate.put(
-                        date,
-                        Math.floorMod(Objects.hash(employee.getEmployeeId(), date, "attendance-variance-type"), 2) == 0
-                                ? AttendanceVariance.LATE_IN
-                                : AttendanceVariance.EARLY_OUT
-                ));
+    private Set<LocalDate> buildLateDates(Employee employee, List<LocalDate> workDates) {
+        Set<LocalDate> lateDates = new LinkedHashSet<>();
+        for (int month : SEEDED_LATE_MONTHS) {
+            workDates.stream()
+                    .filter(date -> date.getMonthValue() == month)
+                    .sorted(Comparator.comparingInt(date ->
+                            Math.floorMod(Objects.hash(employee.getEmployeeId(), date, "seeded-late-day"), Integer.MAX_VALUE)))
+                    .limit(SEEDED_LATE_DAYS_PER_MONTH)
+                    .forEach(lateDates::add);
+        }
+        addTargetedLateDate(employee, workDates, lateDates, TARGETED_LATE_DATE_ONE, Math.floorMod(employee.getEmployeeId().intValue(), 4) == 1);
+        addTargetedLateDate(employee, workDates, lateDates, TARGETED_LATE_DATE_TWO, Math.floorMod(employee.getEmployeeId().intValue(), 4) == 2);
+        return lateDates;
+    }
 
-        return varianceByDate;
+    private void addTargetedLateDate(Employee employee,
+                                     List<LocalDate> workDates,
+                                     Set<LocalDate> lateDates,
+                                     LocalDate targetDate,
+                                     boolean shouldBeLate) {
+        if (shouldBeLate && workDates.contains(targetDate)) {
+            lateDates.add(targetDate);
+        }
     }
 
     private AttendanceLog createAttendanceLog(Employee employee, LocalDate workDate, String direction, AttendanceVariance variance) {
@@ -316,9 +366,9 @@ public class SampleRows {
     }
 
     private int lateOffsetMinutes(Employee employee, LocalDate workDate) {
-        return 5 + Math.floorMod(
+        return MIN_LATE_OFFSET_MINUTES + Math.floorMod(
                 Objects.hash(employee.getEmployeeId(), workDate, "late-minutes"),
-                14
+                LATE_OFFSET_VARIATION_MINUTES
         );
     }
 
@@ -337,52 +387,92 @@ public class SampleRows {
         return List.of(
                 new EmployeeSeed("John", null, "Doe", LocalDate.of(1985, 1, 15), LocalDate.of(2024, 1, 8), null,
                         BigDecimal.valueOf(1_500_000.00), "john.doe@maridone.test", true, "09170000001",
-                        EmploymentStatus.REGULAR, ExemptionStatus.EXEMPT, Position.MANAGEMENT,
+                        EmploymentStatus.REGULAR, ExemptionStatus.EXEMPT, Position.MANAGEMENT, null,
                         "101 Executive Ave", null, "Makati", "Metro Manila", "Philippines", "1200"),
                 new EmployeeSeed("Jane", null, "Smith", LocalDate.of(1988, 3, 22), LocalDate.of(2024, 2, 12), null,
                         BigDecimal.valueOf(1_200_000.00), "jane.smith@maridone.test", true, "09170000002",
-                        EmploymentStatus.REGULAR, ExemptionStatus.EXEMPT, Position.MANAGEMENT,
+                        EmploymentStatus.REGULAR, ExemptionStatus.EXEMPT, Position.MANAGEMENT, null,
                         "102 Executive Ave", null, "Taguig", "Metro Manila", "Philippines", "1630"),
                 new EmployeeSeed("Robert", null, "Brown", LocalDate.of(1990, 5, 9), LocalDate.of(2025, 1, 6), null,
                         BigDecimal.valueOf(600_000.00), "robert.brown@maridone.test", true, "09170000003",
-                        EmploymentStatus.REGULAR, ExemptionStatus.EXEMPT, Position.HR,
+                        EmploymentStatus.REGULAR, ExemptionStatus.EXEMPT, Position.HR, null,
                         "201 People Ops St", null, "Pasig", "Metro Manila", "Philippines", "1600"),
                 new EmployeeSeed("Emily", "Anne", "Davis", LocalDate.of(1992, 7, 11), LocalDate.of(2025, 2, 3), null,
                         BigDecimal.valueOf(550_000.00), "emily.davis@maridone.test", true, "09170000004",
-                        EmploymentStatus.REGULAR, ExemptionStatus.EXEMPT, Position.HR,
+                        EmploymentStatus.REGULAR, ExemptionStatus.EXEMPT, Position.HR, null,
                         "202 People Ops St", null, "Quezon City", "Metro Manila", "Philippines", "1100"),
-                new EmployeeSeed("Michael", null, "Wilson", LocalDate.of(1995, 9, 17), LocalDate.of(2026, 1, 15), null,
-                        BigDecimal.valueOf(300_000.00), "michael.wilson@maridone.test", false, "09170000005",
-                        EmploymentStatus.NEW_HIRE, ExemptionStatus.EXEMPT, Position.EMPLOYEE,
-                        "301 Operations Rd", null, "Mandaluyong", "Metro Manila", "Philippines", "1550"),
                 new EmployeeSeed("Linda", null, "Jones", LocalDate.of(1991, 4, 28), LocalDate.of(2024, 6, 10), null,
-                        BigDecimal.valueOf(500_000.00), "linda.jones@maridone.test", true, "09170000006",
-                        EmploymentStatus.REGULAR, ExemptionStatus.NON_EXEMPT, Position.ACCOUNTING,
+                        BigDecimal.valueOf(500_000.00), "linda.jones@maridone.test", true, "09170000005",
+                        EmploymentStatus.REGULAR, ExemptionStatus.NON_EXEMPT, Position.ACCOUNTING, null,
                         "401 Finance Blvd", null, "Pasay", "Metro Manila", "Philippines", "1300"),
                 new EmployeeSeed("William", null, "Garcia", LocalDate.of(1998, 12, 3), LocalDate.of(2026, 2, 2), null,
-                        BigDecimal.valueOf(320_000.00), "william.garcia@maridone.test", false, "09170000007",
-                        EmploymentStatus.NEW_HIRE, ExemptionStatus.NON_EXEMPT, Position.ACCOUNTING,
+                        BigDecimal.valueOf(320_000.00), "william.garcia@maridone.test", false, "09170000006",
+                        EmploymentStatus.NEW_HIRE, ExemptionStatus.NON_EXEMPT, Position.ACCOUNTING, null,
                         "402 Finance Blvd", null, "Paranaque", "Metro Manila", "Philippines", "1700"),
-                new EmployeeSeed("Susan", null, "Miller", LocalDate.of(1999, 10, 20), LocalDate.of(2025, 11, 3), null,
-                        BigDecimal.valueOf(150_000.00), "susan.miller@maridone.test", true, "09170000008",
-                        EmploymentStatus.PART_TIME, ExemptionStatus.NON_EXEMPT, Position.EMPLOYEE,
-                        "501 Support Lane", null, "Manila", "Metro Manila", "Philippines", "1000"),
-                new EmployeeSeed("Joseph", null, "Taylor", LocalDate.of(1987, 8, 13), LocalDate.of(2024, 4, 1), LocalDate.of(2026, 3, 20),
-                        BigDecimal.valueOf(100_000.00), "joseph.taylor@maridone.test", true, "09170000009",
-                        EmploymentStatus.TERMINATED, ExemptionStatus.NON_EXEMPT, Position.EMPLOYEE,
-                        "502 Support Lane", "Temp Housing Block A", "Caloocan", "Metro Manila", "Philippines", "1400"),
-                new EmployeeSeed("Richard", null, "Moore", LocalDate.of(1993, 11, 30), LocalDate.of(2025, 8, 18), null,
-                        BigDecimal.valueOf(200_000.00), "richard.moore@maridone.test", true, "09170000010",
-                        EmploymentStatus.SUSPENDED, ExemptionStatus.NON_EXEMPT, Position.EMPLOYEE,
-                        "503 Support Lane", null, "Las Pinas", "Metro Manila", "Philippines", "1740"),
                 new EmployeeSeed("Cecilia", null, "Reyes", LocalDate.of(1989, 6, 18), LocalDate.of(2024, 3, 11), null,
-                        BigDecimal.valueOf(720_000.00), "cecilia.reyes@maridone.test", true, "09170000011",
-                        EmploymentStatus.REGULAR, ExemptionStatus.EXEMPT, Position.MANAGER,
+                        BigDecimal.valueOf(720_000.00), "cecilia.reyes@maridone.test", true, "09170000007",
+                        EmploymentStatus.REGULAR, ExemptionStatus.EXEMPT, Position.MANAGER, ManagerTitle.HEAD_OF_PEOPLE_OPERATIONS,
                         "601 Leadership Row", null, "San Juan", "Metro Manila", "Philippines", "1502"),
                 new EmployeeSeed("Daniel", null, "Cruz", LocalDate.of(1991, 2, 25), LocalDate.of(2024, 5, 20), null,
-                        BigDecimal.valueOf(710_000.00), "daniel.cruz@maridone.test", true, "09170000012",
-                        EmploymentStatus.REGULAR, ExemptionStatus.EXEMPT, Position.MANAGER,
-                        "602 Leadership Row", null, "Marikina", "Metro Manila", "Philippines", "1800")
+                        BigDecimal.valueOf(710_000.00), "daniel.cruz@maridone.test", true, "09170000008",
+                        EmploymentStatus.REGULAR, ExemptionStatus.EXEMPT, Position.MANAGER, ManagerTitle.HEAD_OF_PROCUREMENT,
+                        "602 Leadership Row", null, "Marikina", "Metro Manila", "Philippines", "1800"),
+                new EmployeeSeed("Patricia", null, "Santos", LocalDate.of(1990, 8, 14), LocalDate.of(2024, 7, 1), null,
+                        BigDecimal.valueOf(705_000.00), "patricia.santos@maridone.test", true, "09170000009",
+                        EmploymentStatus.REGULAR, ExemptionStatus.EXEMPT, Position.MANAGER, ManagerTitle.PRODUCTION_SUPERVISOR,
+                        "603 Leadership Row", null, "Pasig", "Metro Manila", "Philippines", "1605"),
+                new EmployeeSeed("Adrian", null, "Flores", LocalDate.of(1992, 10, 8), LocalDate.of(2024, 8, 12), null,
+                        BigDecimal.valueOf(715_000.00), "adrian.flores@maridone.test", true, "09170000010",
+                        EmploymentStatus.REGULAR, ExemptionStatus.EXEMPT, Position.MANAGER, ManagerTitle.PRODUCT_DEVELOPMENT_ENGINEER,
+                        "604 Leadership Row", null, "Quezon City", "Metro Manila", "Philippines", "1110"),
+                new EmployeeSeed("Michael", null, "Wilson", LocalDate.of(1995, 9, 17), LocalDate.of(2026, 1, 15), null,
+                        BigDecimal.valueOf(300_000.00), "michael.wilson@maridone.test", false, "09170000011",
+                        EmploymentStatus.NEW_HIRE, ExemptionStatus.NON_EXEMPT, Position.EMPLOYEE, null,
+                        "301 Operations Rd", null, "Mandaluyong", "Metro Manila", "Philippines", "1550"),
+                new EmployeeSeed("Susan", null, "Miller", LocalDate.of(1999, 10, 20), LocalDate.of(2025, 11, 3), null,
+                        BigDecimal.valueOf(150_000.00), "susan.miller@maridone.test", true, "09170000012",
+                        EmploymentStatus.PART_TIME, ExemptionStatus.NON_EXEMPT, Position.EMPLOYEE, null,
+                        "302 Operations Rd", null, "Manila", "Metro Manila", "Philippines", "1000"),
+                new EmployeeSeed("Joseph", null, "Taylor", LocalDate.of(1987, 8, 13), LocalDate.of(2024, 4, 1), null,
+                        BigDecimal.valueOf(260_000.00), "joseph.taylor@maridone.test", true, "09170000013",
+                        EmploymentStatus.REGULAR, ExemptionStatus.NON_EXEMPT, Position.EMPLOYEE, null,
+                        "303 Operations Rd", "Temp Housing Block A", "Caloocan", "Metro Manila", "Philippines", "1400"),
+                new EmployeeSeed("Richard", null, "Moore", LocalDate.of(1993, 11, 30), LocalDate.of(2025, 8, 18), null,
+                        BigDecimal.valueOf(280_000.00), "richard.moore@maridone.test", true, "09170000014",
+                        EmploymentStatus.REGULAR, ExemptionStatus.NON_EXEMPT, Position.EMPLOYEE, null,
+                        "304 Support Lane", null, "Las Pinas", "Metro Manila", "Philippines", "1740"),
+                new EmployeeSeed("Olivia", null, "Ramos", LocalDate.of(1996, 6, 21), LocalDate.of(2025, 4, 7), null,
+                        BigDecimal.valueOf(275_000.00), "olivia.ramos@maridone.test", true, "09170000015",
+                        EmploymentStatus.REGULAR, ExemptionStatus.NON_EXEMPT, Position.EMPLOYEE, null,
+                        "305 Support Lane", null, "Makati", "Metro Manila", "Philippines", "1227"),
+                new EmployeeSeed("Ethan", null, "Navarro", LocalDate.of(1994, 12, 1), LocalDate.of(2025, 5, 19), null,
+                        BigDecimal.valueOf(285_000.00), "ethan.navarro@maridone.test", true, "09170000016",
+                        EmploymentStatus.REGULAR, ExemptionStatus.NON_EXEMPT, Position.EMPLOYEE, null,
+                        "306 Support Lane", null, "Taguig", "Metro Manila", "Philippines", "1634"),
+                new EmployeeSeed("Grace", null, "Bautista", LocalDate.of(1997, 1, 29), LocalDate.of(2025, 6, 2), null,
+                        BigDecimal.valueOf(295_000.00), "grace.bautista@maridone.test", true, "09170000017",
+                        EmploymentStatus.REGULAR, ExemptionStatus.NON_EXEMPT, Position.EMPLOYEE, null,
+                        "307 Production Ave", null, "Pasig", "Metro Manila", "Philippines", "1603"),
+                new EmployeeSeed("Noah", null, "Mendoza", LocalDate.of(1998, 4, 16), LocalDate.of(2025, 7, 14), null,
+                        BigDecimal.valueOf(305_000.00), "noah.mendoza@maridone.test", true, "09170000018",
+                        EmploymentStatus.REGULAR, ExemptionStatus.NON_EXEMPT, Position.EMPLOYEE, null,
+                        "308 Production Ave", null, "Antipolo", "Rizal", "Philippines", "1870"),
+                new EmployeeSeed("Chloe", null, "Lim", LocalDate.of(1995, 2, 11), LocalDate.of(2025, 8, 4), null,
+                        BigDecimal.valueOf(298_000.00), "chloe.lim@maridone.test", true, "09170000019",
+                        EmploymentStatus.REGULAR, ExemptionStatus.NON_EXEMPT, Position.EMPLOYEE, null,
+                        "309 Production Ave", null, "Marikina", "Metro Manila", "Philippines", "1805"),
+                new EmployeeSeed("Lucas", null, "Torres", LocalDate.of(1993, 3, 5), LocalDate.of(2025, 9, 1), null,
+                        BigDecimal.valueOf(315_000.00), "lucas.torres@maridone.test", true, "09170000020",
+                        EmploymentStatus.SUSPENDED, ExemptionStatus.NON_EXEMPT, Position.EMPLOYEE, null,
+                        "310 Product Dev Blvd", null, "Quezon City", "Metro Manila", "Philippines", "1105"),
+                new EmployeeSeed("Mia", null, "Castillo", LocalDate.of(1999, 5, 27), LocalDate.of(2025, 10, 6), null,
+                        BigDecimal.valueOf(290_000.00), "mia.castillo@maridone.test", true, "09170000021",
+                        EmploymentStatus.REGULAR, ExemptionStatus.NON_EXEMPT, Position.EMPLOYEE, null,
+                        "311 Product Dev Blvd", null, "Mandaluyong", "Metro Manila", "Philippines", "1554"),
+                new EmployeeSeed("Sean", null, "Velasco", LocalDate.of(1994, 7, 19), LocalDate.of(2025, 11, 10), null,
+                        BigDecimal.valueOf(310_000.00), "sean.velasco@maridone.test", true, "09170000022",
+                        EmploymentStatus.TERMINATED, ExemptionStatus.NON_EXEMPT, Position.EMPLOYEE, null,
+                        "312 Product Dev Blvd", null, "Pasay", "Metro Manila", "Philippines", "1309")
         );
     }
 
@@ -404,7 +494,7 @@ public class SampleRows {
                         "Internal systems and access review covering devices, credentials, and compliance checks.",
                         LocalDateTime.of(2026, 2, 10, 9, 0),
                         LocalDateTime.of(2026, 2, 11, 17, 0),
-                        5,
+                        2,
                         LocalDateTime.of(2026, 2, 4, 9, 0)),
                 new CalendarSeed("Leadership Summit",
                         "Management forum for escalation handling, staffing plans, and budget checkpoints.",
@@ -428,7 +518,7 @@ public class SampleRows {
                         "Review of office systems, attendance tooling, and deployment readiness.",
                         LocalDateTime.of(2026, 3, 1, 9, 0),
                         LocalDateTime.of(2026, 3, 1, 12, 0),
-                        5,
+                        3,
                         LocalDateTime.of(2026, 2, 18, 9, 40)),
                 new CalendarSeed("Company Holiday",
                         "Observed company holiday. Offices are closed except for approved essential operations.",
@@ -465,6 +555,7 @@ public class SampleRows {
             EmploymentStatus employmentStatus,
             ExemptionStatus exemptionStatus,
             Position position,
+            ManagerTitle empTitle,
             String permanentAddress,
             String temporaryAddress,
             String city,

@@ -4,11 +4,14 @@ import org.example.maridone.annotation.ExecutionTime;
 import org.example.maridone.core.dto.CreateUserAccountDto;
 import org.example.maridone.core.employee.Employee;
 import org.example.maridone.core.employee.EmployeeRepository;
-import org.example.maridone.core.mapper.CoreMapper;
-import org.example.maridone.document.path.DocumentPath;
+import org.example.maridone.document.DocumentPathRepository;
+import org.example.maridone.document.dto.DocumentResponseDto;
+import org.example.maridone.document.mapper.DocumentMapper;
+import org.example.maridone.document.spec.DocumentSpecs;
 import org.example.maridone.exception.notfound.AccountNotFoundException;
 import org.example.maridone.exception.unauthorized.DuplicateAccountException;
 import org.example.maridone.exception.notfound.EmployeeNotFoundException;
+import org.springframework.data.domain.Sort;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -20,19 +23,22 @@ import java.util.List;
 public class UserAccountService {
 
     private final UserAccountRepository userAccountRepository;
-    private final CoreMapper coreMapper;
     private final PasswordEncoder passwordEncoder;
     private final EmployeeRepository employeeRepository;
+    private final DocumentPathRepository documentPathRepository;
+    private final DocumentMapper documentMapper;
 
     public UserAccountService
             (UserAccountRepository userAccountRepository,
-             CoreMapper coreMapper,
              PasswordEncoder passwordEncoder,
-             EmployeeRepository employeeRepository) {
+             EmployeeRepository employeeRepository,
+             DocumentPathRepository documentPathRepository,
+             DocumentMapper documentMapper) {
         this.userAccountRepository = userAccountRepository;
-        this.coreMapper = coreMapper;
         this.passwordEncoder = passwordEncoder;
         this.employeeRepository = employeeRepository;
+        this.documentPathRepository = documentPathRepository;
+        this.documentMapper = documentMapper;
     }
 
     @ExecutionTime
@@ -45,7 +51,10 @@ public class UserAccountService {
     @Transactional
     @ExecutionTime
     public UserAccount createUserAccount(CreateUserAccountDto payload) {
-        if (userAccountRepository.existsByUsername(payload.getUsername())) {
+        String username = requireUsername(payload.getUsername());
+        String password = requirePassword(payload.getPassword());
+
+        if (userAccountRepository.existsByUsername(username)) {
             throw new DuplicateAccountException("Username already exists");
         }
         if (userAccountRepository.existsByEmployee_EmployeeId(payload.getEmployeeId())) {
@@ -54,17 +63,77 @@ public class UserAccountService {
         Employee emp = employeeRepository.findById(payload.getEmployeeId()).orElseThrow(() -> new EmployeeNotFoundException(payload.getEmployeeId()));
 
         UserAccount user = new UserAccount();
-        user.setUsername(payload.getUsername());
-        user.setPasswordHash(passwordEncoder.encode(payload.getPassword()));
+        user.setUsername(username);
+        user.setPasswordHash(passwordEncoder.encode(password));
         user.setEmployee(emp);
+        emp.setUserAccount(user);
         user.setAccountStatus(payload.getAccountStatus());
         userAccountRepository.save(user);
         return user;
     }
 
+    @Transactional
     @ExecutionTime
-    public List<DocumentPath> getDocuments(String username) {
-        UserAccount userAccount = getUserAccount(username);
-        return userAccount.getDocumentPaths();
+    public UserAccount updateUserAccount(CreateUserAccountDto payload) {
+        UserAccount existing = userAccountRepository.findByEmployee_EmployeeId(payload.getEmployeeId()).orElse(null);
+        if (existing == null) {
+            throw new AccountNotFoundException("employeeId=" + payload.getEmployeeId());
+        }
+
+        String username = requireUsername(payload.getUsername());
+        if (!existing.getUsername().equals(username) && userAccountRepository.existsByUsername(username)) {
+            throw new DuplicateAccountException("Username already exists");
+        }
+
+        existing.setUsername(username);
+        if (existing.getEmployee() != null) {
+            existing.getEmployee().setUserAccount(existing);
+        }
+
+        if (payload.getPassword() != null && !payload.getPassword().trim().isEmpty()) {
+            existing.setPasswordHash(passwordEncoder.encode(payload.getPassword().trim()));
+        }
+
+        userAccountRepository.save(existing);
+        return existing;
+    }
+
+    @ExecutionTime
+    public List<DocumentResponseDto> getDocuments(String username, String subDir) {
+        getUserAccount(username);
+        return documentPathRepository.findAll(
+                        DocumentSpecs.hasUsername(username),
+                        Sort.by(Sort.Direction.DESC, "pathId")
+                ).stream()
+                .filter(document -> matchesSubDirectory(document.getFilePath(), subDir))
+                .map(documentMapper::toDocumentResponseDto)
+                .toList();
+    }
+
+    private boolean matchesSubDirectory(String filePath, String subDir) {
+        if (subDir == null || subDir.trim().isEmpty()) {
+            return true;
+        }
+        if (filePath == null || filePath.isBlank()) {
+            return false;
+        }
+
+        String normalizedPath = filePath.replace('\\', '/').toLowerCase();
+        String normalizedSubDir = "/" + subDir.trim().toLowerCase() + "/";
+        return normalizedPath.contains(normalizedSubDir);
+    }
+
+    private String requireUsername(String username) {
+        if (username == null || username.trim().isEmpty()) {
+            throw new IllegalArgumentException("Username is required.");
+        }
+        return username.trim();
+    }
+
+    private String requirePassword(String password) {
+        if (password == null || password.trim().isEmpty()) {
+            throw new IllegalArgumentException("Password is required.");
+        }
+        return password.trim();
     }
 }
