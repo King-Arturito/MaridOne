@@ -6,6 +6,7 @@ CREATE TABLE leave_request (
     request_status  VARCHAR(255)                        NOT NULL,
     reason          VARCHAR(255)                        NOT NULL,
     approver        VARCHAR(255),
+    approved_at     TIMESTAMPTZ,
     approver_reason VARCHAR(255),
     emp_id          BIGINT                              NOT NULL,
     is_paid         BOOLEAN                             NOT NULL DEFAULT true,

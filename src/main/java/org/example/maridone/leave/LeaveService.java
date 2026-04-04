@@ -40,6 +40,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.DayOfWeek;
 import java.time.Duration;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -315,6 +316,7 @@ public class LeaveService {
         request.setApproverReason(payload.getApproverReason());
         request.setRequestStatus(payload.getRequestStatus());
         request.setApprover(user.getEmployee().getLastName() + ", " + user.getEmployee().getFirstName());
+        request.setApprovedAt(Instant.now());
         leaveRequestRepository.save(request);
         return request;
     }

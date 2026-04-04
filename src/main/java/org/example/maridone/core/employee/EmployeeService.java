@@ -248,6 +248,7 @@ public class EmployeeService {
 
     private EmployeeDetailsDto toEmployeeDetails(Employee employee) {
         EmployeeDetailsDto response = coreMapper.toEmployeeDetailsDto(employee);
+        response.setDepartment(resolveDepartment(employee));
         response.setUserAccountName(findUsername(employee.getEmployeeId()));
         return response;
     }

@@ -28,7 +28,6 @@ public class GlobalExceptionHandler {
             ShiftsNotFoundException.class,
             BankNotFoundException.class,
             CalendarEventNotFound.class,
-            RuntimeException.class,
             BalanceNotFoundException.class
     })
     public ResponseEntity<Map<String, String>> handleNotFoundExceptions(RuntimeException ex) {
@@ -82,5 +81,11 @@ public class GlobalExceptionHandler {
     public ResponseEntity<Map<String, String>> handleLargePayloadExceptions(RuntimeException ex) {
         return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE)
                 .body(Map.of("error", ex.getMessage()));
+    }
+
+    @ExceptionHandler(Exception.class)
+    public ResponseEntity<Map<String, String>> handleUnexpectedExceptions(Exception ex) {
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(Map.of("error", ex.getMessage() != null ? ex.getMessage() : "Unexpected server error."));
     }
 }

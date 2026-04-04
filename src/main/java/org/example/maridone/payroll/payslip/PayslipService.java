@@ -37,7 +37,6 @@ import java.util.stream.Collectors;
 //todo: modify localDocumentService after defense, use Cloud
 
 public class PayslipService {
-
     private final EmployeeRepository employeeRepository;
     private final PayrollRunRepository payrollRunRepository;
     private final AttendanceLogRepository attendanceLogRepository;
@@ -88,7 +87,8 @@ public class PayslipService {
 
                 pdfBytes = os.toByteArray();
             } catch (Exception e) {
-                throw new RuntimeException("Failed to generate PDF for " + block.name(), e);
+                String reason = e.getMessage() == null || e.getMessage().isBlank() ? "Unknown PDF rendering error." : e.getMessage();
+                throw new RuntimeException("Failed to generate PDF for " + block.name() + ": " + reason, e);
             }
 
             // sample file name: UUID_Payslip_Arthur_Evangelista_2026-03-31.pdf
@@ -177,11 +177,15 @@ public class PayslipService {
 
             BigDecimal overallEarnings =  earnings.stream().map(PayBreakdown::amount).reduce(BigDecimal.ZERO, BigDecimal::add);
             BigDecimal overallDeductions = deductions.stream().map(PayBreakdown::amount).reduce(BigDecimal.ZERO, BigDecimal::add);
+            BigDecimal netPay = item.getNetPay() != null ? item.getNetPay() : overallEarnings.subtract(overallDeductions);
+            String payPeriod = payslipProjection.getPayPeriodStart() + " to " + payslipProjection.getPayPeriodEnd();
 
             DetailBlocks details = new DetailBlocks(
                     employee.getFirstName() + " " + employee.getLastName(),
+                    "-",
                     department,
                     employee.getPosition() != null ? employee.getPosition().toString() : "_",
+                    payPeriod,
                     payslipProjection.getPayPeriodStart(),
                     payslipProjection.getPayPeriodEnd(),
                     workedDays,
@@ -189,6 +193,7 @@ public class PayslipService {
                     deductions,
                     overallEarnings,
                     overallDeductions,
+                    netPay,
                     userAccountMap.get(employee).getUsername()
             );
             detailBlocks.add(details);
@@ -199,8 +204,10 @@ public class PayslipService {
 
     public record DetailBlocks(
             String name,
+            String taxNumber,
             String department,
             String designation,
+            String payPeriod,
             LocalDate periodStart,
             LocalDate periodEnd,
             Integer workedDays,
@@ -208,6 +215,7 @@ public class PayslipService {
             List<PayBreakdown> deductionsBreakdownList,
             BigDecimal overallEarnings,
             BigDecimal overallDeductions,
+            BigDecimal netPay,
             String userAccountName
     ){}
 

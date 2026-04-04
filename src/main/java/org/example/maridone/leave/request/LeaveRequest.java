@@ -7,6 +7,7 @@ import org.example.maridone.enums.LeaveType;
 import org.example.maridone.enums.Status;
 import org.hibernate.annotations.Check;
 
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 
@@ -46,6 +47,9 @@ public class LeaveRequest {
 
     @Column(name = "approver_reason", nullable = true)
     private String approverReason;
+
+    @Column(name = "approved_at", nullable = true)
+    private Instant approvedAt;
 
     @Column(name = "is_paid",  nullable = false)
     private Boolean isPaid = true;
@@ -116,6 +120,14 @@ public class LeaveRequest {
 
     public void setApproverReason(String approverReason) {
         this.approverReason = approverReason;
+    }
+
+    public Instant getApprovedAt() {
+        return approvedAt;
+    }
+
+    public void setApprovedAt(Instant approvedAt) {
+        this.approvedAt = approvedAt;
     }
 
     public Boolean getPaid() {

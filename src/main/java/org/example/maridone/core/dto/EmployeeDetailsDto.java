@@ -24,6 +24,7 @@ public class EmployeeDetailsDto {
     private String isVerified;
     private String phoneNumber;
     private Position position;
+    private String department;
     private String userAccountName;
     private Long managerId;
     private Address address;
@@ -122,6 +123,14 @@ public class EmployeeDetailsDto {
 
     public void setPosition(Position position) {
         this.position = position;
+    }
+
+    public String getDepartment() {
+        return department;
+    }
+
+    public void setDepartment(String department) {
+        this.department = department;
     }
 
     public Long getManagerId() {
