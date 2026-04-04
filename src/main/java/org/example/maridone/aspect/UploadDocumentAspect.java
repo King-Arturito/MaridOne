@@ -6,12 +6,8 @@ import org.aspectj.lang.annotation.Aspect;
 import org.aspectj.lang.annotation.Pointcut;
 import org.aspectj.lang.reflect.MethodSignature;
 import org.example.maridone.annotation.Upload;
-import org.example.maridone.core.employee.Employee;
-import org.example.maridone.core.employee.EmployeeRepository;
-import org.example.maridone.core.employee.EmployeeService;
 import org.example.maridone.core.user.UserAccountRepository;
-import org.example.maridone.document.NOCLOUD.LocalDocumentService;
-import org.springframework.context.annotation.Profile;
+import org.example.maridone.document.DocumentService;
 import org.springframework.stereotype.Component;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -21,12 +17,11 @@ import java.lang.reflect.Method;
 @Aspect
 
 public class UploadDocumentAspect {
-    //todo: REPLACE FOR PROD
-    private final LocalDocumentService localDocumentService;
+    private final DocumentService documentService;
     private final UserAccountRepository userAccountRepository;
 
-    public UploadDocumentAspect(LocalDocumentService localDocumentService,  UserAccountRepository userAccountRepository) {
-        this.localDocumentService = localDocumentService;
+    public UploadDocumentAspect(DocumentService documentService,  UserAccountRepository userAccountRepository) {
+        this.documentService = documentService;
         this.userAccountRepository = userAccountRepository;
 
     }
@@ -64,7 +59,7 @@ public class UploadDocumentAspect {
             String username = userAccountRepository.findByEmployee_EmployeeId(employeeId)
                     .map(user -> user.getUsername())
                     .orElseThrow(() -> new RuntimeException("User account not found for employee id " + employeeId));
-            localDocumentService.upload(file, username, subDir);
+            documentService.upload(file, username, subDir);
         }
     }
 }

@@ -5,7 +5,7 @@ import org.example.maridone.common.CommonCalculator;
 import org.example.maridone.common.CommonSpecs;
 import org.example.maridone.config.PayrollConfig;
 import org.example.maridone.document.DocumentPathRepository;
-import org.example.maridone.document.NOCLOUD.LocalDocumentService;
+import org.example.maridone.document.DocumentService;
 import org.example.maridone.document.path.DocumentPath;
 import org.example.maridone.document.spec.DocumentSpecs;
 import org.example.maridone.enums.*;
@@ -17,6 +17,7 @@ import org.example.maridone.exception.conflict.OverlappingDatesException;
 import org.example.maridone.exception.notfound.*;
 import org.example.maridone.exception.toolarge.FileTooLargeException;
 import org.example.maridone.exception.unauthorized.DuplicateLeaveException;
+import org.example.maridone.exception.unauthorized.InvalidActionException;
 import org.example.maridone.exception.unauthorized.InsufficientBalanceException;
 import org.example.maridone.leave.balance.*;
 import org.example.maridone.leave.dto.*;
@@ -59,7 +60,7 @@ public class LeaveService {
     private final TemplateShiftRepository templateShiftRepository;
     private final DocumentPathRepository documentPathRepository;
     private final LeaveMapper leaveMapper;
-    private final LocalDocumentService localDocumentService;
+    private final DocumentService documentService;
     private final PayrollConfig payrollConfig;
 
     public LeaveService(
@@ -70,8 +71,7 @@ public class LeaveService {
             TemplateShiftRepository templateShiftRepository,
             DocumentPathRepository documentPathRepository,
             LeaveMapper leaveMapper,
-            //todo: change to Cloud
-            LocalDocumentService localDocumentService,
+            DocumentService documentService,
             PayrollConfig payrollConfig) {
         this.leaveBalanceRepository = leaveBalanceRepository;
         this.leaveRequestRepository = leaveRequestRepository;
@@ -80,7 +80,7 @@ public class LeaveService {
         this.templateShiftRepository = templateShiftRepository;
         this.documentPathRepository = documentPathRepository;
         this.leaveMapper = leaveMapper;
-        this.localDocumentService = localDocumentService;
+        this.documentService = documentService;
         this.payrollConfig = payrollConfig;
     }
 
@@ -272,7 +272,7 @@ public class LeaveService {
             if (file.getSize() > (10*1024*1024)) {
                 throw new FileTooLargeException("File size exceeded 10MB.");
             }
-            localDocumentService.upload(file, emp.getUserAccount().getUsername(), Directories.LEAVE_REQUEST.getDisplayName());
+            documentService.upload(file, emp.getUserAccount().getUsername(), Directories.LEAVE_REQUEST.getDisplayName());
         }
         leaveRequestRepository.saveAll(requests);
         return requests;
@@ -293,6 +293,8 @@ public class LeaveService {
         if (requestEmpId == null) {
             throw new IllegalStateException("Employee ID connected to request not found.");
         }
+
+        validateApproverAccess(user, requestEmpId);
 
         if (request.getRequestStatus() != Status.PENDING)  {
             throw new IllegalStateException("This Request has been processed already.");
@@ -447,6 +449,21 @@ public class LeaveService {
             throw new AccountNotFoundException(username);
         }
         return employeeRepository.findHandledEmployeeIds(employeeId);
+    }
+
+    private void validateApproverAccess(UserAccount user, Long requestEmpId) {
+        Position position = Optional.ofNullable(user.getEmployee())
+                .map(Employee::getPosition)
+                .orElse(Position.UNKNOWN);
+
+        if (position != Position.MANAGER) {
+            return;
+        }
+
+        List<Long> handledEmployeeIds = resolveHandledEmployeeIds(user.getUsername());
+        if (!handledEmployeeIds.contains(requestEmpId)) {
+            throw new InvalidActionException("Managers can only review leave requests from their own team.");
+        }
     }
 
 

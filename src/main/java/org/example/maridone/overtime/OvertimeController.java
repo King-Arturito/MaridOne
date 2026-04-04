@@ -48,7 +48,7 @@ public class OvertimeController {
 
     //update Overtime Request status for HR
     @PatchMapping("/update")
-    @PreAuthorize("hasRole('HR')")
+    @PreAuthorize("hasAnyRole('HR', 'MANAGER')")
     @AuditLog
     public ResponseEntity<OvertimeResponseDto> updateOvertimeRequest(
             @RequestBody @Valid OvertimeUpdateDto updateDto,

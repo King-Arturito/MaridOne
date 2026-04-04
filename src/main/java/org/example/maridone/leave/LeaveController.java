@@ -115,7 +115,7 @@ public class LeaveController {
     }
 
     @PatchMapping("/update/{requestId}")
-    @PreAuthorize("hasRole('HR')")
+    @PreAuthorize("hasAnyRole('HR', 'MANAGER')")
     @AuditLog
     public ResponseEntity<LeaveRequest> updateLeaveRequest(@Validated(OnUpdate.class) @RequestBody LeaveRequestDto payload, @PathVariable Long requestId) {
         LeaveRequest request = leaveService.updateLeaveRequest(payload, requestId);

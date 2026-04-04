@@ -8,11 +8,13 @@ import org.example.maridone.config.DefaultConfig;
 import org.example.maridone.core.employee.Employee;
 import org.example.maridone.core.employee.EmployeeRepository;
 import org.example.maridone.core.spec.EmployeeSpecs;
+import org.example.maridone.core.user.UserAccount;
 import org.example.maridone.core.user.UserAccountRepository;
 import org.example.maridone.enums.Position;
 import org.example.maridone.enums.Status;
 import org.example.maridone.exception.conflict.OverlappingDatesException;
 import org.example.maridone.exception.notfound.AccountNotFoundException;
+import org.example.maridone.exception.unauthorized.InvalidActionException;
 import org.example.maridone.exception.unauthorized.OvertimeException;
 import org.example.maridone.overtime.dto.OvertimeRequestDto;
 import org.example.maridone.overtime.dto.OvertimeResponseDto;
@@ -91,10 +93,18 @@ public class OvertimeService {
         if (req.getRequestStatus() != Status.PENDING) {
             throw new OvertimeException("Overtime Request Not Pending/Already Processed");
         }
-        Specification<Employee> spec = Specification.allOf(
-                EmployeeSpecs.hasUserAccount(approverUsername)
-        );
-        Employee emp = employeeRepository.findOne(spec).orElseThrow(() -> new AccountNotFoundException(approverUsername));
+        Employee emp = userAccountRepository.findByUsername(approverUsername)
+                .map(UserAccount::getEmployee)
+                .orElseThrow(() -> new AccountNotFoundException(approverUsername));
+
+        Long requestEmployeeId = req.getEmployeeId() != null
+                ? req.getEmployeeId()
+                : req.getEmployee() != null
+                    ? req.getEmployee().getEmployeeId()
+                    : null;
+
+        validateApproverAccess(emp, approverUsername, requestEmployeeId);
+
         req.setApprover(emp.getLastName() + ", " +  emp.getFirstName());
         req.setRequestStatus(updateDto.getUpdateStatus());
         req.setApprovedAt(Instant.now());
@@ -158,6 +168,21 @@ public class OvertimeService {
             throw new AccountNotFoundException(username);
         }
         return employeeRepository.findHandledEmployeeIds(employeeId);
+    }
+
+    private void validateApproverAccess(Employee approver, String username, Long requestEmployeeId) {
+        if (approver.getPosition() != Position.MANAGER) {
+            return;
+        }
+
+        if (requestEmployeeId == null) {
+            throw new InvalidActionException("The overtime request is missing its employee reference.");
+        }
+
+        List<Long> handledEmployeeIds = resolveHandledEmployeeIds(username);
+        if (!handledEmployeeIds.contains(requestEmployeeId)) {
+            throw new InvalidActionException("Managers can only review overtime requests from their own team.");
+        }
     }
 
     private void validateRequestWindow(OvertimeRequestDto requestDto) {

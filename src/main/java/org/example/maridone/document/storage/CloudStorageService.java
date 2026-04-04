@@ -15,6 +15,7 @@ import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
+import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 import software.amazon.awssdk.services.s3.presigner.model.GetObjectPresignRequest;
@@ -85,6 +86,41 @@ public class CloudStorageService implements StorageService {
 
     @Override
     @ExecutionTime
+    public Resource loadLibraryDocument(String subDir, String fileName) {
+        DocumentLibraryDirectories.validate(subDir);
+
+        try {
+            String key = buildLibraryKey(subDir, fileName);
+            GetObjectRequest getObjectRequest = GetObjectRequest.builder()
+                    .bucket(cloudConfig.getBucketName())
+                    .key(key)
+                    .build();
+
+            return new InputStreamResource(s3Client.getObject(getObjectRequest));
+        } catch (Exception e) {
+            throw new CloudReadException("Could not read library file from DigitalOcean Spaces: " + fileName, e);
+        }
+    }
+
+    @Override
+    @ExecutionTime
+    public String probeContentType(String subDir, String fileName) {
+        DocumentLibraryDirectories.validate(subDir);
+
+        try {
+            String key = buildLibraryKey(subDir, fileName);
+            return s3Client.headObject(HeadObjectRequest.builder()
+                            .bucket(cloudConfig.getBucketName())
+                            .key(key)
+                            .build())
+                    .contentType();
+        } catch (Exception e) {
+            return "application/octet-stream";
+        }
+    }
+
+    @Override
+    @ExecutionTime
     public void delete(String filePath) {
         try {
             DeleteObjectRequest deleteObjectRequest = DeleteObjectRequest.builder()
@@ -118,5 +154,9 @@ public class CloudStorageService implements StorageService {
         } catch (Exception e) {
             throw new CloudReadException("Failed to generate secure download link for: " + filePath, e);
         }
+    }
+
+    private String buildLibraryKey(String subDir, String fileName) {
+        return subDir + "/" + fileName;
     }
 }

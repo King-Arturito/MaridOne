@@ -7,7 +7,7 @@ import org.example.maridone.common.CommonSpecs;
 import org.example.maridone.core.user.UserAccount;
 import org.example.maridone.core.user.UserAccountRepository;
 import org.example.maridone.document.DocumentPathRepository;
-import org.example.maridone.document.NOCLOUD.LocalDocumentService;
+import org.example.maridone.document.DocumentService;
 import org.example.maridone.document.path.DocumentPath;
 import org.example.maridone.document.spec.DocumentSpecs;
 import org.example.maridone.enums.Directories;
@@ -46,20 +46,20 @@ public class DisputeService {
     private final UserAccountRepository userAccountRepository;
     private final DocumentPathRepository documentPathRepository;
     //todo: change to cloud
-    private final LocalDocumentService localDocumentService;
+    private final DocumentService documentService;
     private final PayrollMapper payrollMapper;
     public DisputeService
             (DisputeRequestRepository disputeRepository,
              PayrollItemRepository payrollItemRepository,
              UserAccountRepository userAccountRepository,
              DocumentPathRepository documentPathRepository,
-             LocalDocumentService localDocumentService,
+             DocumentService documentService,
              PayrollMapper payrollMapper) {
         this.disputeRepository = disputeRepository;
         this.payrollItemRepository = payrollItemRepository;
         this.userAccountRepository = userAccountRepository;
         this.documentPathRepository = documentPathRepository;
-        this.localDocumentService = localDocumentService;
+        this.documentService = documentService;
         this.payrollMapper = payrollMapper;
     }
 
@@ -91,7 +91,7 @@ public class DisputeService {
             if (file.getSize() > (10*1024*1024)) {
                 throw new FileTooLargeException("File exceeds 10MB");
             }
-            localDocumentService.upload(file, item.getEmployee().getUserAccount().getUsername(), Directories.DISPUTE.getDisplayName());
+            documentService.upload(file, item.getEmployee().getUserAccount().getUsername(), Directories.DISPUTE.getDisplayName());
         }
         return disputeRepository.save(disputeRequest);
     }
