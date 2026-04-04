@@ -1,42 +1,355 @@
 <!DOCTYPE html>
-<html xmlns:th="http://www.thymeleaf.org">
+<html xmlns:th="http://www.thymeleaf.org" lang="en">
 <head>
     <meta charset="UTF-8"/>
     <title>Payslip</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Playfair+Display:wght@900&display=swap');
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'DM Sans', sans-serif;
+            font-size: 13px;
+            color: #1a1a1a;
+            background: #f0f0f0;
+            display: flex;
+            justify-content: center;
+            padding: 40px 20px;
+        }
+
+        .payslip {
+            width: 800px;
+            background: #fff;
+            border: 2px solid #1a1a1a;
+            padding: 0;
+            position: relative;
+        }
+
+        /* ── Header ── */
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            padding: 28px 32px 20px;
+            border-bottom: 2px solid #1a1a1a;
+        }
+
+        .company-info h1 {
+            font-family: 'DM Sans', sans-serif;
+            font-weight: 700;
+            font-size: 16px;
+            line-height: 1.3;
+        }
+
+        .company-info p {
+            font-size: 12px;
+            color: #555;
+            line-height: 1.5;
+        }
+
+        .payslip-title {
+            font-family: 'Playfair Display', serif;
+            font-weight: 900;
+            font-size: 36px;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+        }
+
+        /* ── Employee Info ── */
+        .employee-section {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0;
+            padding: 20px 32px 16px;
+        }
+
+        .info-group {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .info-row {
+            display: flex;
+            align-items: baseline;
+            gap: 12px;
+        }
+
+        .info-row .label {
+            font-weight: 500;
+            font-size: 12px;
+            color: #444;
+            min-width: 100px;
+            flex-shrink: 0;
+        }
+
+        .info-row .value {
+            font-size: 13px;
+            font-weight: 500;
+            border-bottom: 1px solid #ccc;
+            flex: 1;
+            padding-bottom: 2px;
+            min-height: 18px;
+        }
+
+        /* ── Tables Section ── */
+        .tables-section {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
+            padding: 16px 32px 0;
+        }
+
+        .table-block table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+        }
+
+        .table-block thead th {
+            background: #e0e0e0;
+            font-weight: 700;
+            text-align: left;
+            padding: 8px 10px;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .table-block thead th:last-child {
+            text-align: right;
+        }
+
+        .table-block tbody td {
+            padding: 7px 10px;
+            border-bottom: 1px solid #eee;
+            vertical-align: top;
+        }
+
+        .table-block tbody td:last-child {
+            text-align: right;
+            white-space: nowrap;
+        }
+
+        .table-block tbody td.currency {
+            text-align: center;
+            width: 40px;
+            font-weight: 500;
+            color: #666;
+        }
+
+        /* Total rows */
+        .total-row {
+            background: #f5f5f5;
+        }
+
+        .total-row td {
+            font-weight: 700 !important;
+            border-bottom: none !important;
+            padding: 9px 10px !important;
+        }
+
+        /* ── Net Pay ── */
+        .net-pay-section {
+            padding: 16px 32px 0;
+            display: flex;
+            justify-content: flex-end;
+        }
+
+        .net-pay-box {
+            display: flex;
+            border: 2px solid #1a1a1a;
+            font-weight: 700;
+        }
+
+        .net-pay-box .net-label {
+            background: #e0e0e0;
+            padding: 10px 20px;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+        }
+
+        .net-pay-box .net-value {
+            padding: 10px 24px;
+            font-size: 16px;
+            display: flex;
+            align-items: center;
+            letter-spacing: 0.3px;
+        }
+
+        /* ── Signatures ── */
+        .signatures {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
+            padding: 48px 32px 28px;
+        }
+
+        .signature-block {
+            text-align: center;
+        }
+
+        .signature-block .line {
+            border-top: 1px solid #999;
+            margin-bottom: 6px;
+            width: 80%;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .signature-block p {
+            font-size: 11px;
+            color: #666;
+            font-style: italic;
+        }
+
+        /* Print styles */
+        @media print {
+            body {
+                background: #fff;
+                padding: 0;
+            }
+            .payslip {
+                border: none;
+                width: 100%;
+            }
+        }
+    </style>
 </head>
 <body>
 
-<h1>Payslip Details</h1>
+<div class="payslip">
 
-<div>
-    <p><strong>Name:</strong> <span th:text="${details.name}">Employee Name</span></p>
-    <p><strong>Department:</strong> <span th:text="${details.department}">Department</span></p>
-    <p><strong>Designation:</strong> <span th:text="${details.designation}">Designation</span></p>
-    <p><strong>Pay Period:</strong> <span th:text="${details.periodStart}">Start Date</span> to <span th:text="${details.periodEnd}">End Date</span></p>
-    <p><strong>Worked Days:</strong> <span th:text="${details.workedDays}">0</span></p>
+    <!-- Header -->
+    <div class="header">
+        <div class="company-info">
+            <h1>Marid Industries Corporation</h1>
+            <p>Address</p>
+            <p>marid@marid.com</p>
+        </div>
+        <div class="payslip-title">PAYSLIP</div>
+    </div>
+
+    <!-- Employee Info -->
+    <div class="employee-section">
+        <div class="info-group">
+            <div class="info-row">
+                <span class="label">Name</span>
+                <span class="value" th:text="${details.name}"></span>
+            </div>
+            <div class="info-row">
+                <span class="label">Tax Number</span>
+                <span class="value" th:text="${details.taxNumber}"></span>
+            </div>
+            <div class="info-row">
+                <span class="label">Designation</span>
+                <span class="value" th:text="${details.designation}"></span>
+            </div>
+            <div class="info-row">
+                <span class="label">Department</span>
+                <span class="value" th:text="${details.department}"></span>
+            </div>
+        </div>
+        <div class="info-group">
+            <div class="info-row">
+                <span class="label">Pay Period</span>
+                <span class="value" th:text="${details.payPeriod}"></span>
+            </div>
+            <div class="info-row">
+                <span class="label">Start Date</span>
+                <span class="value" th:text="${details.periodStart}"></span>
+            </div>
+            <div class="info-row">
+                <span class="label">End Date</span>
+                <span class="value" th:text="${details.periodEnd}"></span>
+            </div>
+            <div class="info-row">
+                <span class="label">Worked Days</span>
+                <span class="value" th:text="${details.workedDays}"></span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Earnings & Deductions Tables -->
+    <div class="tables-section">
+
+        <!-- Earnings -->
+        <div class="table-block">
+            <table>
+                <thead>
+                <tr>
+                    <th colspan="2">Earnings</th>
+                    <th>Amount</th>
+                </tr>
+                </thead>
+                <tbody>
+                <tr th:each="earning : ${details.earningsList}">
+                    <td th:text="${earning.name}">Basic Salary</td>
+                    <td class="currency">PHP</td>
+                    <td th:text="${#numbers.formatDecimal(earning.amount, 1, 2)}">0.00</td>
+                </tr>
+                <tr class="total-row">
+                    <td style="text-align:right;">Total Earnings</td>
+                    <td class="currency">PHP</td>
+                    <td th:text="${#numbers.formatDecimal(details.overallEarnings, 1, 2)}">0.00</td>
+                </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Deductions -->
+        <div class="table-block">
+            <table>
+                <thead>
+                <tr>
+                    <th colspan="2">Deductions</th>
+                    <th>Amount</th>
+                </tr>
+                </thead>
+                <tbody>
+                <tr th:each="deduction : ${details.deductionsBreakdownList}">
+                    <td th:text="${deduction.name}">SSS</td>
+                    <td class="currency">PHP</td>
+                    <td th:text="${#numbers.formatDecimal(deduction.amount, 1, 2)}">0.00</td>
+                </tr>
+                <tr class="total-row">
+                    <td style="text-align:right;">Total Deductions</td>
+                    <td class="currency">PHP</td>
+                    <td th:text="${#numbers.formatDecimal(details.overallDeductions, 1, 2)}">0.00</td>
+                </tr>
+                </tbody>
+            </table>
+        </div>
+
+    </div>
+
+    <!-- Net Pay -->
+    <div class="net-pay-section">
+        <div class="net-pay-box">
+            <div class="net-label">Net Pay</div>
+            <div class="net-value">PHP <span th:text="${#numbers.formatDecimal(details.netPay, 1, 2)}">0.00</span></div>
+        </div>
+    </div>
+
+    <!-- Signatures -->
+    <div class="signatures">
+        <div class="signature-block">
+            <div class="line"></div>
+            <p>Employee Signature over Printed Name</p>
+        </div>
+        <div class="signature-block">
+            <div class="line"></div>
+            <p>Employer Signature over Printed Name</p>
+        </div>
+    </div>
+
 </div>
-
-<hr />
-
-<h2>Earnings</h2>
-<ul>
-    <li th:each="earning : ${details.earningsList}">
-        <span th:text="${earning.name}">Earning Name</span>:
-        <span th:text="${earning.amount}">0.00</span>
-    </li>
-</ul>
-<p><strong>Overall Earnings:</strong> <span th:text="${details.overallEarnings}">0.00</span></p>
-
-<hr />
-
-<h2>Deductions</h2>
-<ul>
-    <li th:each="deduction : ${details.deductionsBreakdownList}">
-        <span th:text="${deduction.name}">Deduction Name</span>:
-        <span th:text="${deduction.amount}">0.00</span>
-    </li>
-</ul>
-<p><strong>Overall Deductions:</strong> <span th:text="${details.overallDeductions}">0.00</span></p>
 
 </body>
 </html>
