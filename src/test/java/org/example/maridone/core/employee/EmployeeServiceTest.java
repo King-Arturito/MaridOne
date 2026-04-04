@@ -14,6 +14,7 @@ import org.example.maridone.enums.ExemptionStatus;
 import org.example.maridone.enums.ManagerTitle;
 import org.example.maridone.enums.Position;
 import org.example.maridone.exception.notfound.EmployeeNotFoundException;
+import org.example.maridone.exception.unauthorized.InvalidActionException;
 import org.example.maridone.schedule.mapper.ScheduleMapper;
 import org.example.maridone.schedule.shift.TemplateShiftRepository;
 import org.junit.jupiter.api.Assertions;
@@ -174,5 +175,25 @@ class EmployeeServiceTest {
         Assertions.assertEquals(1, result.size());
         Assertions.assertEquals(11L, result.get(0).getId());
         Assertions.assertEquals("team11", result.get(0).getUserAccountName());
+    }
+
+    @Test
+    void updateStatus_ShouldThrow_WhenEmployeeAlreadyTerminated() {
+        Employee employee = new Employee();
+        ReflectionTestUtils.setField(employee, "employeeId", 14L);
+        employee.setEmploymentStatus(EmploymentStatus.TERMINATED);
+
+        EmployeeRequestDto requestDto = new EmployeeRequestDto();
+        requestDto.setEmploymentStatus(EmploymentStatus.TERMINATED);
+
+        when(employeeRepository.findById(14L)).thenReturn(Optional.of(employee));
+
+        InvalidActionException error = Assertions.assertThrows(
+                InvalidActionException.class,
+                () -> employeeService.updateStatus(14L, requestDto)
+        );
+
+        Assertions.assertEquals("This employee is already terminated.", error.getMessage());
+        verify(employeeRepository, never()).save(any(Employee.class));
     }
 }

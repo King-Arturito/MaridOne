@@ -12,6 +12,7 @@ import org.example.maridone.core.user.UserAccountRepository;
 import org.example.maridone.embeddable.Address;
 import org.example.maridone.exception.notfound.AccountNotFoundException;
 import org.example.maridone.exception.notfound.EmployeeNotFoundException;
+import org.example.maridone.exception.unauthorized.InvalidActionException;
 import org.example.maridone.enums.EmploymentStatus;
 import org.example.maridone.enums.ExemptionStatus;
 import org.example.maridone.enums.ManagerTitle;
@@ -209,6 +210,13 @@ public class EmployeeService {
     @ExecutionTime
     public EmployeeResponseDto updateStatus(Long id, EmployeeRequestDto updated) {
         Employee emp = employeeRepository.findById(id).orElseThrow(() -> new EmployeeNotFoundException(id));
+        if (updated.getEmploymentStatus() == null) {
+            throw new InvalidActionException("Employment status is required.");
+        }
+        if (emp.getEmploymentStatus() == EmploymentStatus.TERMINATED
+                && updated.getEmploymentStatus() == EmploymentStatus.TERMINATED) {
+            throw new InvalidActionException("This employee is already terminated.");
+        }
 
         emp.setEmploymentStatus(updated.getEmploymentStatus());
         employeeRepository.save(emp);
