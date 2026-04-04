@@ -1,6 +1,7 @@
 package org.example.maridone.core.user;
 
 import org.example.maridone.annotation.ExecutionTime;
+import org.example.maridone.auth.token.RefreshTokenRepository;
 import org.example.maridone.core.dto.CreateUserAccountDto;
 import org.example.maridone.core.employee.Employee;
 import org.example.maridone.core.employee.EmployeeRepository;
@@ -27,18 +28,21 @@ public class UserAccountService {
     private final EmployeeRepository employeeRepository;
     private final DocumentPathRepository documentPathRepository;
     private final DocumentMapper documentMapper;
+    private final RefreshTokenRepository refreshTokenRepository;
 
     public UserAccountService
             (UserAccountRepository userAccountRepository,
              PasswordEncoder passwordEncoder,
              EmployeeRepository employeeRepository,
              DocumentPathRepository documentPathRepository,
-             DocumentMapper documentMapper) {
+             DocumentMapper documentMapper,
+             RefreshTokenRepository refreshTokenRepository) {
         this.userAccountRepository = userAccountRepository;
         this.passwordEncoder = passwordEncoder;
         this.employeeRepository = employeeRepository;
         this.documentPathRepository = documentPathRepository;
         this.documentMapper = documentMapper;
+        this.refreshTokenRepository = refreshTokenRepository;
     }
 
     @ExecutionTime
@@ -85,14 +89,35 @@ public class UserAccountService {
             throw new DuplicateAccountException("Username already exists");
         }
 
+        String oldUsername = existing.getUsername();
+        String updatedPasswordHash = existing.getPasswordHash();
+        if (payload.getPassword() != null && !payload.getPassword().trim().isEmpty()) {
+            updatedPasswordHash = passwordEncoder.encode(payload.getPassword().trim());
+        }
+
+        if (!oldUsername.equals(username)) {
+            userAccountRepository.insertReplacementAccount(
+                    username,
+                    updatedPasswordHash,
+                    existing.getAccountStatus().name(),
+                    payload.getEmployeeId(),
+                    Boolean.TRUE.equals(existing.getTwoFactorEnabled()),
+                    existing.getTwoFactorSecret()
+            );
+            documentPathRepository.reassignUsername(oldUsername, username);
+            refreshTokenRepository.deleteByUsername(oldUsername);
+            userAccountRepository.deleteByUsernameNative(oldUsername);
+
+            return userAccountRepository.findByUsername(username)
+                    .orElseThrow(() -> new AccountNotFoundException(username));
+        }
+
         existing.setUsername(username);
         if (existing.getEmployee() != null) {
             existing.getEmployee().setUserAccount(existing);
         }
 
-        if (payload.getPassword() != null && !payload.getPassword().trim().isEmpty()) {
-            existing.setPasswordHash(passwordEncoder.encode(payload.getPassword().trim()));
-        }
+        existing.setPasswordHash(updatedPasswordHash);
 
         userAccountRepository.save(existing);
         return existing;

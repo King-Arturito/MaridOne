@@ -2,6 +2,7 @@ package org.example.maridone.core.user;
 
 import java.util.Optional;
 
+import org.example.maridone.auth.token.RefreshTokenRepository;
 import org.example.maridone.core.dto.CreateUserAccountDto;
 import org.example.maridone.core.employee.Employee;
 import org.example.maridone.core.employee.EmployeeRepository;
@@ -17,6 +18,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import static org.mockito.ArgumentMatchers.any;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -32,6 +34,7 @@ class UserAccountServiceTest {
     @Mock private PasswordEncoder passwordEncoder;
     @Mock private DocumentPathRepository documentPathRepository;
     @Mock private DocumentMapper documentMapper;
+    @Mock private RefreshTokenRepository refreshTokenRepository;
 
     @InjectMocks
     private UserAccountService userAccountService;
@@ -105,5 +108,44 @@ class UserAccountServiceTest {
 
         Assertions.assertEquals(1, result.size());
         Assertions.assertEquals(payslip.getFilePath(), result.get(0).getFilePath());
+    }
+
+    @Test
+    void updateUserAccount_ShouldMigrateLinkedRecords_WhenUsernameChanges() {
+        CreateUserAccountDto dto = new CreateUserAccountDto();
+        dto.setEmployeeId(21L);
+        dto.setUsername("chloe.renamed");
+
+        Employee employee = new Employee();
+        UserAccount existing = new UserAccount();
+        existing.setUsername("chloe.old");
+        existing.setPasswordHash("existing_hash");
+        existing.setAccountStatus(AccountStatus.ACTIVE);
+        existing.setEmployee(employee);
+        existing.setTwoFactorEnabled(true);
+        existing.setTwoFactorSecret("secret-2fa");
+
+        UserAccount replacement = new UserAccount();
+        replacement.setUsername("chloe.renamed");
+
+        when(userAccountRepository.findByEmployee_EmployeeId(21L)).thenReturn(Optional.of(existing));
+        when(userAccountRepository.existsByUsername("chloe.renamed")).thenReturn(false);
+        when(userAccountRepository.findByUsername("chloe.renamed")).thenReturn(Optional.of(replacement));
+
+        UserAccount result = userAccountService.updateUserAccount(dto);
+
+        Assertions.assertEquals("chloe.renamed", result.getUsername());
+        verify(userAccountRepository).insertReplacementAccount(
+                "chloe.renamed",
+                "existing_hash",
+                AccountStatus.ACTIVE.name(),
+                21L,
+                true,
+                "secret-2fa"
+        );
+        verify(documentPathRepository).reassignUsername("chloe.old", "chloe.renamed");
+        verify(refreshTokenRepository).deleteByUsername("chloe.old");
+        verify(userAccountRepository).deleteByUsernameNative("chloe.old");
+        verify(userAccountRepository, never()).save(existing);
     }
 }

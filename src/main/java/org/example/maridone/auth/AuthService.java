@@ -70,7 +70,7 @@ public class AuthService {
 
             EmploymentStatus status = userAccount.getEmployee().getEmploymentStatus();
             if (status.equals(EmploymentStatus.TERMINATED)) {
-                throw new UnauthorizedAccessException("You many not login. Your account has been terminated.");
+                throw new UnauthorizedAccessException("You may not login. Your account has been terminated.");
             } else if (status.equals(EmploymentStatus.SUSPENDED)) {
                 throw new UnauthorizedAccessException("You are currently suspended.");
             }
