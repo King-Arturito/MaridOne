@@ -42,8 +42,9 @@ public class LogController {
     @PreAuthorize("hasAnyRole('HR', 'MANAGEMENT')")
     public Page<AttendanceLog> getAttendance(
             @RequestParam(required = false) Long empId,
+            AttendanceLogFilter filter,
             @PageableDefault(size = 25, sort = "timestamp", direction = Sort.Direction.DESC) Pageable pageable) {
-        return logService.getAttendance(empId, pageable);
+        return logService.getAttendance(empId, filter, pageable);
     }
 
     @GetMapping("/attendance/team")
@@ -61,7 +62,7 @@ public class LogController {
     public Page<AttendanceLog> getMyAttendance(
             @PathVariable Long empId,
             @PageableDefault(size = 25, sort = "timestamp", direction = Sort.Direction.DESC) Pageable pageable) {
-        return logService.getAttendance(empId, pageable);
+        return logService.getAttendance(empId, null, pageable);
     }
 
 

@@ -69,9 +69,10 @@ public class LogService {
     }
 
     @ExecutionTime
-    public Page<AttendanceLog> getAttendance(Long empId, Pageable pageable) {
+    public Page<AttendanceLog> getAttendance(Long empId, AttendanceLogFilter filter, Pageable pageable) {
         Specification<AttendanceLog> spec = Specification.allOf(
-                CommonSpecs.fieldEquals("employeeId", empId)
+                CommonSpecs.fieldEquals("employeeId", empId),
+                filter == null ? null : AttendanceLogSpecs.filtered(filter)
         );
         return attendanceLogRepository.findAll(spec, pageable);
     }
