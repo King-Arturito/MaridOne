@@ -4,6 +4,7 @@ import org.example.maridone.annotation.NotifyRole;
 import org.example.maridone.annotation.ExecutionTime;
 import org.example.maridone.annotation.Notify;
 import org.example.maridone.common.CommonSpecs;
+import org.example.maridone.config.DefaultConfig;
 import org.example.maridone.core.employee.Employee;
 import org.example.maridone.core.employee.EmployeeRepository;
 import org.example.maridone.core.spec.EmployeeSpecs;
@@ -18,6 +19,8 @@ import org.example.maridone.overtime.dto.OvertimeResponseDto;
 import org.example.maridone.overtime.dto.OvertimeUpdateDto;
 import org.example.maridone.overtime.mapper.OvertimeMapper;
 import org.example.maridone.overtime.spec.OvertimeSpecs;
+import org.example.maridone.schedule.shift.TemplateShiftRepository;
+import org.example.maridone.schedule.shift.TemplateShiftSchedule;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
@@ -25,6 +28,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.List;
 
 @Service
@@ -34,15 +40,21 @@ public class OvertimeService {
     private final EmployeeRepository employeeRepository;
     private final OvertimeMapper overtimeMapper;
     private final UserAccountRepository userAccountRepository;
+    private final TemplateShiftRepository templateShiftRepository;
+    private final DefaultConfig defaultConfig;
 
     public OvertimeService(OvertimeRequestRepository overtimeRequestRepository,
                            OvertimeMapper overtimeMapper,
                            EmployeeRepository employeeRepository,
-                           UserAccountRepository userAccountRepository) {
+                           UserAccountRepository userAccountRepository,
+                           TemplateShiftRepository templateShiftRepository,
+                           DefaultConfig defaultConfig) {
         this.overtimeRequestRepository = overtimeRequestRepository;
         this.overtimeMapper = overtimeMapper;
         this.employeeRepository = employeeRepository;
         this.userAccountRepository = userAccountRepository;
+        this.templateShiftRepository = templateShiftRepository;
+        this.defaultConfig = defaultConfig;
     }
 
     @Transactional
@@ -53,9 +65,13 @@ public class OvertimeService {
                 EmployeeSpecs.hasUserAccount(username)
         );
         Employee emp = employeeRepository.findOne(spec).orElseThrow(() -> new AccountNotFoundException(username));
+        validateRequestWindow(requestDto);
+        validateOutsideShiftSchedule(emp, requestDto.getStartTime(), requestDto.getEndTime());
 
         Specification<OvertimeRequest> checkConflicts = Specification.allOf(
                 CommonSpecs.fieldEquals("employee", emp),
+                CommonSpecs.fieldNotEquals("requestStatus", Status.CANCELLED),
+                CommonSpecs.fieldNotEquals("requestStatus", Status.REJECTED),
                 OvertimeSpecs.checkOverlaps(requestDto.getStartTime(), requestDto.getEndTime())
         );
         if (overtimeRequestRepository.count(checkConflicts) > 0) {
@@ -142,5 +158,52 @@ public class OvertimeService {
             throw new AccountNotFoundException(username);
         }
         return employeeRepository.findHandledEmployeeIds(employeeId);
+    }
+
+    private void validateRequestWindow(OvertimeRequestDto requestDto) {
+        LocalDate workDate = requestDto.getWorkDate();
+        LocalDateTime startTime = requestDto.getStartTime();
+        LocalDateTime endTime = requestDto.getEndTime();
+
+        if (workDate == null || startTime == null || endTime == null) {
+            throw new OvertimeException("Overtime date and time window are required.");
+        }
+        if (!startTime.toLocalDate().equals(workDate)) {
+            throw new OvertimeException("The overtime start date must match the selected work date.");
+        }
+        if (!endTime.isAfter(startTime)) {
+            throw new OvertimeException("End date and time must be later than the start date and time.");
+        }
+        if (workDate.isBefore(LocalDate.now(defaultConfig.getTimeZone()))) {
+            throw new OvertimeException("Overtime cannot be requested for past dates.");
+        }
+
+        LocalDate maxEndDate = startTime.toLocalDate().plusDays(1);
+        if (endTime.toLocalDate().isAfter(maxEndDate)) {
+            throw new OvertimeException("End date can only be up to the day after the selected start date.");
+        }
+        if (endTime.toLocalDate().isEqual(maxEndDate) && endTime.toLocalTime().isAfter(LocalTime.of(6, 0))) {
+            throw new OvertimeException("If overtime ends the next day, the latest allowed end time is 6:00 AM.");
+        }
+    }
+
+    private void validateOutsideShiftSchedule(Employee employee, LocalDateTime requestStart, LocalDateTime requestEnd) {
+        TemplateShiftSchedule shiftSchedule = templateShiftRepository.findAllByEmployeeId(employee.getEmployeeId())
+                .stream()
+                .filter(schedule -> schedule.getDayOfWeek() == requestStart.getDayOfWeek())
+                .findFirst()
+                .orElseThrow(() -> new OvertimeException("Your work schedule is not set up yet, so overtime cannot be processed."));
+
+        LocalDate shiftDate = requestStart.toLocalDate();
+        LocalDateTime shiftStart = LocalDateTime.of(shiftDate, shiftSchedule.getStartTime());
+        LocalDateTime shiftEnd = shiftSchedule.getEndTime().isAfter(shiftSchedule.getStartTime())
+                || shiftSchedule.getEndTime().equals(shiftSchedule.getStartTime())
+                ? LocalDateTime.of(shiftDate, shiftSchedule.getEndTime())
+                : LocalDateTime.of(shiftDate.plusDays(1), shiftSchedule.getEndTime());
+
+        boolean isOutsideShift = !requestEnd.isAfter(shiftStart) || !requestStart.isBefore(shiftEnd);
+        if (!isOutsideShift) {
+            throw new OvertimeException("Overtime can only be requested outside your scheduled shift.");
+        }
     }
 }

@@ -15,6 +15,7 @@ public class LeaveResponseDto {
     private Status requestStatus;
     private String reason;
     private LeaveType leaveType;
+    private String approver;
     private String approverReason;
     private Boolean isPaid;
 
@@ -88,6 +89,14 @@ public class LeaveResponseDto {
 
     public void setLeaveType(LeaveType leaveType) {
         this.leaveType = leaveType;
+    }
+
+    public String getApprover() {
+        return approver;
+    }
+
+    public void setApprover(String approver) {
+        this.approver = approver;
     }
 
     public String getApproverReason() {
