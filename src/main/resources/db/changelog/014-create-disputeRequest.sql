@@ -4,6 +4,7 @@ CREATE TABLE dispute_request (
     reason          VARCHAR(255)    NOT NULL,
     status          VARCHAR(255)    NOT NULL,
     status_reason   VARCHAR(255),
+    approver        VARCHAR(255),
     created_at      TIMESTAMPTZ     NOT NULL,
     updated_at      TIMESTAMPTZ,
     item_id         BIGINT          NOT NULL,

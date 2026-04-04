@@ -4,6 +4,8 @@ import org.example.maridone.annotation.NotifyRole;
 import org.example.maridone.annotation.ExecutionTime;
 import org.example.maridone.annotation.Notify;
 import org.example.maridone.common.CommonSpecs;
+import org.example.maridone.core.user.UserAccount;
+import org.example.maridone.core.user.UserAccountRepository;
 import org.example.maridone.document.DocumentPathRepository;
 import org.example.maridone.document.NOCLOUD.LocalDocumentService;
 import org.example.maridone.document.path.DocumentPath;
@@ -12,6 +14,7 @@ import org.example.maridone.enums.Directories;
 import org.example.maridone.enums.PayrollStatus;
 import org.example.maridone.enums.Position;
 import org.example.maridone.enums.Status;
+import org.example.maridone.exception.notfound.AccountNotFoundException;
 import org.example.maridone.exception.toolarge.FileTooLargeException;
 import org.example.maridone.exception.unauthorized.DuplicateDisputeException;
 import org.example.maridone.exception.unauthorized.InvalidActionException;
@@ -40,6 +43,7 @@ import java.time.Instant;
 public class DisputeService {
     private final DisputeRequestRepository disputeRepository;
     private final PayrollItemRepository payrollItemRepository;
+    private final UserAccountRepository userAccountRepository;
     private final DocumentPathRepository documentPathRepository;
     //todo: change to cloud
     private final LocalDocumentService localDocumentService;
@@ -47,11 +51,13 @@ public class DisputeService {
     public DisputeService
             (DisputeRequestRepository disputeRepository,
              PayrollItemRepository payrollItemRepository,
+             UserAccountRepository userAccountRepository,
              DocumentPathRepository documentPathRepository,
              LocalDocumentService localDocumentService,
              PayrollMapper payrollMapper) {
         this.disputeRepository = disputeRepository;
         this.payrollItemRepository = payrollItemRepository;
+        this.userAccountRepository = userAccountRepository;
         this.documentPathRepository = documentPathRepository;
         this.localDocumentService = localDocumentService;
         this.payrollMapper = payrollMapper;
@@ -93,14 +99,23 @@ public class DisputeService {
     @Transactional
     @ExecutionTime
     @Notify(message = "Your Dispute Request has been  #{#result.status}", targetEmployee = "#result.employeeId",importance = "HIGH")
-    public DisputeResponseDto updateDisputeStatus(Long disputeId, DisputeActionDto payload) {
+    public DisputeResponseDto updateDisputeStatus(Long disputeId, DisputeActionDto payload, String approverUsername) {
         DisputeRequest disputeRequest = disputeRepository.findByIdWithEmployee(disputeId)
                 .orElseThrow(() -> new RequestNotFoundException("Dispute Request",disputeId));
         if (disputeRequest.getStatus().equals(Status.APPROVED)) {
             throw new InvalidActionException("Dispute ID: " + disputeId + " has been approved already.");
         }
+        UserAccount approver = userAccountRepository.findByUsername(approverUsername)
+                .orElseThrow(() -> new AccountNotFoundException(approverUsername));
         disputeRequest.setStatus(payload.getStatus());
         disputeRequest.setStatusReason(payload.getStatusReason());
+        if (approver.getEmployee() != null) {
+            disputeRequest.setApprover(
+                    approver.getEmployee().getLastName() + ", " + approver.getEmployee().getFirstName()
+            );
+        } else {
+            disputeRequest.setApprover(approverUsername);
+        }
         disputeRequest.setUpdatedAt(Instant.now());
         disputeRepository.save(disputeRequest);
         return payrollMapper.toResponseDto(disputeRequest);
