@@ -17,6 +17,18 @@ public interface DailyShiftRepository extends JpaRepository<DailyShiftSchedule, 
     @Query("""
         SELECT d
         FROM DailyShiftSchedule d
+        WHERE d.startDateTime >= :periodStart
+          AND d.startDateTime < :periodEndExclusive
+        ORDER BY d.startDateTime
+        """)
+    List<DailyShiftSchedule> findAllByPeriod(
+            @Param("periodStart") LocalDateTime periodStart,
+            @Param("periodEndExclusive") LocalDateTime periodEndExclusive
+    );
+
+    @Query("""
+        SELECT d
+        FROM DailyShiftSchedule d
         WHERE d.templateShiftSchedule.employeeId IN :employeeIds
           AND d.startDateTime >= :periodStart
           AND d.startDateTime < :periodEndExclusive

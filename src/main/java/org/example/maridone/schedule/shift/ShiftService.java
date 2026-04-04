@@ -83,6 +83,26 @@ public class ShiftService {
         return scheduleMapper.toResponseDtos(schedules);
     }
 
+    @Transactional(readOnly = true)
+    @ExecutionTime
+    public List<DailyShiftSchedule> getDailyShifts(LocalDate startDate, LocalDate endDate) {
+        if (startDate == null || endDate == null) {
+            return List.of();
+        }
+
+        LocalDate from = startDate;
+        LocalDate to = endDate;
+        if (to.isBefore(from)) {
+            from = endDate;
+            to = startDate;
+        }
+
+        return dailyShiftRepository.findAllByPeriod(
+                from.atStartOfDay(),
+                to.plusDays(1).atStartOfDay()
+        );
+    }
+
     @Transactional
     @ExecutionTime
     public TemplateShiftSchedule addShiftSchedule(ShiftRequestDto payload) {
