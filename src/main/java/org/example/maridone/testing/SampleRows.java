@@ -36,6 +36,8 @@ import org.example.maridone.notification.Notification;
 import org.example.maridone.notification.NotificationRepository;
 import org.example.maridone.schedule.calendar.CalendarRepository;
 import org.example.maridone.schedule.calendar.CompanyCalendar;
+import org.example.maridone.schedule.shift.DailyShiftRepository;
+import org.example.maridone.schedule.shift.DailyShiftSchedule;
 import org.example.maridone.schedule.shift.TemplateShiftRepository;
 import org.example.maridone.schedule.shift.TemplateShiftSchedule;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -52,6 +54,7 @@ public class SampleRows {
     private static final ZoneId SEED_TIME_ZONE = ZoneId.of("Asia/Manila");
     private static final LocalTime SHIFT_START = LocalTime.of(8, 0);
     private static final LocalTime SHIFT_END = LocalTime.of(17, 0);
+    private static final LocalDate JANUARY_SHIFT_START_DATE = LocalDate.of(2026, 1, 1);
     private static final LocalDate ATTENDANCE_START_DATE = LocalDate.of(2026, 2, 1);
     private static final LocalDate ATTENDANCE_END_DATE = LocalDate.of(2026, 4, 4);
     private static final List<DayOfWeek> STANDARD_WORK_DAYS = List.of(
@@ -77,6 +80,9 @@ public class SampleRows {
 
     @Autowired
     private TemplateShiftRepository templateShiftRepository;
+
+    @Autowired
+    private DailyShiftRepository dailyShiftRepository;
 
     @Autowired
     private BankAccountRepository bankAccountRepository;
@@ -107,7 +113,8 @@ public class SampleRows {
         createAndSaveCompanyCalendar(employees);
         createAndSaveUserAccounts(employees);
         createAndSaveBankAccounts(employees);
-        createAndSaveShiftSchedules(employees);
+        List<TemplateShiftSchedule> templateSchedules = createAndSaveShiftSchedules(employees);
+        createAndSaveSeededDailyShifts(templateSchedules);
         createAndSaveLeaveBalances(employees);
         createAndSaveNotifications(employees);
         createAndSaveAttendanceLogs(employees);
@@ -227,7 +234,7 @@ public class SampleRows {
         return account;
     }
 
-    private void createAndSaveShiftSchedules(List<Employee> employees) {
+    private List<TemplateShiftSchedule> createAndSaveShiftSchedules(List<Employee> employees) {
         List<TemplateShiftSchedule> schedules = new ArrayList<>();
         for (Employee employee : employees) {
             for (DayOfWeek dayOfWeek : STANDARD_WORK_DAYS) {
@@ -240,6 +247,41 @@ public class SampleRows {
             }
         }
         templateShiftRepository.saveAll(schedules);
+        return schedules;
+    }
+
+    private void createAndSaveSeededDailyShifts(List<TemplateShiftSchedule> templateSchedules) {
+        // Seed daily shifts across the whole seeded payroll window.
+        // January still has no attendance logs for absence testing, while February onward aligns with seeded attendance.
+        List<DailyShiftSchedule> dailyShifts = new ArrayList<>();
+
+        for (LocalDate workDate = JANUARY_SHIFT_START_DATE; !workDate.isAfter(ATTENDANCE_END_DATE); workDate = workDate.plusDays(1)) {
+            DayOfWeek workDay = workDate.getDayOfWeek();
+            for (TemplateShiftSchedule template : templateSchedules) {
+                Employee employee = template.getEmployee();
+                if (employee == null || template.getDayOfWeek() != workDay) {
+                    continue;
+                }
+                if (workDate.isBefore(employee.getEmploymentDateStart())) {
+                    continue;
+                }
+                if (employee.getEmploymentDateEnd() != null && workDate.isAfter(employee.getEmploymentDateEnd())) {
+                    continue;
+                }
+
+                DailyShiftSchedule dailyShift = new DailyShiftSchedule();
+                dailyShift.setTemplateShiftSchedule(template);
+                dailyShift.setStartDateTime(LocalDateTime.of(workDate, template.getStartTime()));
+                dailyShift.setEndDateTime(
+                        LocalDateTime.of(workDate, template.getEndTime()).plusDays(
+                                template.getEndTime().isBefore(template.getStartTime()) ? 1 : 0
+                        )
+                );
+                dailyShifts.add(dailyShift);
+            }
+        }
+
+        dailyShiftRepository.saveAll(dailyShifts);
     }
 
     private void createAndSaveLeaveBalances(List<Employee> employees) {
