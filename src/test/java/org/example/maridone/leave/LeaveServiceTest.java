@@ -14,7 +14,10 @@ import org.example.maridone.core.user.UserAccountRepository;
 import org.example.maridone.config.PayrollConfig;
 import org.example.maridone.enums.Directories;
 import org.example.maridone.enums.LeaveType;
+import org.example.maridone.enums.Position;
 import org.example.maridone.enums.Status;
+import org.example.maridone.core.user.UserAccount;
+import org.example.maridone.exception.unauthorized.InvalidActionException;
 import org.example.maridone.leave.balance.LeaveBalance;
 import org.example.maridone.leave.balance.LeaveBalanceRepository;
 import org.example.maridone.leave.dto.BalanceRequestDto;
@@ -36,6 +39,9 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContext;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.util.ReflectionTestUtils;
 
 @ExtendWith(MockitoExtension.class)
@@ -174,5 +180,91 @@ class LeaveServiceTest {
                 leaveService.getTeamLeaveRequests(new LeaveFilter(null, null, null, null, null), username, Pageable.ofSize(20));
 
         Assertions.assertEquals(1, result.getTotalElements());
+    }
+
+    @Test
+    void updateLeaveRequest_ShouldAllowManagerForHandledEmployee() {
+        LeaveRequest request = new LeaveRequest();
+        request.setRequestStatus(Status.PENDING);
+        request.setPaid(false);
+
+        Employee employee = new Employee();
+        ReflectionTestUtils.setField(employee, "employeeId", 3L);
+        request.setEmployee(employee);
+
+        Employee managerEmployee = new Employee();
+        managerEmployee.setFirstName("Adrian");
+        managerEmployee.setLastName("Flores");
+        managerEmployee.setPosition(Position.MANAGER);
+
+        UserAccount managerAccount = new UserAccount();
+        managerAccount.setUsername("manager1");
+        managerAccount.setEmployee(managerEmployee);
+
+        LeaveRequestDto payload = new LeaveRequestDto();
+        payload.setLeaveType(LeaveType.VACATION_LEAVE);
+        payload.setRequestStatus(Status.APPROVED);
+        payload.setApproverReason("Approved for your team schedule.");
+
+        Authentication authentication = org.mockito.Mockito.mock(Authentication.class);
+        SecurityContext securityContext = org.mockito.Mockito.mock(SecurityContext.class);
+
+        when(authentication.getName()).thenReturn("manager1");
+        when(securityContext.getAuthentication()).thenReturn(authentication);
+        SecurityContextHolder.setContext(securityContext);
+
+        when(userAccountRepository.findByUsername("manager1")).thenReturn(Optional.of(managerAccount));
+        when(userAccountRepository.findEmployeeIdByUsername("manager1")).thenReturn(2L);
+        when(leaveRequestRepository.findById(9L)).thenReturn(Optional.of(request));
+        when(leaveRequestRepository.findEmployeeIdByRequestId(9L)).thenReturn(Optional.of(3L));
+        ReflectionTestUtils.setField(managerEmployee, "employeeId", 2L);
+        when(employeeRepository.findHandledEmployeeIds(2L)).thenReturn(List.of(3L));
+        when(leaveRequestRepository.save(any(LeaveRequest.class))).thenReturn(request);
+
+        LeaveRequest result = leaveService.updateLeaveRequest(payload, 9L);
+
+        Assertions.assertEquals(Status.APPROVED, result.getRequestStatus());
+        Assertions.assertEquals("Flores, Adrian", result.getApprover());
+        SecurityContextHolder.clearContext();
+    }
+
+    @Test
+    void updateLeaveRequest_ShouldRejectManagerForUnhandledEmployee() {
+        LeaveRequest request = new LeaveRequest();
+        request.setRequestStatus(Status.PENDING);
+        request.setPaid(false);
+
+        Employee employee = new Employee();
+        ReflectionTestUtils.setField(employee, "employeeId", 7L);
+        request.setEmployee(employee);
+
+        Employee managerEmployee = new Employee();
+        ReflectionTestUtils.setField(managerEmployee, "employeeId", 2L);
+        managerEmployee.setPosition(Position.MANAGER);
+
+        UserAccount managerAccount = new UserAccount();
+        managerAccount.setUsername("manager1");
+        managerAccount.setEmployee(managerEmployee);
+
+        LeaveRequestDto payload = new LeaveRequestDto();
+        payload.setLeaveType(LeaveType.VACATION_LEAVE);
+        payload.setRequestStatus(Status.REJECTED);
+        payload.setApproverReason("Not your direct team request.");
+
+        Authentication authentication = org.mockito.Mockito.mock(Authentication.class);
+        SecurityContext securityContext = org.mockito.Mockito.mock(SecurityContext.class);
+
+        when(authentication.getName()).thenReturn("manager1");
+        when(securityContext.getAuthentication()).thenReturn(authentication);
+        SecurityContextHolder.setContext(securityContext);
+
+        when(userAccountRepository.findByUsername("manager1")).thenReturn(Optional.of(managerAccount));
+        when(userAccountRepository.findEmployeeIdByUsername("manager1")).thenReturn(2L);
+        when(leaveRequestRepository.findById(10L)).thenReturn(Optional.of(request));
+        when(leaveRequestRepository.findEmployeeIdByRequestId(10L)).thenReturn(Optional.of(7L));
+        when(employeeRepository.findHandledEmployeeIds(2L)).thenReturn(List.of(3L, 4L));
+
+        Assertions.assertThrows(InvalidActionException.class, () -> leaveService.updateLeaveRequest(payload, 10L));
+        SecurityContextHolder.clearContext();
     }
 }

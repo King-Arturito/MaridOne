@@ -5,7 +5,7 @@ import org.example.maridone.config.DefaultConfig;
 import org.example.maridone.core.employee.Employee;
 import org.example.maridone.core.employee.EmployeeRepository;
 import org.example.maridone.core.user.UserAccount;
-import org.example.maridone.document.NOCLOUD.LocalDocumentService;
+import org.example.maridone.document.DocumentService;
 import org.example.maridone.enums.Directories;
 import org.example.maridone.enums.ManagerTitle;
 import org.example.maridone.log.AttendanceLogRepository;
@@ -34,15 +34,13 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
-//todo: modify localDocumentService after defense, use Cloud
-
 public class PayslipService {
     private final EmployeeRepository employeeRepository;
     private final PayrollRunRepository payrollRunRepository;
     private final AttendanceLogRepository attendanceLogRepository;
     private final EarningsRepository earningsRepository;
     private final DeductionsRepository deductionsRepository;
-    private final LocalDocumentService localDocumentService;
+    private final DocumentService documentService;
     private final PayrollItemRepository payrollItemRepository;
     private final DefaultConfig defaultConfig;
     private final TemplateEngine templateEngine;
@@ -52,7 +50,7 @@ public class PayslipService {
                           AttendanceLogRepository attendanceLogRepository,
                           EarningsRepository earningsRepository,
                           DeductionsRepository deductionsRepository,
-                          LocalDocumentService localDocumentService,
+                          DocumentService documentService,
                           PayrollItemRepository payrollItemRepository,
                           DefaultConfig defaultConfig,
                           TemplateEngine templateEngine)
@@ -62,7 +60,7 @@ public class PayslipService {
         this.attendanceLogRepository = attendanceLogRepository;
         this.earningsRepository = earningsRepository;
         this.deductionsRepository = deductionsRepository;
-        this.localDocumentService = localDocumentService;
+        this.documentService = documentService;
         this.payrollItemRepository = payrollItemRepository;
         this.defaultConfig = defaultConfig;
         this.templateEngine = templateEngine;
@@ -104,7 +102,7 @@ public class PayslipService {
             );
             batchRequests.add(new FileUploadBatchRequest(multipartFile, block.userAccountName(), Directories.PAYSLIP.getDisplayName()));
         }
-        localDocumentService.batchUpload(batchRequests);
+        documentService.batchUpload(batchRequests);
     }
 
     @Transactional

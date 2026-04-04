@@ -1,7 +1,6 @@
 package org.example.maridone.document;
 
 import org.example.maridone.document.dto.DocumentResponseDto;
-import org.springframework.context.annotation.Profile;
 import org.springframework.core.io.Resource;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -13,7 +12,6 @@ import org.springframework.web.multipart.MultipartFile;
 
 @RestController
 @RequestMapping("/api/document")
-@Profile("prod")
 public class DocumentController {
 
     private final DocumentService documentService;
@@ -26,6 +24,17 @@ public class DocumentController {
     @PreAuthorize("@documentOwnerCheck.isSelf(#pathId, authentication.name)")
     public ResponseEntity<Resource> view(@PathVariable Long pathId) {
         DocumentViewResult result = documentService.view(pathId);
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + result.fileName() + "\"")
+                .contentType(MediaType.parseMediaType(result.fileType()))
+                .body(result.file());
+    }
+
+    @GetMapping("/library/{subDir}/{fileName:.+}")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<Resource> viewLibraryDocument(@PathVariable String subDir,
+                                                        @PathVariable String fileName) {
+        DocumentViewResult result = documentService.viewLibraryDocument(subDir, fileName);
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + result.fileName() + "\"")
                 .contentType(MediaType.parseMediaType(result.fileType()))

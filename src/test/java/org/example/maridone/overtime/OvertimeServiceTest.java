@@ -9,8 +9,11 @@ import java.util.Optional;
 import org.example.maridone.config.DefaultConfig;
 import org.example.maridone.core.employee.Employee;
 import org.example.maridone.core.employee.EmployeeRepository;
+import org.example.maridone.core.user.UserAccount;
 import org.example.maridone.core.user.UserAccountRepository;
+import org.example.maridone.enums.Position;
 import org.example.maridone.enums.Status;
+import org.example.maridone.exception.unauthorized.InvalidActionException;
 import org.example.maridone.exception.unauthorized.OvertimeException;
 import org.example.maridone.overtime.dto.OvertimeRequestDto;
 import org.example.maridone.overtime.dto.OvertimeResponseDto;
@@ -110,11 +113,17 @@ class OvertimeServiceTest {
         request.setRequestStatus(Status.PENDING); 
 
         Employee admin = new Employee();
+        ReflectionTestUtils.setField(admin, "employeeId", 1L);
         admin.setFirstName("Admin");
         admin.setLastName("User");
+        admin.setPosition(Position.HR);
+
+        UserAccount approverAccount = new UserAccount();
+        approverAccount.setUsername(approver);
+        approverAccount.setEmployee(admin);
 
         when(overtimeRequestRepository.findById(otId)).thenReturn(Optional.of(request));
-        when(employeeRepository.findOne(any(Specification.class))).thenReturn(Optional.of(admin));
+        when(userAccountRepository.findByUsername(approver)).thenReturn(Optional.of(approverAccount));
         when(overtimeRequestRepository.save(any(OvertimeRequest.class))).thenReturn(request);
         
         OvertimeResponseDto responseDto = new OvertimeResponseDto();
@@ -141,5 +150,73 @@ class OvertimeServiceTest {
                 overtimeService.getTeamOvertimeRequests(new OvertimeFilter(null, null, null, null, null, null), username, Pageable.ofSize(20));
 
         Assertions.assertEquals(1, result.getTotalElements());
+    }
+
+    @Test
+    void updateOvertimeRequest_ShouldAllowManagerForHandledEmployee() {
+        OvertimeRequest request = new OvertimeRequest();
+        ReflectionTestUtils.setField(request, "overtimeId", 7L);
+        request.setRequestStatus(Status.PENDING);
+        Employee targetEmployee = new Employee();
+        ReflectionTestUtils.setField(targetEmployee, "employeeId", 3L);
+        request.setEmployee(targetEmployee);
+
+        Employee managerEmployee = new Employee();
+        ReflectionTestUtils.setField(managerEmployee, "employeeId", 2L);
+        managerEmployee.setFirstName("Adrian");
+        managerEmployee.setLastName("Flores");
+        managerEmployee.setPosition(Position.MANAGER);
+
+        UserAccount managerAccount = new UserAccount();
+        managerAccount.setUsername("manager1");
+        managerAccount.setEmployee(managerEmployee);
+
+        OvertimeUpdateDto updateDto = new OvertimeUpdateDto();
+        updateDto.setOvertimeId(7L);
+        updateDto.setUpdateStatus(Status.APPROVED);
+        updateDto.setApproveReason("Approved for the team deadline.");
+
+        when(overtimeRequestRepository.findById(7L)).thenReturn(Optional.of(request));
+        when(userAccountRepository.findByUsername("manager1")).thenReturn(Optional.of(managerAccount));
+        when(userAccountRepository.findEmployeeIdByUsername("manager1")).thenReturn(2L);
+        when(employeeRepository.findHandledEmployeeIds(2L)).thenReturn(java.util.List.of(3L));
+        when(overtimeRequestRepository.save(any(OvertimeRequest.class))).thenReturn(request);
+        when(overtimeMapper.toOvertimeResponseDto(request)).thenReturn(new OvertimeResponseDto());
+
+        OvertimeResponseDto result = overtimeService.updateOvertimeRequest(updateDto, "manager1");
+
+        Assertions.assertNotNull(result);
+        Assertions.assertEquals(Status.APPROVED, request.getRequestStatus());
+        Assertions.assertEquals("Flores, Adrian", request.getApprover());
+    }
+
+    @Test
+    void updateOvertimeRequest_ShouldRejectManagerForUnhandledEmployee() {
+        OvertimeRequest request = new OvertimeRequest();
+        ReflectionTestUtils.setField(request, "overtimeId", 8L);
+        request.setRequestStatus(Status.PENDING);
+        Employee targetEmployee = new Employee();
+        ReflectionTestUtils.setField(targetEmployee, "employeeId", 9L);
+        request.setEmployee(targetEmployee);
+
+        Employee managerEmployee = new Employee();
+        ReflectionTestUtils.setField(managerEmployee, "employeeId", 2L);
+        managerEmployee.setPosition(Position.MANAGER);
+
+        UserAccount managerAccount = new UserAccount();
+        managerAccount.setUsername("manager1");
+        managerAccount.setEmployee(managerEmployee);
+
+        OvertimeUpdateDto updateDto = new OvertimeUpdateDto();
+        updateDto.setOvertimeId(8L);
+        updateDto.setUpdateStatus(Status.REJECTED);
+        updateDto.setApproveReason("Not handled by this manager.");
+
+        when(overtimeRequestRepository.findById(8L)).thenReturn(Optional.of(request));
+        when(userAccountRepository.findByUsername("manager1")).thenReturn(Optional.of(managerAccount));
+        when(userAccountRepository.findEmployeeIdByUsername("manager1")).thenReturn(2L);
+        when(employeeRepository.findHandledEmployeeIds(2L)).thenReturn(java.util.List.of(3L, 4L));
+
+        Assertions.assertThrows(InvalidActionException.class, () -> overtimeService.updateOvertimeRequest(updateDto, "manager1"));
     }
 }

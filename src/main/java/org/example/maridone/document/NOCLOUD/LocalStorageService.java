@@ -1,6 +1,7 @@
 package org.example.maridone.document.NOCLOUD;
 
 import org.example.maridone.document.storage.StorageService;
+import org.example.maridone.document.storage.DocumentLibraryDirectories;
 import org.springframework.context.annotation.Profile;
 import org.springframework.http.HttpStatus;
 import org.springframework.core.io.Resource;
@@ -12,18 +13,12 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.IOException;
 import java.net.MalformedURLException;
 import java.nio.file.*;
-import java.util.Set;
 import java.util.UUID;
 
 //todo:  REMOVE AFTER DEFENSE
 @Service
+@Profile("!prod")
 public class LocalStorageService implements StorageService {
-
-    private static final Set<String> LIBRARY_DIRECTORIES = Set.of(
-            "employee-handbook",
-            "training-materials",
-            "onboarding-materials"
-    );
 
     private final Path rootLocation = Paths.get("local-documents").toAbsolutePath().normalize();
 
@@ -75,10 +70,9 @@ public class LocalStorageService implements StorageService {
         }
     }
 
+    @Override
     public Resource loadLibraryDocument(String subDir, String fileName) {
-        if (!LIBRARY_DIRECTORIES.contains(subDir)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Unknown document library directory: " + subDir);
-        }
+        DocumentLibraryDirectories.validate(subDir);
 
         try {
             Path directory = rootLocation.resolve(subDir).normalize();
@@ -99,6 +93,7 @@ public class LocalStorageService implements StorageService {
         }
     }
 
+    @Override
     public String probeContentType(String subDir, String fileName) {
         try {
             Path file = rootLocation.resolve(subDir).resolve(fileName).normalize();
