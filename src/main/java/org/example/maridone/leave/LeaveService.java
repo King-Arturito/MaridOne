@@ -24,6 +24,7 @@ import org.example.maridone.leave.dto.*;
 import org.example.maridone.leave.request.LeaveRequest;
 import org.example.maridone.leave.request.LeaveRequestRepository;
 import org.example.maridone.leave.spec.LeaveSpecs;
+import org.example.maridone.notification.NotificationMessageFormatter;
 import org.example.maridone.notification.NotificationService;
 import org.example.maridone.schedule.shift.TemplateShiftRepository;
 import org.example.maridone.schedule.shift.TemplateShiftSchedule;
@@ -140,7 +141,6 @@ public class LeaveService {
     @ExecutionTime
     @Transactional
     @AuditLog
-    @NotifyRole(message = "An employee cancelled a leave request.", targetRole = Position.HR)
     public void cancelRequest(Long requestId) {
         LeaveRequest request = leaveRequestRepository.findById(requestId).orElseThrow(() -> new RequestNotFoundException("Leave Request", requestId));
         if (request.getRequestStatus().equals(Status.APPROVED)) {
@@ -148,10 +148,15 @@ public class LeaveService {
         }
         request.setRequestStatus(Status.CANCELLED);
         leaveRequestRepository.save(request);
+        String employeeName = NotificationMessageFormatter.formatEmployeeName(request.getEmployee());
+        String leaveDates = NotificationMessageFormatter.formatDateRange(
+                request.getStartDateTime().toLocalDate(),
+                request.getEndDateTime().toLocalDate()
+        );
+        notifyHr("Leave request from " + employeeName + " (" + leaveDates + ") was cancelled.");
         notifyManager(
                 request.getEmployee(),
-                "Team leave request from " + request.getEmployee().getFirstName() + " "
-                        + request.getEmployee().getLastName() + " was cancelled."
+                "Team leave request from " + employeeName + " (" + leaveDates + ") was cancelled."
         );
     }
 
@@ -493,6 +498,13 @@ public class LeaveService {
             return;
         }
         notificationService.createNotification(manager, message, "HIGH");
+    }
+
+    private void notifyHr(String message) {
+        List<Long> hrEmployeeIds = employeeRepository.findEmployeeIdsByPosition(Position.HR, EmploymentStatus.TERMINATED);
+        for (Long employeeId : hrEmployeeIds) {
+            notificationService.createNotification(employeeRepository.getReferenceById(employeeId), message, "HIGH");
+        }
     }
 
 

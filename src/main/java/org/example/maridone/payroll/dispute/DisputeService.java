@@ -4,6 +4,7 @@ import org.example.maridone.annotation.NotifyRole;
 import org.example.maridone.annotation.ExecutionTime;
 import org.example.maridone.annotation.Notify;
 import org.example.maridone.common.CommonSpecs;
+import org.example.maridone.core.employee.EmployeeRepository;
 import org.example.maridone.core.user.UserAccount;
 import org.example.maridone.core.user.UserAccountRepository;
 import org.example.maridone.document.DocumentPathRepository;
@@ -11,6 +12,7 @@ import org.example.maridone.document.DocumentService;
 import org.example.maridone.document.path.DocumentPath;
 import org.example.maridone.document.spec.DocumentSpecs;
 import org.example.maridone.enums.Directories;
+import org.example.maridone.enums.EmploymentStatus;
 import org.example.maridone.enums.PayrollStatus;
 import org.example.maridone.enums.Position;
 import org.example.maridone.enums.Status;
@@ -26,6 +28,8 @@ import org.example.maridone.payroll.dto.DisputeActionDto;
 import org.example.maridone.payroll.dto.DisputeRequestDto;
 import org.example.maridone.payroll.dto.DisputeResponseDto;
 import org.example.maridone.payroll.mapper.PayrollMapper;
+import org.example.maridone.notification.NotificationMessageFormatter;
+import org.example.maridone.notification.NotificationService;
 import org.example.maridone.payroll.run.PayrollItemRepository;
 import org.example.maridone.payroll.spec.DisputeSpecs;
 import org.springframework.data.domain.Page;
@@ -43,24 +47,30 @@ import java.time.Instant;
 public class DisputeService {
     private final DisputeRequestRepository disputeRepository;
     private final PayrollItemRepository payrollItemRepository;
+    private final EmployeeRepository employeeRepository;
     private final UserAccountRepository userAccountRepository;
     private final DocumentPathRepository documentPathRepository;
     //todo: change to cloud
     private final DocumentService documentService;
     private final PayrollMapper payrollMapper;
+    private final NotificationService notificationService;
     public DisputeService
             (DisputeRequestRepository disputeRepository,
              PayrollItemRepository payrollItemRepository,
+             EmployeeRepository employeeRepository,
              UserAccountRepository userAccountRepository,
              DocumentPathRepository documentPathRepository,
              DocumentService documentService,
-             PayrollMapper payrollMapper) {
+             PayrollMapper payrollMapper,
+             NotificationService notificationService) {
         this.disputeRepository = disputeRepository;
         this.payrollItemRepository = payrollItemRepository;
+        this.employeeRepository = employeeRepository;
         this.userAccountRepository = userAccountRepository;
         this.documentPathRepository = documentPathRepository;
         this.documentService = documentService;
         this.payrollMapper = payrollMapper;
+        this.notificationService = notificationService;
     }
 
 
@@ -184,7 +194,6 @@ public class DisputeService {
 
     @ExecutionTime
     @Transactional
-    @NotifyRole(message = "An employee cancelled a dispute request.", targetRole = Position.HR)
     public void cancelRequest(Long disputeId) {
         DisputeRequest disputeRequest = disputeRepository.findById(disputeId).orElseThrow(() -> new RequestNotFoundException("Dispute Request",disputeId));
         if (disputeRequest.getStatus().equals(Status.APPROVED)) {
@@ -192,5 +201,16 @@ public class DisputeService {
         }
         disputeRequest.setStatus(Status.CANCELLED);
         disputeRepository.save(disputeRequest);
+        String employeeName = NotificationMessageFormatter.formatEmployeeName(disputeRequest.getPayrollItem().getEmployee());
+        String payrollPeriod = NotificationMessageFormatter.formatPayrollPeriod(
+                disputeRequest.getPayrollItem().getPayrollRun()
+        );
+        notifyHr("Dispute request from " + employeeName + " for " + payrollPeriod + " was cancelled.");
+    }
+
+    private void notifyHr(String message) {
+        for (Long employeeId : employeeRepository.findEmployeeIdsByPosition(Position.HR, EmploymentStatus.TERMINATED)) {
+            notificationService.createNotification(employeeRepository.getReferenceById(employeeId), message, "HIGH");
+        }
     }
 }

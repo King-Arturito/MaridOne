@@ -217,19 +217,31 @@ class LeaveServiceTest {
         emp.setLastName("Moore");
         emp.setManager(manager);
 
+        Employee hr = new Employee();
+        hr.setFirstName("Pat");
+        hr.setLastName("Reyes");
+
         LeaveRequest request = new LeaveRequest();
         request.setEmployee(emp);
         request.setRequestStatus(Status.PENDING);
+        request.setStartDateTime(LocalDateTime.of(2026, 4, 7, 8, 0));
+        request.setEndDateTime(LocalDateTime.of(2026, 4, 8, 17, 0));
 
         when(leaveRequestRepository.findById(12L)).thenReturn(Optional.of(request));
         when(leaveRequestRepository.save(any(LeaveRequest.class))).thenReturn(request);
+        when(employeeRepository.findEmployeeIdsByPosition(Position.HR, EmploymentStatus.TERMINATED)).thenReturn(List.of(5L));
+        when(employeeRepository.getReferenceById(5L)).thenReturn(hr);
 
         leaveService.cancelRequest(12L);
 
         Assertions.assertEquals(Status.CANCELLED, request.getRequestStatus());
         verify(notificationService).createNotification(
+                hr,
+                "Leave request from Richard Moore (April 7, 2026 to April 8, 2026) was cancelled.",
+                "HIGH");
+        verify(notificationService).createNotification(
                 manager,
-                "Team leave request from Richard Moore was cancelled.",
+                "Team leave request from Richard Moore (April 7, 2026 to April 8, 2026) was cancelled.",
                 "HIGH");
     }
 

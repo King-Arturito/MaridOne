@@ -164,19 +164,30 @@ class OvertimeServiceTest {
         emp.setLastName("Santos");
         emp.setManager(manager);
 
+        Employee hr = new Employee();
+        hr.setFirstName("Pat");
+        hr.setLastName("Reyes");
+
         OvertimeRequest request = new OvertimeRequest();
         request.setEmployee(emp);
         request.setRequestStatus(Status.PENDING);
+        request.setWorkDate(LocalDate.of(2026, 4, 7));
 
         when(overtimeRequestRepository.findById(14L)).thenReturn(Optional.of(request));
         when(overtimeRequestRepository.save(any(OvertimeRequest.class))).thenReturn(request);
+        when(employeeRepository.findEmployeeIdsByPosition(Position.HR, EmploymentStatus.TERMINATED)).thenReturn(java.util.List.of(5L));
+        when(employeeRepository.getReferenceById(5L)).thenReturn(hr);
 
         overtimeService.cancelRequest(14L);
 
         Assertions.assertEquals(Status.CANCELLED, request.getRequestStatus());
         verify(notificationService).createNotification(
+                hr,
+                "Overtime request from Niko Santos for April 7, 2026 was cancelled.",
+                "HIGH");
+        verify(notificationService).createNotification(
                 manager,
-                "Team overtime request from Niko Santos was cancelled.",
+                "Team overtime request from Niko Santos for April 7, 2026 was cancelled.",
                 "HIGH");
     }
 

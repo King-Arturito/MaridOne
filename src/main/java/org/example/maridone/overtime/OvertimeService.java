@@ -10,12 +10,14 @@ import org.example.maridone.core.employee.EmployeeRepository;
 import org.example.maridone.core.spec.EmployeeSpecs;
 import org.example.maridone.core.user.UserAccount;
 import org.example.maridone.core.user.UserAccountRepository;
+import org.example.maridone.enums.EmploymentStatus;
 import org.example.maridone.enums.Position;
 import org.example.maridone.enums.Status;
 import org.example.maridone.exception.conflict.OverlappingDatesException;
 import org.example.maridone.exception.notfound.AccountNotFoundException;
 import org.example.maridone.exception.unauthorized.InvalidActionException;
 import org.example.maridone.exception.unauthorized.OvertimeException;
+import org.example.maridone.notification.NotificationMessageFormatter;
 import org.example.maridone.notification.NotificationService;
 import org.example.maridone.overtime.dto.OvertimeRequestDto;
 import org.example.maridone.overtime.dto.OvertimeResponseDto;
@@ -168,7 +170,6 @@ public class OvertimeService {
 
     @Transactional
     @ExecutionTime
-    @NotifyRole(message = "An employee cancelled an overtime request.", targetRole = Position.HR)
     public void cancelRequest(Long overtimeId) {
         OvertimeRequest overtimeRequest =  overtimeRequestRepository.findById(overtimeId).orElseThrow(() -> new OvertimeException("Overtime Not Found"));
         if (overtimeRequest.getRequestStatus().equals(Status.APPROVED)) {
@@ -176,10 +177,12 @@ public class OvertimeService {
         }
         overtimeRequest.setRequestStatus(Status.CANCELLED);
         overtimeRequestRepository.save(overtimeRequest);
+        String employeeName = NotificationMessageFormatter.formatEmployeeName(overtimeRequest.getEmployee());
+        String workDate = NotificationMessageFormatter.formatDate(overtimeRequest.getWorkDate());
+        notifyHr("Overtime request from " + employeeName + " for " + workDate + " was cancelled.");
         notifyManager(
                 overtimeRequest.getEmployee(),
-                "Team overtime request from " + overtimeRequest.getEmployee().getFirstName() + " "
-                        + overtimeRequest.getEmployee().getLastName() + " was cancelled."
+                "Team overtime request from " + employeeName + " for " + workDate + " was cancelled."
         );
 
     }
@@ -213,6 +216,13 @@ public class OvertimeService {
             return;
         }
         notificationService.createNotification(manager, message, "HIGH");
+    }
+
+    private void notifyHr(String message) {
+        List<Long> hrEmployeeIds = employeeRepository.findEmployeeIdsByPosition(Position.HR, EmploymentStatus.TERMINATED);
+        for (Long employeeId : hrEmployeeIds) {
+            notificationService.createNotification(employeeRepository.getReferenceById(employeeId), message, "HIGH");
+        }
     }
 
     private void validateRequestWindow(OvertimeRequestDto requestDto) {
