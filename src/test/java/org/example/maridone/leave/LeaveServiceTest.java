@@ -14,6 +14,7 @@ import org.example.maridone.core.user.UserAccountRepository;
 import org.example.maridone.config.PayrollConfig;
 import org.example.maridone.enums.Directories;
 import org.example.maridone.enums.LeaveType;
+import org.example.maridone.enums.EmploymentStatus;
 import org.example.maridone.enums.Position;
 import org.example.maridone.enums.Status;
 import org.example.maridone.core.user.UserAccount;
@@ -25,6 +26,7 @@ import org.example.maridone.leave.dto.LeaveResponseDto;
 import org.example.maridone.leave.dto.LeaveRequestDto;
 import org.example.maridone.leave.request.LeaveRequest;
 import org.example.maridone.leave.request.LeaveRequestRepository;
+import org.example.maridone.notification.NotificationService;
 import org.example.maridone.schedule.shift.TemplateShiftRepository;
 import org.example.maridone.schedule.shift.TemplateShiftSchedule;
 import org.junit.jupiter.api.Assertions;
@@ -34,6 +36,7 @@ import static org.mockito.ArgumentMatchers.any;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.verify;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
@@ -54,6 +57,7 @@ class LeaveServiceTest {
     @Mock private TemplateShiftRepository templateShiftRepository;
     @Mock private LeaveMapper leaveMapper;
     @Mock private PayrollConfig payrollConfig;
+    @Mock private NotificationService notificationService;
 
     @InjectMocks
     private LeaveService leaveService;
@@ -153,6 +157,48 @@ class LeaveServiceTest {
         Assertions.assertFalse(unpaid.getPaid());
         Assertions.assertEquals(LocalDateTime.of(2026, 3, 25, 13, 0), unpaid.getStartDateTime());
         Assertions.assertEquals(LocalDateTime.of(2026, 3, 27, 17, 0), unpaid.getEndDateTime());
+    }
+
+    @Test
+    void createLeaveRequest_ShouldNotifyManager_WhenEmployeeHasManager() {
+        Long empId = 1L;
+        LeaveRequestDto dto = new LeaveRequestDto();
+        dto.setStartDateTime(LocalDate.of(2026, 3, 23).atTime(8, 0));
+        dto.setEndDateTime(LocalDate.of(2026, 3, 23).atTime(17, 0));
+        dto.setReason("Vacation");
+        dto.setLeaveType(LeaveType.VACATION_LEAVE);
+
+        Employee manager = new Employee();
+        manager.setFirstName("Adrian");
+        manager.setLastName("Flores");
+        manager.setPosition(Position.MANAGER);
+        manager.setEmploymentStatus(EmploymentStatus.REGULAR);
+        UserAccount managerAccount = new UserAccount();
+        managerAccount.setUsername("manager1");
+        manager.setUserAccount(managerAccount);
+
+        Employee emp = new Employee();
+        ReflectionTestUtils.setField(emp, "employeeId", empId);
+        emp.setFirstName("Richard");
+        emp.setLastName("Moore");
+        emp.setManager(manager);
+
+        LeaveBalance leaveBalance = new LeaveBalance();
+        leaveBalance.setBalanceHours(BigDecimal.valueOf(9));
+
+        when(employeeRepository.findById(empId)).thenReturn(Optional.of(emp));
+        when(leaveBalanceRepository.findByLeaveTypeAndEmployee_EmployeeId(LeaveType.VACATION_LEAVE, empId))
+                .thenReturn(Optional.of(leaveBalance));
+        when(templateShiftRepository.findAllByEmployeeId(empId)).thenReturn(List.of(
+                createSchedule(DayOfWeek.MONDAY, LocalTime.of(8, 0), LocalTime.of(17, 0), emp)
+        ));
+
+        leaveService.createLeaveRequest(dto, empId, null);
+
+        verify(notificationService).createNotification(
+                manager,
+                "New team leave request from Richard Moore (2026-03-23 to 2026-03-23)",
+                "HIGH");
     }
 
     private TemplateShiftSchedule createSchedule(DayOfWeek day, LocalTime start, LocalTime end, Employee employee) {

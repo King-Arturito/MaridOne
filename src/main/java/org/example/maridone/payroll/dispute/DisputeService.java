@@ -66,7 +66,11 @@ public class DisputeService {
 
     @Transactional
     @ExecutionTime
-    @NotifyRole(message = "Dispute Requested", targetRole = Position.HR, importance = "HIGH")
+    @NotifyRole(
+            message = "New payroll dispute from #{#result.payrollItem.employee.firstName} "
+                    + "#{#result.payrollItem.employee.lastName}: #{#result.subject}",
+            targetRole = Position.HR,
+            importance = "HIGH")
     public DisputeRequest createDisputeRequest(Long itemId, DisputeRequestDto payload, MultipartFile file) {
         PayrollItem item = payrollItemRepository
                 .findByItemIdAndPayrollRun_PayrollStatus(itemId, PayrollStatus.POSTED)
@@ -98,7 +102,10 @@ public class DisputeService {
 
     @Transactional
     @ExecutionTime
-    @Notify(message = "Your Dispute Request has been  #{#result.status}", targetEmployee = "#result.employeeId",importance = "HIGH")
+    @Notify(
+            message = "Your dispute about #{#result.subject} was #{#result.status}",
+            targetEmployee = "#result.employeeId",
+            importance = "HIGH")
     public DisputeResponseDto updateDisputeStatus(Long disputeId, DisputeActionDto payload, String approverUsername) {
         DisputeRequest disputeRequest = disputeRepository.findByIdWithEmployee(disputeId)
                 .orElseThrow(() -> new RequestNotFoundException("Dispute Request",disputeId));
@@ -177,7 +184,7 @@ public class DisputeService {
 
     @ExecutionTime
     @Transactional
-    @NotifyRole(message = "Dispute Request Cancelled.", targetRole = Position.HR)
+    @NotifyRole(message = "An employee cancelled a dispute request.", targetRole = Position.HR)
     public void cancelRequest(Long disputeId) {
         DisputeRequest disputeRequest = disputeRepository.findById(disputeId).orElseThrow(() -> new RequestNotFoundException("Dispute Request",disputeId));
         if (disputeRequest.getStatus().equals(Status.APPROVED)) {

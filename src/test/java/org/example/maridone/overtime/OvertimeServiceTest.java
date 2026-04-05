@@ -11,10 +11,12 @@ import org.example.maridone.core.employee.Employee;
 import org.example.maridone.core.employee.EmployeeRepository;
 import org.example.maridone.core.user.UserAccount;
 import org.example.maridone.core.user.UserAccountRepository;
+import org.example.maridone.enums.EmploymentStatus;
 import org.example.maridone.enums.Position;
 import org.example.maridone.enums.Status;
 import org.example.maridone.exception.unauthorized.InvalidActionException;
 import org.example.maridone.exception.unauthorized.OvertimeException;
+import org.example.maridone.notification.NotificationService;
 import org.example.maridone.overtime.dto.OvertimeRequestDto;
 import org.example.maridone.overtime.dto.OvertimeResponseDto;
 import org.example.maridone.overtime.dto.OvertimeUpdateDto;
@@ -28,6 +30,7 @@ import static org.mockito.ArgumentMatchers.any;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.verify;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
@@ -44,6 +47,7 @@ class OvertimeServiceTest {
     @Mock private UserAccountRepository userAccountRepository;
     @Mock private TemplateShiftRepository templateShiftRepository;
     @Mock private DefaultConfig defaultConfig;
+    @Mock private NotificationService notificationService;
 
     @InjectMocks
     private OvertimeService overtimeService;
@@ -98,6 +102,50 @@ class OvertimeServiceTest {
         when(templateShiftRepository.findAllByEmployeeId(9L)).thenReturn(java.util.List.of(shift));
 
         Assertions.assertThrows(OvertimeException.class, () -> overtimeService.createOvertimeRequest(dto, username));
+    }
+
+    @Test
+    void createOvertimeRequest_ShouldNotifyManager_WhenEmployeeHasManager() {
+        String username = "niko123";
+        ZoneId zoneId = ZoneId.of("Asia/Manila");
+        LocalDate workDate = LocalDate.now(zoneId).plusDays(1);
+        OvertimeRequestDto dto = new OvertimeRequestDto();
+        dto.setWorkDate(workDate);
+        dto.setStartTime(LocalDateTime.of(workDate, LocalTime.of(17, 0)));
+        dto.setEndTime(LocalDateTime.of(workDate, LocalTime.of(19, 0)));
+
+        Employee manager = new Employee();
+        manager.setFirstName("Adrian");
+        manager.setLastName("Flores");
+        manager.setPosition(Position.MANAGER);
+        manager.setEmploymentStatus(EmploymentStatus.REGULAR);
+        UserAccount managerAccount = new UserAccount();
+        managerAccount.setUsername("manager1");
+        manager.setUserAccount(managerAccount);
+
+        OvertimeRequest request = new OvertimeRequest();
+        Employee emp = new Employee();
+        ReflectionTestUtils.setField(emp, "employeeId", 9L);
+        emp.setFirstName("Niko");
+        emp.setLastName("Santos");
+        emp.setManager(manager);
+        TemplateShiftSchedule shift = new TemplateShiftSchedule();
+        shift.setDayOfWeek(workDate.getDayOfWeek());
+        shift.setStartTime(LocalTime.of(8, 0));
+        shift.setEndTime(LocalTime.of(17, 0));
+
+        when(overtimeMapper.toOvertimeRequest(dto)).thenReturn(request);
+        when(employeeRepository.findOne(any(Specification.class))).thenReturn(Optional.of(emp));
+        when(defaultConfig.getTimeZone()).thenReturn(zoneId);
+        when(templateShiftRepository.findAllByEmployeeId(9L)).thenReturn(java.util.List.of(shift));
+        when(overtimeRequestRepository.save(any(OvertimeRequest.class))).thenReturn(request);
+
+        overtimeService.createOvertimeRequest(dto, username);
+
+        verify(notificationService).createNotification(
+                manager,
+                "New team overtime request from Niko Santos for " + workDate,
+                "HIGH");
     }
 
     @Test

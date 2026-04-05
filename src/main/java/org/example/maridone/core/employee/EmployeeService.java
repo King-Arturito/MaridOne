@@ -15,8 +15,11 @@ import org.example.maridone.exception.notfound.EmployeeNotFoundException;
 import org.example.maridone.exception.unauthorized.InvalidActionException;
 import org.example.maridone.enums.EmploymentStatus;
 import org.example.maridone.enums.ExemptionStatus;
+import org.example.maridone.enums.LeaveType;
 import org.example.maridone.enums.ManagerTitle;
 import org.example.maridone.enums.Position;
+import org.example.maridone.leave.balance.LeaveBalance;
+import org.example.maridone.leave.balance.LeaveBalanceRepository;
 import org.example.maridone.schedule.dto.ShiftResponseDto;
 import org.example.maridone.schedule.mapper.ScheduleMapper;
 import org.example.maridone.schedule.shift.TemplateShiftRepository;
@@ -43,19 +46,22 @@ public class EmployeeService {
     private final TemplateShiftRepository templateShiftRepository;
     private final ScheduleMapper scheduleMapper;
     private final PayrollConfig payrollConfig;
+    private final LeaveBalanceRepository leaveBalanceRepository;
 
     EmployeeService(EmployeeRepository employeeRepository,
                     CoreMapper coreMapper,
                     UserAccountRepository userAccountRepository,
                     TemplateShiftRepository templateShiftRepository,
                     ScheduleMapper scheduleMapper,
-                    PayrollConfig payrollConfig) {
+                    PayrollConfig payrollConfig,
+                    LeaveBalanceRepository leaveBalanceRepository) {
         this.employeeRepository = employeeRepository;
         this.coreMapper = coreMapper;
         this.userAccountRepository = userAccountRepository;
         this.templateShiftRepository = templateShiftRepository;
         this.scheduleMapper = scheduleMapper;
         this.payrollConfig = payrollConfig;
+        this.leaveBalanceRepository = leaveBalanceRepository;
     }
 
 
@@ -72,6 +78,7 @@ public class EmployeeService {
         employee.setYearlySalary(Optional.ofNullable(employee.getYearlySalary()).orElse(BigDecimal.ZERO));
         employee.setManager(resolveManager(employeeRequestDto.getManagerId(), null));
         employeeRepository.save(employee);
+        seedDefaultLeaveBalances(employee);
         return toEmployeeResponse(employee);
     }
 
@@ -304,6 +311,29 @@ public class EmployeeService {
         }
         return employeeRepository.findById(managerId)
                 .orElseThrow(() -> new EmployeeNotFoundException(managerId));
+    }
+
+    private void seedDefaultLeaveBalances(Employee employee) {
+        if (employee == null || employee.getEmployeeId() == null) {
+            return;
+        }
+
+        if (employee.getEmploymentStatus() == EmploymentStatus.TERMINATED
+                || employee.getEmploymentStatus() == EmploymentStatus.SUSPENDED) {
+            return;
+        }
+
+        LeaveBalance sickLeave = new LeaveBalance();
+        sickLeave.setEmployee(employee);
+        sickLeave.setLeaveType(LeaveType.SICK_LEAVE);
+        sickLeave.setBalanceHours(payrollConfig.getSickLeaveHours());
+
+        LeaveBalance vacationLeave = new LeaveBalance();
+        vacationLeave.setEmployee(employee);
+        vacationLeave.setLeaveType(LeaveType.VACATION_LEAVE);
+        vacationLeave.setBalanceHours(payrollConfig.getVacationLeaveHours());
+
+        leaveBalanceRepository.saveAll(List.of(sickLeave, vacationLeave));
     }
 
     private Long resolveCurrentEmployeeId(String username) {

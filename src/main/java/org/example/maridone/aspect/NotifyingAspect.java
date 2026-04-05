@@ -2,7 +2,6 @@ package org.example.maridone.aspect;
 
 import org.aspectj.lang.JoinPoint;
 import org.aspectj.lang.ProceedingJoinPoint;
-import org.aspectj.lang.annotation.AfterReturning;
 import org.aspectj.lang.annotation.Around;
 import org.aspectj.lang.annotation.Aspect;
 import org.aspectj.lang.annotation.Pointcut;
@@ -17,6 +16,8 @@ import org.example.maridone.exception.notfound.EmployeeNotFoundException;
 import org.example.maridone.notification.Notification;
 import org.example.maridone.notification.NotificationRepository;
 import org.example.maridone.payroll.run.PayrollItemRepository;
+import org.example.maridone.payroll.run.PayrollRun;
+import org.example.maridone.payroll.run.PayrollRunRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.expression.EvaluationContext;
@@ -28,6 +29,8 @@ import org.springframework.stereotype.Component;
 import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.Matcher;
@@ -41,14 +44,18 @@ public class NotifyingAspect {
     private final NotificationRepository notificationRepository;
     private final EmployeeRepository employeeRepository;
     private final PayrollItemRepository payrollItemRepository;
+    private final PayrollRunRepository payrollRunRepository;
 
     private final ExpressionParser spelParser = new SpelExpressionParser();
+    private static final DateTimeFormatter NOTIFICATION_DATE_FORMATTER = DateTimeFormatter.ofPattern("MMMM d, uuuu");
 
     public NotifyingAspect(NotificationRepository notificationRepository,
                            PayrollItemRepository payrollItemRepository,
+                           PayrollRunRepository payrollRunRepository,
                            EmployeeRepository employeeRepository) {
         this.notificationRepository  = notificationRepository;
         this.payrollItemRepository = payrollItemRepository;
+        this.payrollRunRepository = payrollRunRepository;
         this.employeeRepository = employeeRepository;
     }
 
@@ -61,12 +68,16 @@ public class NotifyingAspect {
     @Pointcut("@annotation(org.example.maridone.annotation.NotifyPayRun) && args(payId,..)")
     public void notifyPayRun(Long payId) {}
 
-    @AfterReturning("notifyRoleBulk()")
-    public void addNotifications(JoinPoint joinPoint) {
+    @Around("notifyRoleBulk()")
+    public Object addNotifications(ProceedingJoinPoint joinPoint) throws Throwable {
+        Object result = joinPoint.proceed();
+
         List<Notification> notifications = new ArrayList<>();
         MethodSignature signature = (MethodSignature) joinPoint.getSignature();
         Method method = signature.getMethod();
         NotifyRole notify = method.getAnnotation(NotifyRole.class);
+        EvaluationContext context = buildContext(joinPoint, result);
+        String message = resolveMessage(notify.message(), context);
         List<Long> employeeIds = employeeRepository.findEmployeeIdsByPosition(notify.targetRole(), EmploymentStatus.TERMINATED);
 
         for (Long employeeId : employeeIds) {
@@ -75,12 +86,13 @@ public class NotifyingAspect {
             notification.setCreatedAt(Instant.now());
             notification.setReadStatus(false);
             notification.setImportance(notify.importance());
-            notification.setMessage(notify.message());
+            notification.setMessage(message);
             notification.setEmployee(emp);
             notifications.add(notification);
         }
         notificationRepository.saveAll(notifications);
-        logger.info("Notified: {}", notify.targetRole());
+        logger.info("Notified: {} | Message: {}", notify.targetRole(), message);
+        return result;
     }
 
     @Around("notifyUser()")
@@ -123,7 +135,9 @@ public class NotifyingAspect {
         List<Long> empIds = payrollItemRepository.findEmployeeIdsByPayrollRun(payId);
 
         Instant createdAt = Instant.now();
-        String message = "Pay Run Posted";
+        String message = payrollRunRepository.findById(payId)
+                .map(this::formatPayRunNotification)
+                .orElse("Your payslip is ready.");
         for (Long employeeId : empIds) {
             Employee emp = employeeRepository.getReferenceById(employeeId);
             Notification notification = new Notification();
@@ -191,10 +205,25 @@ public class NotifyingAspect {
         while (matcher.find()) {
             String expr = matcher.group(1);
             Object value = spelParser.parseExpression(expr).getValue(context);
-            matcher.appendReplacement(result, value != null ? value.toString() : "");
+            matcher.appendReplacement(result, Matcher.quoteReplacement(value != null ? value.toString() : ""));
         }
 
         matcher.appendTail(result);
         return result.toString();
+    }
+
+    private String formatPayRunNotification(PayrollRun payrollRun) {
+        LocalDate periodStart = payrollRun.getPeriodStart();
+        LocalDate periodEnd = payrollRun.getPeriodEnd();
+
+        if (periodStart == null || periodEnd == null) {
+            return "Your payslip is ready.";
+        }
+
+        return "Your payslip for "
+                + periodStart.format(NOTIFICATION_DATE_FORMATTER)
+                + " to "
+                + periodEnd.format(NOTIFICATION_DATE_FORMATTER)
+                + " is ready.";
     }
 }

@@ -24,6 +24,7 @@ import org.example.maridone.leave.dto.*;
 import org.example.maridone.leave.request.LeaveRequest;
 import org.example.maridone.leave.request.LeaveRequestRepository;
 import org.example.maridone.leave.spec.LeaveSpecs;
+import org.example.maridone.notification.NotificationService;
 import org.example.maridone.schedule.shift.TemplateShiftRepository;
 import org.example.maridone.schedule.shift.TemplateShiftSchedule;
 import org.springframework.data.domain.Page;
@@ -62,6 +63,7 @@ public class LeaveService {
     private final LeaveMapper leaveMapper;
     private final DocumentService documentService;
     private final PayrollConfig payrollConfig;
+    private final NotificationService notificationService;
 
     public LeaveService(
             LeaveBalanceRepository leaveBalanceRepository,
@@ -72,7 +74,8 @@ public class LeaveService {
             DocumentPathRepository documentPathRepository,
             LeaveMapper leaveMapper,
             DocumentService documentService,
-            PayrollConfig payrollConfig) {
+            PayrollConfig payrollConfig,
+            NotificationService notificationService) {
         this.leaveBalanceRepository = leaveBalanceRepository;
         this.leaveRequestRepository = leaveRequestRepository;
         this.employeeRepository = employeeRepository;
@@ -82,6 +85,7 @@ public class LeaveService {
         this.leaveMapper = leaveMapper;
         this.documentService = documentService;
         this.payrollConfig = payrollConfig;
+        this.notificationService = notificationService;
     }
 
     @Transactional
@@ -136,7 +140,7 @@ public class LeaveService {
     @ExecutionTime
     @Transactional
     @AuditLog
-    @NotifyRole(message = "Leave Request has been cancelled", targetRole = Position.HR)
+    @NotifyRole(message = "An employee cancelled a leave request.", targetRole = Position.HR)
     public void cancelRequest(Long requestId) {
         LeaveRequest request = leaveRequestRepository.findById(requestId).orElseThrow(() -> new RequestNotFoundException("Leave Request", requestId));
         if (request.getRequestStatus().equals(Status.APPROVED)) {
@@ -209,7 +213,11 @@ public class LeaveService {
 
     @Transactional
     @ExecutionTime
-    @NotifyRole(message = "Leave Request Pending", targetRole = Position.HR, importance = "HIGH")
+    @NotifyRole(
+            message = "New leave request from #{#result[0].employee.firstName} #{#result[0].employee.lastName} "
+                    + "(#{#result[0].startDateTime.toLocalDate()} to #{#result[0].endDateTime.toLocalDate()})",
+            targetRole = Position.HR,
+            importance = "HIGH")
     public List<LeaveRequest> createLeaveRequest(LeaveRequestDto payload, Long empId, MultipartFile file) {
         Employee emp =  employeeRepository.findById(empId).orElseThrow(() -> new EmployeeNotFoundException(empId));
         List<LeaveRequest> requests = new ArrayList<>();
@@ -275,12 +283,16 @@ public class LeaveService {
             documentService.upload(file, emp.getUserAccount().getUsername(), Directories.LEAVE_REQUEST.getDisplayName());
         }
         leaveRequestRepository.saveAll(requests);
+        notifyManagerAboutLeaveRequest(emp, payload);
         return requests;
     }
 
     @Transactional
     @ExecutionTime
-    @Notify(message = "Your Leave Request has been #{#result.requestStatus}", importance = "HIGH", targetEmployee = "#result.employee")
+    @Notify(
+            message = "Your leave request for #{#result.startDateTime.toLocalDate()} was #{#result.requestStatus}",
+            importance = "HIGH",
+            targetEmployee = "#result.employee")
     public LeaveRequest updateLeaveRequest(LeaveRequestDto payload, Long requestId) {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         UserAccount user = userAccountRepository.findByUsername(authentication.getName()).orElseThrow(
@@ -464,6 +476,17 @@ public class LeaveService {
         if (!handledEmployeeIds.contains(requestEmpId)) {
             throw new InvalidActionException("Managers can only review leave requests from their own team.");
         }
+    }
+
+    private void notifyManagerAboutLeaveRequest(Employee employee, LeaveRequestDto payload) {
+        Employee manager = employee.getManager();
+        if (manager == null || manager.getPosition() != Position.MANAGER) {
+            return;
+        }
+
+        String message = "New team leave request from " + employee.getFirstName() + " " + employee.getLastName()
+                + " (" + payload.getStartDateTime().toLocalDate() + " to " + payload.getEndDateTime().toLocalDate() + ")";
+        notificationService.createNotification(manager, message, "HIGH");
     }
 
 

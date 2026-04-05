@@ -16,6 +16,7 @@ import org.example.maridone.exception.conflict.OverlappingDatesException;
 import org.example.maridone.exception.notfound.AccountNotFoundException;
 import org.example.maridone.exception.unauthorized.InvalidActionException;
 import org.example.maridone.exception.unauthorized.OvertimeException;
+import org.example.maridone.notification.NotificationService;
 import org.example.maridone.overtime.dto.OvertimeRequestDto;
 import org.example.maridone.overtime.dto.OvertimeResponseDto;
 import org.example.maridone.overtime.dto.OvertimeUpdateDto;
@@ -44,24 +45,31 @@ public class OvertimeService {
     private final UserAccountRepository userAccountRepository;
     private final TemplateShiftRepository templateShiftRepository;
     private final DefaultConfig defaultConfig;
+    private final NotificationService notificationService;
 
     public OvertimeService(OvertimeRequestRepository overtimeRequestRepository,
                            OvertimeMapper overtimeMapper,
                            EmployeeRepository employeeRepository,
                            UserAccountRepository userAccountRepository,
                            TemplateShiftRepository templateShiftRepository,
-                           DefaultConfig defaultConfig) {
+                           DefaultConfig defaultConfig,
+                           NotificationService notificationService) {
         this.overtimeRequestRepository = overtimeRequestRepository;
         this.overtimeMapper = overtimeMapper;
         this.employeeRepository = employeeRepository;
         this.userAccountRepository = userAccountRepository;
         this.templateShiftRepository = templateShiftRepository;
         this.defaultConfig = defaultConfig;
+        this.notificationService = notificationService;
     }
 
     @Transactional
     @ExecutionTime
-    @NotifyRole(message = "Overtime Requested", importance = "HIGH", targetRole = Position.HR)
+    @NotifyRole(
+            message = "New overtime request from #{#result.employee.firstName} #{#result.employee.lastName} "
+                    + "for #{#result.workDate}",
+            importance = "HIGH",
+            targetRole = Position.HR)
     public OvertimeRequest createOvertimeRequest(OvertimeRequestDto requestDto, String username) {
         Specification<Employee> spec = Specification.allOf(
                 EmployeeSpecs.hasUserAccount(username)
@@ -82,12 +90,17 @@ public class OvertimeService {
         OvertimeRequest request = overtimeMapper.toOvertimeRequest(requestDto);
         request.setEmployee(emp);
 
-        return overtimeRequestRepository.save(request);
+        OvertimeRequest savedRequest = overtimeRequestRepository.save(request);
+        notifyManagerAboutOvertimeRequest(emp, requestDto);
+        return savedRequest;
     }
 
     @Transactional
     @ExecutionTime
-    @Notify(message = "Your Overtime Request has been #{#result.requestStatus}", importance = "HIGH", targetEmployee = "#result.employeeId")
+    @Notify(
+            message = "Your overtime request for #{#result.workDate} was #{#result.requestStatus}",
+            importance = "HIGH",
+            targetEmployee = "#result.employeeId")
     public OvertimeResponseDto updateOvertimeRequest(OvertimeUpdateDto updateDto, String approverUsername) {
         OvertimeRequest req = overtimeRequestRepository.findById(updateDto.getOvertimeId()).orElseThrow(() -> new OvertimeException("Overtime Not Found"));
         if (req.getRequestStatus() != Status.PENDING) {
@@ -151,7 +164,7 @@ public class OvertimeService {
 
     @Transactional
     @ExecutionTime
-    @NotifyRole(message = "Overtime Request Cancelled.", targetRole = Position.HR)
+    @NotifyRole(message = "An employee cancelled an overtime request.", targetRole = Position.HR)
     public void cancelRequest(Long overtimeId) {
         OvertimeRequest overtimeRequest =  overtimeRequestRepository.findById(overtimeId).orElseThrow(() -> new OvertimeException("Overtime Not Found"));
         if (overtimeRequest.getRequestStatus().equals(Status.APPROVED)) {
@@ -183,6 +196,17 @@ public class OvertimeService {
         if (!handledEmployeeIds.contains(requestEmployeeId)) {
             throw new InvalidActionException("Managers can only review overtime requests from their own team.");
         }
+    }
+
+    private void notifyManagerAboutOvertimeRequest(Employee employee, OvertimeRequestDto requestDto) {
+        Employee manager = employee.getManager();
+        if (manager == null || manager.getPosition() != Position.MANAGER) {
+            return;
+        }
+
+        String message = "New team overtime request from " + employee.getFirstName() + " " + employee.getLastName()
+                + " for " + requestDto.getWorkDate();
+        notificationService.createNotification(manager, message, "HIGH");
     }
 
     private void validateRequestWindow(OvertimeRequestDto requestDto) {

@@ -31,7 +31,7 @@ public class LeaveController {
     }
 
     @GetMapping("/balance/{empId}")
-    @PreAuthorize("@userCheck.isSelf(#empId, authentication.getName())")
+    @PreAuthorize("hasRole('HR') or @userCheck.isSelf(#empId, authentication.getName())")
     public List<BalanceResponseDto> getBalance(@PathVariable Long empId){
         return leaveService.getBalance(empId);
     }

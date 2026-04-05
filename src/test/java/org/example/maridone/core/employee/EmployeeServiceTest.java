@@ -2,6 +2,7 @@ package org.example.maridone.core.employee;
 
 import java.util.Optional;
 import java.util.List;
+import java.util.ArrayList;
 import java.time.Duration;
 
 import org.example.maridone.config.PayrollConfig;
@@ -11,10 +12,13 @@ import org.example.maridone.core.mapper.CoreMapper;
 import org.example.maridone.core.user.UserAccountRepository;
 import org.example.maridone.enums.EmploymentStatus;
 import org.example.maridone.enums.ExemptionStatus;
+import org.example.maridone.enums.LeaveType;
 import org.example.maridone.enums.ManagerTitle;
 import org.example.maridone.enums.Position;
 import org.example.maridone.exception.notfound.EmployeeNotFoundException;
 import org.example.maridone.exception.unauthorized.InvalidActionException;
+import org.example.maridone.leave.balance.LeaveBalance;
+import org.example.maridone.leave.balance.LeaveBalanceRepository;
 import org.example.maridone.schedule.mapper.ScheduleMapper;
 import org.example.maridone.schedule.shift.TemplateShiftRepository;
 import org.junit.jupiter.api.Assertions;
@@ -28,6 +32,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.argThat;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
@@ -51,6 +56,9 @@ class EmployeeServiceTest {
 
     @Mock
     private PayrollConfig payrollConfig;
+
+    @Mock
+    private LeaveBalanceRepository leaveBalanceRepository;
 
     @InjectMocks
     private EmployeeService employeeService;
@@ -83,6 +91,8 @@ class EmployeeServiceTest {
         when(employeeRepository.save(any(Employee.class))).thenReturn(employee);
         when(coreMapper.toEmployeeResponse(any(Employee.class))).thenReturn(responseDto);
         when(userAccountRepository.findUsernameByEmployeeEmployeeId(anyLong())).thenReturn(Optional.empty());
+        when(payrollConfig.getSickLeaveHours()).thenReturn(java.math.BigDecimal.valueOf(120));
+        when(payrollConfig.getVacationLeaveHours()).thenReturn(java.math.BigDecimal.valueOf(120));
 
         EmployeeResponseDto result = employeeService.createEmployee(requestDto);
 
@@ -92,6 +102,16 @@ class EmployeeServiceTest {
         Assertions.assertNotNull(employee.getEmploymentDateStart());
         Assertions.assertEquals(ExemptionStatus.NON_EXEMPT, employee.getExemptionStatus());
         verify(employeeRepository).save(any(Employee.class));
+        verify(leaveBalanceRepository).saveAll(argThat(balances -> {
+                    List<LeaveBalance> collected = new ArrayList<>();
+                    balances.forEach(collected::add);
+                    return collected.size() == 2 &&
+                            collected.stream().map(LeaveBalance::getLeaveType).toList().containsAll(List.of(
+                                LeaveType.SICK_LEAVE,
+                                LeaveType.VACATION_LEAVE
+                        ));
+                }
+        ));
     }
 
     @Test
@@ -148,6 +168,34 @@ class EmployeeServiceTest {
 
         Assertions.assertEquals("Phone number must be exactly 11 digits.", error.getMessage());
         verify(employeeRepository, never()).save(any(Employee.class));
+    }
+
+    @Test
+    void createEmployee_ShouldSkipDefaultLeaveBalances_ForSuspendedEmployee() {
+        stubScheduleDependencies();
+        EmployeeRequestDto requestDto = new EmployeeRequestDto();
+
+        Employee employee = new Employee();
+        ReflectionTestUtils.setField(employee, "employeeId", 8L);
+        employee.setFirstName("Lucas");
+        employee.setLastName("Suspended");
+        employee.setEmail("lucas@example.com");
+        employee.setPhoneNumber("09171234567");
+        employee.setBirthDate(java.time.LocalDate.of(2000, 1, 1));
+        employee.setPosition(Position.EMPLOYEE);
+        employee.setEmploymentStatus(EmploymentStatus.SUSPENDED);
+
+        EmployeeResponseDto responseDto = new EmployeeResponseDto();
+        responseDto.setId(8L);
+
+        when(coreMapper.toEmployee(any(EmployeeRequestDto.class))).thenReturn(employee);
+        when(employeeRepository.save(any(Employee.class))).thenReturn(employee);
+        when(coreMapper.toEmployeeResponse(any(Employee.class))).thenReturn(responseDto);
+        when(userAccountRepository.findUsernameByEmployeeEmployeeId(anyLong())).thenReturn(Optional.empty());
+
+        employeeService.createEmployee(requestDto);
+
+        verify(leaveBalanceRepository, never()).saveAll(any());
     }
 
     @Test

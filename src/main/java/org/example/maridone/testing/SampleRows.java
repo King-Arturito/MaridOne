@@ -301,16 +301,28 @@ public class SampleRows {
     private void createAndSaveNotifications(List<Employee> employees) {
         List<Notification> notifications = new ArrayList<>();
         ZonedDateTime base = ZonedDateTime.of(2026, 2, 1, 8, 0, 0, 0, SEED_TIME_ZONE);
+        List<String> seededMessages = List.of(
+                "Your payslip for January 1, 2026 to January 15, 2026 is ready.",
+                "Leave update: your request is awaiting review.",
+                "Overtime update: your request has been received.",
+                "Attendance reminder: please review your latest time logs.",
+                "Training assigned: the employee handbook is ready for review.",
+                "Calendar update: a new company event was added.",
+                "Profile reminder: review your contact details.",
+                "Payroll reminder: check your latest deductions summary.",
+                "Security reminder: update your password regularly.",
+                "HR update: a new company announcement is available."
+        );
 
         for (Employee employee : employees) {
-            for (int i = 1; i <= 10; i++) {
+            for (int i = 0; i < seededMessages.size(); i++) {
                 Notification notification = new Notification();
-                notification.setMessage("System Alert #" + i + " for employee #" + employee.getEmployeeId());
-                notification.setImportance(i <= 5 ? "HIGH" : "LOW");
-                notification.setReadStatus(i <= 3);
+                notification.setMessage(seededMessages.get(i));
+                notification.setImportance(i < 5 ? "HIGH" : "LOW");
+                notification.setReadStatus(i < 3);
                 notification.setCreatedAt(
                         base.plusHours((employee.getEmployeeId() - 1) * 2L)
-                                .plusHours(i * 6L)
+                                .plusHours((i + 1L) * 6L)
                                 .toInstant()
                 );
                 notification.setEmployee(employee);
