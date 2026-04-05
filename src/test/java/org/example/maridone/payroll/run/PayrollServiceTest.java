@@ -237,6 +237,31 @@ class PayrollServiceTest {
     }
 
     @Test
+    void processPayrollExempt_UnpaidOverlappingLeave_ShouldStillCreateAbsentDeduction() {
+        LocalDate workDate = LocalDate.of(2026, 3, 21);
+        PayrollRun run = buildSingleDayRun(workDate);
+        Employee employee = buildEmployee(11L, ExemptionStatus.EXEMPT, "624000.00");
+        DailyShiftSchedule dailyShift = buildDailyShift(employee, workDate, LocalTime.of(8, 0), LocalTime.of(17, 0));
+        LeaveRequest unpaidLeave = buildLeave(employee, workDate.atTime(8, 0), workDate.atTime(17, 0), false);
+
+        when(defaultConfig.getTimeZone()).thenReturn(ZONE);
+        when(attendanceLogRepository.findByEmployeeIdInAndTimestampBetween(anyList(), any(Instant.class), any(Instant.class), any()))
+                .thenReturn(List.of());
+        when(dailyShiftRepository.findAllByEmployeeIdsAndPeriod(anyList(), any(LocalDateTime.class), any(LocalDateTime.class)))
+                .thenReturn(List.of(dailyShift));
+        when(leaveRequestRepository.findApprovedLeavesForPeriod(anyList(), any(LocalDateTime.class), any(LocalDateTime.class)))
+                .thenReturn(List.of(unpaidLeave));
+        when(holidayService.getHolidayLookup(any(LocalDate.class), any(LocalDate.class)))
+                .thenReturn(HolidayLookup.empty());
+
+        List<PayrollItem> items = payrollService.processPayrollExempt(run, List.of(employee));
+
+        Assertions.assertEquals(1, items.size());
+        Assertions.assertTrue(items.get(0).getDeductions().stream()
+                .anyMatch(line -> line.getDeductionType() == DeductionType.ABSENT_DEDUCTION));
+    }
+
+    @Test
     void processPayrollNonExempt_ApprovedOvertimeWithoutAttendanceOverlap_ShouldNotCreateOvertimeEarnings() {
         LocalDate workDate = LocalDate.of(2026, 3, 22);
         PayrollRun run = buildSingleDayRun(workDate);
@@ -272,6 +297,34 @@ class PayrollServiceTest {
         PayrollItem item = items.get(0);
         Assertions.assertTrue(item.getEarnings().stream().noneMatch(line -> Boolean.TRUE.equals(line.getOvertime())));
         assertBigDecimalEquals("26000.00", item.getGrossPay());
+    }
+
+    @Test
+    void processPayrollNonExempt_UnpaidLeaveShouldNotSuppressAbsentDeduction() {
+        LocalDate workDate = LocalDate.of(2026, 3, 24);
+        PayrollRun run = buildSingleDayRun(workDate);
+        Employee employee = buildEmployee(12L, ExemptionStatus.NON_EXEMPT, "624000.00");
+        DailyShiftSchedule dailyShift = buildDailyShift(employee, workDate, LocalTime.of(8, 0), LocalTime.of(17, 0));
+        LeaveRequest unpaidLeave = buildLeave(employee, workDate.atTime(8, 0), workDate.atTime(17, 0), false);
+
+        when(defaultConfig.getTimeZone()).thenReturn(ZONE);
+        when(attendanceLogRepository.findByEmployeeIdInAndTimestampBetween(anyList(), any(Instant.class), any(Instant.class), any()))
+                .thenReturn(List.of());
+        when(overtimeRequestRepository.findAll(any(Specification.class)))
+                .thenReturn(List.of());
+        when(dailyShiftRepository.findAllByEmployeeIdsAndPeriod(anyList(), any(LocalDateTime.class), any(LocalDateTime.class)))
+                .thenReturn(List.of(dailyShift));
+        when(leaveRequestRepository.findApprovedLeavesForPeriod(anyList(), any(LocalDateTime.class), any(LocalDateTime.class)))
+                .thenReturn(List.of(unpaidLeave));
+        when(holidayService.getHolidayLookup(any(LocalDate.class), any(LocalDate.class)))
+                .thenReturn(HolidayLookup.empty());
+
+        List<PayrollItem> items = new ArrayList<>();
+        payrollService.processPayrollNonExempt(run, items, List.of(employee));
+
+        Assertions.assertEquals(1, items.size());
+        Assertions.assertTrue(items.get(0).getDeductions().stream()
+                .anyMatch(line -> line.getDeductionType() == DeductionType.ABSENT_DEDUCTION));
     }
 
     @Test
@@ -461,12 +514,22 @@ class PayrollServiceTest {
     }
 
     private LeaveRequest buildLeave(Employee employee, LocalDateTime startDateTime, LocalDateTime endDateTime) {
+        return buildLeave(employee, startDateTime, endDateTime, true);
+    }
+
+    private LeaveRequest buildLeave(
+            Employee employee,
+            LocalDateTime startDateTime,
+            LocalDateTime endDateTime,
+            boolean paid
+    ) {
         LeaveRequest leaveRequest = new LeaveRequest();
         leaveRequest.setEmployee(employee);
         leaveRequest.setStartDateTime(startDateTime);
         leaveRequest.setEndDateTime(endDateTime);
         leaveRequest.setRequestStatus(Status.APPROVED);
         leaveRequest.setReason("Test leave");
+        leaveRequest.setPaid(paid);
         return leaveRequest;
     }
 

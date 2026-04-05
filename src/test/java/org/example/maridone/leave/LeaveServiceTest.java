@@ -160,6 +160,45 @@ class LeaveServiceTest {
     }
 
     @Test
+    void createLeaveRequest_ShouldMoveUnpaidPortionToNextShift_WhenPaidCoverageEndsAtShiftBoundary() {
+        Long empId = 1L;
+        LeaveRequestDto dto = new LeaveRequestDto();
+        dto.setStartDateTime(LocalDateTime.of(2026, 7, 13, 9, 0));
+        dto.setEndDateTime(LocalDateTime.of(2026, 7, 15, 17, 0));
+        dto.setReason("Medical recovery");
+        dto.setLeaveType(LeaveType.SICK_LEAVE);
+
+        Employee emp = new Employee();
+        ReflectionTestUtils.setField(emp, "employeeId", empId);
+
+        LeaveBalance leaveBalance = new LeaveBalance();
+        leaveBalance.setBalanceHours(BigDecimal.valueOf(16));
+
+        when(employeeRepository.findById(empId)).thenReturn(Optional.of(emp));
+        when(leaveBalanceRepository.findByLeaveTypeAndEmployee_EmployeeId(LeaveType.SICK_LEAVE, empId))
+                .thenReturn(Optional.of(leaveBalance));
+        when(templateShiftRepository.findAllByEmployeeId(empId)).thenReturn(List.of(
+                createSchedule(DayOfWeek.MONDAY, LocalTime.of(9, 0), LocalTime.of(17, 0), emp),
+                createSchedule(DayOfWeek.TUESDAY, LocalTime.of(9, 0), LocalTime.of(17, 0), emp),
+                createSchedule(DayOfWeek.WEDNESDAY, LocalTime.of(9, 0), LocalTime.of(17, 0), emp)
+        ));
+
+        List<LeaveRequest> results = leaveService.createLeaveRequest(dto, empId, null);
+
+        Assertions.assertEquals(2, results.size());
+
+        LeaveRequest paid = results.get(0);
+        Assertions.assertTrue(paid.getPaid());
+        Assertions.assertEquals(LocalDateTime.of(2026, 7, 13, 9, 0), paid.getStartDateTime());
+        Assertions.assertEquals(LocalDateTime.of(2026, 7, 14, 17, 0), paid.getEndDateTime());
+
+        LeaveRequest unpaid = results.get(1);
+        Assertions.assertFalse(unpaid.getPaid());
+        Assertions.assertEquals(LocalDateTime.of(2026, 7, 15, 9, 0), unpaid.getStartDateTime());
+        Assertions.assertEquals(LocalDateTime.of(2026, 7, 15, 17, 0), unpaid.getEndDateTime());
+    }
+
+    @Test
     void createLeaveRequest_ShouldNotifyManager_WhenEmployeeHasManager() {
         Long empId = 1L;
         LeaveRequestDto dto = new LeaveRequestDto();

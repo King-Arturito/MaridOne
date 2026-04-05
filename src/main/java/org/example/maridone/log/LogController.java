@@ -61,8 +61,9 @@ public class LogController {
     @PreAuthorize("@userCheck.isSelf(#empId, authentication.getName())")
     public Page<AttendanceLog> getMyAttendance(
             @PathVariable Long empId,
+            AttendanceLogFilter filter,
             @PageableDefault(size = 25, sort = "timestamp", direction = Sort.Direction.DESC) Pageable pageable) {
-        return logService.getAttendance(empId, null, pageable);
+        return logService.getAttendance(empId, filter, pageable);
     }
 
 

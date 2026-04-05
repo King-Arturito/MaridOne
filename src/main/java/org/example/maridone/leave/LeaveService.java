@@ -273,9 +273,10 @@ public class LeaveService {
                 requests.add(paidRequest);
             }
 
-            if (splitPoint.isBefore(payload.getEndDateTime())) {
+            LocalDateTime unpaidStart = resolveUnpaidCoverageStart(splitPoint, leaveWindows, payload.getEndDateTime());
+            if (unpaidStart.isBefore(payload.getEndDateTime())) {
                 LeaveRequest unpaidRequest = createLeave(
-                        splitPoint,
+                        unpaidStart,
                         payload.getEndDateTime(),
                         emp,
                         payload.getLeaveType(),
@@ -467,6 +468,37 @@ public class LeaveService {
         }
 
         return payload.getEndDateTime();
+    }
+
+    private LocalDateTime resolveUnpaidCoverageStart(
+            LocalDateTime splitPoint,
+            List<LeaveWindow> leaveWindows,
+            LocalDateTime fallbackEnd
+    ) {
+        if (splitPoint == null || leaveWindows == null || leaveWindows.isEmpty()) {
+            return splitPoint == null ? fallbackEnd : splitPoint;
+        }
+
+        for (int index = 0; index < leaveWindows.size(); index++) {
+            LeaveWindow window = leaveWindows.get(index);
+
+            if (splitPoint.isBefore(window.startDateTime())) {
+                return window.startDateTime();
+            }
+
+            if (!splitPoint.isBefore(window.startDateTime()) && splitPoint.isBefore(window.endDateTime())) {
+                return splitPoint;
+            }
+
+            if (splitPoint.equals(window.endDateTime())) {
+                if (index + 1 < leaveWindows.size()) {
+                    return leaveWindows.get(index + 1).startDateTime();
+                }
+                return fallbackEnd;
+            }
+        }
+
+        return fallbackEnd;
     }
 
     private List<Long> resolveHandledEmployeeIds(String username) {

@@ -54,6 +54,8 @@ public class SampleRows {
     private static final ZoneId SEED_TIME_ZONE = ZoneId.of("Asia/Manila");
     private static final LocalTime SHIFT_START = LocalTime.of(8, 0);
     private static final LocalTime SHIFT_END = LocalTime.of(17, 0);
+    private static final LocalTime NIGHT_SHIFT_START = LocalTime.of(22, 0);
+    private static final LocalTime NIGHT_SHIFT_END = LocalTime.of(6, 0);
     private static final LocalDate JANUARY_SHIFT_START_DATE = LocalDate.of(2026, 1, 1);
     private static final LocalDate ATTENDANCE_START_DATE = LocalDate.of(2026, 2, 1);
     private static final LocalDate ATTENDANCE_END_DATE = LocalDate.of(2026, 4, 4);
@@ -69,8 +71,12 @@ public class SampleRows {
     private static final int SEEDED_LATE_DAYS_PER_MONTH = 2;
     private static final LocalDate TARGETED_LATE_DATE_ONE = LocalDate.of(2026, 4, 3);
     private static final LocalDate TARGETED_LATE_DATE_TWO = LocalDate.of(2026, 4, 4);
+    private static final LocalDate TARGETED_LATE_EARLY_OUT_DATE = LocalDate.of(2026, 4, 2);
     private static final int MIN_LATE_OFFSET_MINUTES = 18;
     private static final int LATE_OFFSET_VARIATION_MINUTES = 15;
+    private static final String NIGHT_SHIFT_TEST_EMAIL = "nina.soriano@maridone.test";
+    private static final String ZERO_SALARY_NO_ATTENDANCE_TEST_EMAIL = "omar.delosreyes@maridone.test";
+    private static final String LATE_EARLY_OUT_TEST_EMAIL = "richard.moore@maridone.test";
 
     @Autowired
     private EmployeeRepository employeeRepository;
@@ -241,8 +247,8 @@ public class SampleRows {
                 TemplateShiftSchedule schedule = new TemplateShiftSchedule();
                 schedule.setEmployee(employee);
                 schedule.setDayOfWeek(dayOfWeek);
-                schedule.setStartTime(SHIFT_START);
-                schedule.setEndTime(SHIFT_END);
+                schedule.setStartTime(resolveShiftStart(employee));
+                schedule.setEndTime(resolveShiftEnd(employee));
                 schedules.add(schedule);
             }
         }
@@ -341,6 +347,9 @@ public class SampleRows {
             if (employee.getEmploymentStatus() == EmploymentStatus.SUSPENDED) {
                 continue;
             }
+            if (isZeroSalaryNoAttendanceTestEmployee(employee)) {
+                continue;
+            }
 
             List<LocalDate> employeeWorkDates = allWorkDates.stream()
                     .filter(date -> !date.isBefore(employee.getEmploymentDateStart()))
@@ -353,9 +362,7 @@ public class SampleRows {
 
             Set<LocalDate> lateDates = buildLateDates(employee, employeeWorkDates);
             for (LocalDate workDate : employeeWorkDates) {
-                AttendanceVariance variance = lateDates.contains(workDate)
-                        ? AttendanceVariance.LATE_IN
-                        : AttendanceVariance.ON_TIME;
+                AttendanceVariance variance = resolveAttendanceVariance(employee, workDate, lateDates);
                 attendanceLogs.add(createAttendanceLog(employee, workDate, "IN", variance));
                 attendanceLogs.add(createAttendanceLog(employee, workDate, "OUT", variance));
             }
@@ -400,23 +407,42 @@ public class SampleRows {
     }
 
     private AttendanceLog createAttendanceLog(Employee employee, LocalDate workDate, String direction, AttendanceVariance variance) {
-        LocalTime baseTime = "IN".equals(direction) ? SHIFT_START : SHIFT_END;
+        LocalTime shiftStart = resolveShiftStart(employee);
+        LocalTime shiftEnd = resolveShiftEnd(employee);
+        LocalTime baseTime = "IN".equals(direction) ? shiftStart : shiftEnd;
         int offsetMinutes = switch (variance) {
             case ON_TIME -> 0;
             case LATE_IN -> "IN".equals(direction) ? lateOffsetMinutes(employee, workDate) : 0;
             case EARLY_OUT -> "OUT".equals(direction) ? -earlyOutOffsetMinutes(employee, workDate) : 0;
+            case LATE_IN_AND_EARLY_OUT -> "IN".equals(direction)
+                    ? lateOffsetMinutes(employee, workDate)
+                    : -earlyOutOffsetMinutes(employee, workDate);
         };
+        LocalDate logDate = workDate;
+        if ("OUT".equals(direction) && shiftEnd.isBefore(shiftStart)) {
+            logDate = workDate.plusDays(1);
+        }
 
         AttendanceLog attendanceLog = new AttendanceLog();
         attendanceLog.setEmployeeId(employee.getEmployeeId());
         attendanceLog.setDirection(direction);
         attendanceLog.setTimestamp(
-                workDate.atTime(baseTime)
+                logDate.atTime(baseTime)
                         .plusMinutes(offsetMinutes)
                         .atZone(SEED_TIME_ZONE)
                         .toInstant()
         );
         return attendanceLog;
+    }
+
+    private AttendanceVariance resolveAttendanceVariance(Employee employee, LocalDate workDate, Set<LocalDate> lateDates) {
+        if (isLateAndEarlyOutTestEmployee(employee) && TARGETED_LATE_EARLY_OUT_DATE.equals(workDate)) {
+            return AttendanceVariance.LATE_IN_AND_EARLY_OUT;
+        }
+        if (lateDates.contains(workDate)) {
+            return AttendanceVariance.LATE_IN;
+        }
+        return AttendanceVariance.ON_TIME;
     }
 
     private int lateOffsetMinutes(Employee employee, LocalDate workDate) {
@@ -431,6 +457,26 @@ public class SampleRows {
                 Objects.hash(employee.getEmployeeId(), workDate, "early-out-minutes"),
                 14
         );
+    }
+
+    private LocalTime resolveShiftStart(Employee employee) {
+        return isNightShiftTestEmployee(employee) ? NIGHT_SHIFT_START : SHIFT_START;
+    }
+
+    private LocalTime resolveShiftEnd(Employee employee) {
+        return isNightShiftTestEmployee(employee) ? NIGHT_SHIFT_END : SHIFT_END;
+    }
+
+    private boolean isNightShiftTestEmployee(Employee employee) {
+        return employee != null && NIGHT_SHIFT_TEST_EMAIL.equalsIgnoreCase(employee.getEmail());
+    }
+
+    private boolean isZeroSalaryNoAttendanceTestEmployee(Employee employee) {
+        return employee != null && ZERO_SALARY_NO_ATTENDANCE_TEST_EMAIL.equalsIgnoreCase(employee.getEmail());
+    }
+
+    private boolean isLateAndEarlyOutTestEmployee(Employee employee) {
+        return employee != null && LATE_EARLY_OUT_TEST_EMAIL.equalsIgnoreCase(employee.getEmail());
     }
 
     private Instant toInstant(LocalDateTime dateTime) {
@@ -526,7 +572,15 @@ public class SampleRows {
                 new EmployeeSeed("Sean", null, "Velasco", LocalDate.of(1994, 7, 19), LocalDate.of(2025, 11, 10), null,
                         BigDecimal.valueOf(310_000.00), "sean.velasco@maridone.test", true, "09170000022",
                         EmploymentStatus.TERMINATED, ExemptionStatus.NON_EXEMPT, Position.EMPLOYEE, null,
-                        "312 Product Dev Blvd", null, "Pasay", "Metro Manila", "Philippines", "1309")
+                        "312 Product Dev Blvd", null, "Pasay", "Metro Manila", "Philippines", "1309"),
+                new EmployeeSeed("Nina", null, "Soriano", LocalDate.of(1996, 9, 9), LocalDate.of(2025, 12, 1), null,
+                        BigDecimal.valueOf(320_000.00), NIGHT_SHIFT_TEST_EMAIL, true, "09170000023",
+                        EmploymentStatus.REGULAR, ExemptionStatus.NON_EXEMPT, Position.EMPLOYEE, null,
+                        "401 Night Shift Ave", null, "Taguig", "Metro Manila", "Philippines", "1631"),
+                new EmployeeSeed("Omar", null, "Delos Reyes", LocalDate.of(1997, 10, 12), LocalDate.of(2025, 12, 8), null,
+                        BigDecimal.ZERO, ZERO_SALARY_NO_ATTENDANCE_TEST_EMAIL, true, "09170000024",
+                        EmploymentStatus.REGULAR, ExemptionStatus.NON_EXEMPT, Position.EMPLOYEE, null,
+                        "402 Test Case Ave", null, "Pasig", "Metro Manila", "Philippines", "1604")
         );
     }
 
@@ -632,6 +686,7 @@ public class SampleRows {
     private enum AttendanceVariance {
         ON_TIME,
         LATE_IN,
-        EARLY_OUT
+        EARLY_OUT,
+        LATE_IN_AND_EARLY_OUT
     }
 }

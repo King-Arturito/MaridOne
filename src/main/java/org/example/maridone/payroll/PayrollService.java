@@ -684,7 +684,9 @@ public class PayrollService {
                 employeeIds,
                 schedulePeriodStart,
                 schedulePeriodEndExclusive
-        );
+        ).stream()
+                .filter(leave -> Boolean.TRUE.equals(leave.getPaid()))
+                .toList();
     }
 
     private Map<Long, List<AttendanceLog>> groupAttendanceLogs(List<AttendanceLog> allLogs) {
