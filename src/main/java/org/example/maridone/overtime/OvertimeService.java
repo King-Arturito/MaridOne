@@ -91,7 +91,11 @@ public class OvertimeService {
         request.setEmployee(emp);
 
         OvertimeRequest savedRequest = overtimeRequestRepository.save(request);
-        notifyManagerAboutOvertimeRequest(emp, requestDto);
+        notifyManager(
+                emp,
+                "New team overtime request from " + emp.getFirstName() + " " + emp.getLastName()
+                        + " for " + requestDto.getWorkDate()
+        );
         return savedRequest;
     }
 
@@ -172,6 +176,11 @@ public class OvertimeService {
         }
         overtimeRequest.setRequestStatus(Status.CANCELLED);
         overtimeRequestRepository.save(overtimeRequest);
+        notifyManager(
+                overtimeRequest.getEmployee(),
+                "Team overtime request from " + overtimeRequest.getEmployee().getFirstName() + " "
+                        + overtimeRequest.getEmployee().getLastName() + " was cancelled."
+        );
 
     }
 
@@ -198,14 +207,11 @@ public class OvertimeService {
         }
     }
 
-    private void notifyManagerAboutOvertimeRequest(Employee employee, OvertimeRequestDto requestDto) {
+    private void notifyManager(Employee employee, String message) {
         Employee manager = employee.getManager();
         if (manager == null || manager.getPosition() != Position.MANAGER) {
             return;
         }
-
-        String message = "New team overtime request from " + employee.getFirstName() + " " + employee.getLastName()
-                + " for " + requestDto.getWorkDate();
         notificationService.createNotification(manager, message, "HIGH");
     }
 

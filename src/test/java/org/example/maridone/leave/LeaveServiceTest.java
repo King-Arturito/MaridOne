@@ -201,6 +201,38 @@ class LeaveServiceTest {
                 "HIGH");
     }
 
+    @Test
+    void cancelRequest_ShouldNotifyManager_WhenEmployeeHasManager() {
+        Employee manager = new Employee();
+        manager.setFirstName("Adrian");
+        manager.setLastName("Flores");
+        manager.setPosition(Position.MANAGER);
+        manager.setEmploymentStatus(EmploymentStatus.REGULAR);
+        UserAccount managerAccount = new UserAccount();
+        managerAccount.setUsername("manager1");
+        manager.setUserAccount(managerAccount);
+
+        Employee emp = new Employee();
+        emp.setFirstName("Richard");
+        emp.setLastName("Moore");
+        emp.setManager(manager);
+
+        LeaveRequest request = new LeaveRequest();
+        request.setEmployee(emp);
+        request.setRequestStatus(Status.PENDING);
+
+        when(leaveRequestRepository.findById(12L)).thenReturn(Optional.of(request));
+        when(leaveRequestRepository.save(any(LeaveRequest.class))).thenReturn(request);
+
+        leaveService.cancelRequest(12L);
+
+        Assertions.assertEquals(Status.CANCELLED, request.getRequestStatus());
+        verify(notificationService).createNotification(
+                manager,
+                "Team leave request from Richard Moore was cancelled.",
+                "HIGH");
+    }
+
     private TemplateShiftSchedule createSchedule(DayOfWeek day, LocalTime start, LocalTime end, Employee employee) {
         TemplateShiftSchedule schedule = new TemplateShiftSchedule();
         schedule.setDayOfWeek(day);

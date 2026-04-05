@@ -148,6 +148,11 @@ public class LeaveService {
         }
         request.setRequestStatus(Status.CANCELLED);
         leaveRequestRepository.save(request);
+        notifyManager(
+                request.getEmployee(),
+                "Team leave request from " + request.getEmployee().getFirstName() + " "
+                        + request.getEmployee().getLastName() + " was cancelled."
+        );
     }
 
     @ExecutionTime
@@ -283,7 +288,11 @@ public class LeaveService {
             documentService.upload(file, emp.getUserAccount().getUsername(), Directories.LEAVE_REQUEST.getDisplayName());
         }
         leaveRequestRepository.saveAll(requests);
-        notifyManagerAboutLeaveRequest(emp, payload);
+        notifyManager(
+                emp,
+                "New team leave request from " + emp.getFirstName() + " " + emp.getLastName()
+                        + " (" + payload.getStartDateTime().toLocalDate() + " to " + payload.getEndDateTime().toLocalDate() + ")"
+        );
         return requests;
     }
 
@@ -478,14 +487,11 @@ public class LeaveService {
         }
     }
 
-    private void notifyManagerAboutLeaveRequest(Employee employee, LeaveRequestDto payload) {
+    private void notifyManager(Employee employee, String message) {
         Employee manager = employee.getManager();
         if (manager == null || manager.getPosition() != Position.MANAGER) {
             return;
         }
-
-        String message = "New team leave request from " + employee.getFirstName() + " " + employee.getLastName()
-                + " (" + payload.getStartDateTime().toLocalDate() + " to " + payload.getEndDateTime().toLocalDate() + ")";
         notificationService.createNotification(manager, message, "HIGH");
     }
 

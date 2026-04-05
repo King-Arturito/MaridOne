@@ -149,6 +149,38 @@ class OvertimeServiceTest {
     }
 
     @Test
+    void cancelRequest_ShouldNotifyManager_WhenEmployeeHasManager() {
+        Employee manager = new Employee();
+        manager.setFirstName("Adrian");
+        manager.setLastName("Flores");
+        manager.setPosition(Position.MANAGER);
+        manager.setEmploymentStatus(EmploymentStatus.REGULAR);
+        UserAccount managerAccount = new UserAccount();
+        managerAccount.setUsername("manager1");
+        manager.setUserAccount(managerAccount);
+
+        Employee emp = new Employee();
+        emp.setFirstName("Niko");
+        emp.setLastName("Santos");
+        emp.setManager(manager);
+
+        OvertimeRequest request = new OvertimeRequest();
+        request.setEmployee(emp);
+        request.setRequestStatus(Status.PENDING);
+
+        when(overtimeRequestRepository.findById(14L)).thenReturn(Optional.of(request));
+        when(overtimeRequestRepository.save(any(OvertimeRequest.class))).thenReturn(request);
+
+        overtimeService.cancelRequest(14L);
+
+        Assertions.assertEquals(Status.CANCELLED, request.getRequestStatus());
+        verify(notificationService).createNotification(
+                manager,
+                "Team overtime request from Niko Santos was cancelled.",
+                "HIGH");
+    }
+
+    @Test
     void updateOvertimeRequest_ShouldSucceed_WhenPending() {
         Long otId = 1L;
         String approver = "admin";
