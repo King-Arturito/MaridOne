@@ -52,6 +52,14 @@ public class ShiftController {
         TemplateShiftSchedule schedule = shiftService.updateShiftSchedule(payload);
         return ResponseEntity.ok(schedule);
     }
+
+    @DeleteMapping("/{shiftId}")
+    @PreAuthorize("hasRole('HR') or @managedEmployeeCheck.canManageShift(#shiftId, authentication.name)")
+    @AuditLog
+    public ResponseEntity<Void> deleteShiftSchedule(@PathVariable Long shiftId) {
+        shiftService.deleteShiftSchedule(shiftId);
+        return ResponseEntity.noContent().build();
+    }
     //shift change request
 
     //get employee shifts

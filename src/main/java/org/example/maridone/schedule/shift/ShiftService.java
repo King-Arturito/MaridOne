@@ -181,6 +181,15 @@ public class ShiftService {
 
     @Transactional
     @ExecutionTime
+    public void deleteShiftSchedule(Long shiftId) {
+        TemplateShiftSchedule schedule = templateShiftRepository.findById(shiftId)
+                .orElseThrow(() -> new ShiftsNotFoundException("Shift of ID: " + shiftId + " not found."));
+        templateShiftRepository.delete(schedule);
+        notifyTemplateShiftDayOff(schedule.getEmployee(), schedule.getDayOfWeek());
+    }
+
+    @Transactional
+    @ExecutionTime
     public DailyShiftSchedule upsertDailyShiftOverride(DailyShiftOverrideRequestDto payload) {
         Employee employee = employeeRepository.findById(payload.getEmpId())
                 .orElseThrow(() -> new EmployeeNotFoundException(payload.getEmpId()));
@@ -410,6 +419,18 @@ public class ShiftService {
                 formatDayOfWeek(dayOfWeek),
                 action,
                 formatTimeRange(startTime, endTime)
+        );
+        notificationService.createNotification(employee, message, "HIGH");
+    }
+
+    private void notifyTemplateShiftDayOff(Employee employee, DayOfWeek dayOfWeek) {
+        if (employee == null || dayOfWeek == null) {
+            return;
+        }
+
+        String message = String.format(
+                "Your recurring %s schedule was marked as day off.",
+                formatDayOfWeek(dayOfWeek)
         );
         notificationService.createNotification(employee, message, "HIGH");
     }
