@@ -17,6 +17,7 @@ import org.example.maridone.exception.conflict.OverlappingDatesException;
 import org.example.maridone.exception.notfound.AccountNotFoundException;
 import org.example.maridone.exception.unauthorized.InvalidActionException;
 import org.example.maridone.exception.unauthorized.OvertimeException;
+import org.example.maridone.leave.request.LeaveRequestRepository;
 import org.example.maridone.notification.NotificationMessageFormatter;
 import org.example.maridone.notification.NotificationService;
 import org.example.maridone.overtime.dto.OvertimeRequestDto;
@@ -48,6 +49,7 @@ public class OvertimeService {
     private final TemplateShiftRepository templateShiftRepository;
     private final DefaultConfig defaultConfig;
     private final NotificationService notificationService;
+    private final LeaveRequestRepository leaveRequestRepository;
 
     public OvertimeService(OvertimeRequestRepository overtimeRequestRepository,
                            OvertimeMapper overtimeMapper,
@@ -55,7 +57,8 @@ public class OvertimeService {
                            UserAccountRepository userAccountRepository,
                            TemplateShiftRepository templateShiftRepository,
                            DefaultConfig defaultConfig,
-                           NotificationService notificationService) {
+                           NotificationService notificationService,
+                           LeaveRequestRepository leaveRequestRepository) {
         this.overtimeRequestRepository = overtimeRequestRepository;
         this.overtimeMapper = overtimeMapper;
         this.employeeRepository = employeeRepository;
@@ -63,6 +66,7 @@ public class OvertimeService {
         this.templateShiftRepository = templateShiftRepository;
         this.defaultConfig = defaultConfig;
         this.notificationService = notificationService;
+        this.leaveRequestRepository = leaveRequestRepository;
     }
 
     @Transactional
@@ -78,6 +82,7 @@ public class OvertimeService {
         );
         Employee emp = employeeRepository.findOne(spec).orElseThrow(() -> new AccountNotFoundException(username));
         validateRequestWindow(requestDto);
+        validateNoLeaveConflict(emp, requestDto);
         validateOutsideShiftSchedule(emp, requestDto.getStartTime(), requestDto.getEndTime());
 
         Specification<OvertimeRequest> checkConflicts = Specification.allOf(
@@ -271,6 +276,25 @@ public class OvertimeService {
         boolean isOutsideShift = !requestEnd.isAfter(shiftStart) || !requestStart.isBefore(shiftEnd);
         if (!isOutsideShift) {
             throw new OvertimeException("Overtime can only be requested outside your scheduled shift.");
+        }
+    }
+
+    private void validateNoLeaveConflict(Employee employee, OvertimeRequestDto requestDto) {
+        if (employee == null || employee.getEmployeeId() == null || requestDto.getWorkDate() == null || requestDto.getEndTime() == null) {
+            return;
+        }
+
+        LocalDateTime startOfOvertimeDay = requestDto.getWorkDate().atStartOfDay();
+        LocalDateTime endOfOvertimeDayExclusive = requestDto.getEndTime().toLocalDate().plusDays(1).atStartOfDay();
+
+        boolean hasConflict = leaveRequestRepository.existsActiveOverlapForEmployee(
+                employee.getEmployeeId(),
+                startOfOvertimeDay,
+                endOfOvertimeDayExclusive
+        );
+
+        if (hasConflict) {
+            throw new OverlappingDatesException("Leave and overtime requests cannot be filed on the same day.");
         }
     }
 }

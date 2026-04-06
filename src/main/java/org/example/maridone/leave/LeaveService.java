@@ -26,6 +26,7 @@ import org.example.maridone.leave.request.LeaveRequestRepository;
 import org.example.maridone.leave.spec.LeaveSpecs;
 import org.example.maridone.notification.NotificationMessageFormatter;
 import org.example.maridone.notification.NotificationService;
+import org.example.maridone.overtime.OvertimeRequestRepository;
 import org.example.maridone.schedule.shift.TemplateShiftRepository;
 import org.example.maridone.schedule.shift.TemplateShiftSchedule;
 import org.springframework.data.domain.Page;
@@ -67,6 +68,7 @@ public class LeaveService {
     private final DocumentService documentService;
     private final PayrollConfig payrollConfig;
     private final NotificationService notificationService;
+    private final OvertimeRequestRepository overtimeRequestRepository;
     private Clock clock = Clock.systemDefaultZone();
 
     public LeaveService(
@@ -79,7 +81,8 @@ public class LeaveService {
             LeaveMapper leaveMapper,
             DocumentService documentService,
             PayrollConfig payrollConfig,
-            NotificationService notificationService) {
+            NotificationService notificationService,
+            OvertimeRequestRepository overtimeRequestRepository) {
         this.leaveBalanceRepository = leaveBalanceRepository;
         this.leaveRequestRepository = leaveRequestRepository;
         this.employeeRepository = employeeRepository;
@@ -90,6 +93,7 @@ public class LeaveService {
         this.documentService = documentService;
         this.payrollConfig = payrollConfig;
         this.notificationService = notificationService;
+        this.overtimeRequestRepository = overtimeRequestRepository;
     }
 
     @Transactional
@@ -235,6 +239,7 @@ public class LeaveService {
     public List<LeaveRequest> createLeaveRequest(LeaveRequestDto payload, Long empId, MultipartFile file) {
         Employee emp =  employeeRepository.findById(empId).orElseThrow(() -> new EmployeeNotFoundException(empId));
         validateAdvanceNotice(payload);
+        validateNoOvertimeConflict(empId, payload.getStartDateTime(), payload.getEndDateTime());
         List<LeaveRequest> requests = new ArrayList<>();
 
         BigDecimal remainingHours = leaveBalanceRepository
@@ -305,6 +310,25 @@ public class LeaveService {
                         + " (" + payload.getStartDateTime().toLocalDate() + " to " + payload.getEndDateTime().toLocalDate() + ")"
         );
         return requests;
+    }
+
+    private void validateNoOvertimeConflict(Long employeeId, LocalDateTime leaveStart, LocalDateTime leaveEnd) {
+        if (employeeId == null || leaveStart == null || leaveEnd == null) {
+            return;
+        }
+
+        LocalDateTime startOfFirstLeaveDay = leaveStart.toLocalDate().atStartOfDay();
+        LocalDateTime endOfLastLeaveDayExclusive = leaveEnd.toLocalDate().plusDays(1).atStartOfDay();
+
+        boolean hasConflict = overtimeRequestRepository.existsActiveOverlapForEmployee(
+                employeeId,
+                startOfFirstLeaveDay,
+                endOfLastLeaveDayExclusive
+        );
+
+        if (hasConflict) {
+            throw new OverlappingDatesException("Leave and overtime requests cannot be filed on the same day.");
+        }
     }
 
     @Transactional

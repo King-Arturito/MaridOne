@@ -14,8 +14,10 @@ import org.example.maridone.core.user.UserAccountRepository;
 import org.example.maridone.enums.EmploymentStatus;
 import org.example.maridone.enums.Position;
 import org.example.maridone.enums.Status;
+import org.example.maridone.exception.conflict.OverlappingDatesException;
 import org.example.maridone.exception.unauthorized.InvalidActionException;
 import org.example.maridone.exception.unauthorized.OvertimeException;
+import org.example.maridone.leave.request.LeaveRequestRepository;
 import org.example.maridone.notification.NotificationService;
 import org.example.maridone.overtime.dto.OvertimeRequestDto;
 import org.example.maridone.overtime.dto.OvertimeResponseDto;
@@ -48,6 +50,7 @@ class OvertimeServiceTest {
     @Mock private TemplateShiftRepository templateShiftRepository;
     @Mock private DefaultConfig defaultConfig;
     @Mock private NotificationService notificationService;
+    @Mock private LeaveRequestRepository leaveRequestRepository;
 
     @InjectMocks
     private OvertimeService overtimeService;
@@ -72,6 +75,7 @@ class OvertimeServiceTest {
         when(overtimeMapper.toOvertimeRequest(dto)).thenReturn(request);
         when(employeeRepository.findOne(any(Specification.class))).thenReturn(Optional.of(emp));
         when(defaultConfig.getTimeZone()).thenReturn(zoneId);
+        when(leaveRequestRepository.existsActiveOverlapForEmployee(any(), any(), any())).thenReturn(false);
         when(templateShiftRepository.findAllByEmployeeId(9L)).thenReturn(java.util.List.of(shift));
         when(overtimeRequestRepository.save(any(OvertimeRequest.class))).thenReturn(request);
 
@@ -99,6 +103,7 @@ class OvertimeServiceTest {
 
         when(employeeRepository.findOne(any(Specification.class))).thenReturn(Optional.of(emp));
         when(defaultConfig.getTimeZone()).thenReturn(zoneId);
+        when(leaveRequestRepository.existsActiveOverlapForEmployee(any(), any(), any())).thenReturn(false);
         when(templateShiftRepository.findAllByEmployeeId(9L)).thenReturn(java.util.List.of(shift));
 
         Assertions.assertThrows(OvertimeException.class, () -> overtimeService.createOvertimeRequest(dto, username));
@@ -137,6 +142,7 @@ class OvertimeServiceTest {
         when(overtimeMapper.toOvertimeRequest(dto)).thenReturn(request);
         when(employeeRepository.findOne(any(Specification.class))).thenReturn(Optional.of(emp));
         when(defaultConfig.getTimeZone()).thenReturn(zoneId);
+        when(leaveRequestRepository.existsActiveOverlapForEmployee(any(), any(), any())).thenReturn(false);
         when(templateShiftRepository.findAllByEmployeeId(9L)).thenReturn(java.util.List.of(shift));
         when(overtimeRequestRepository.save(any(OvertimeRequest.class))).thenReturn(request);
 
@@ -146,6 +152,31 @@ class OvertimeServiceTest {
                 manager,
                 "New team overtime request from Niko Santos for " + workDate,
                 "HIGH");
+    }
+
+    @Test
+    void createOvertimeRequest_ShouldReject_WhenLeaveExistsOnSameDay() {
+        String username = "niko123";
+        ZoneId zoneId = ZoneId.of("Asia/Manila");
+        LocalDate workDate = LocalDate.now(zoneId).plusDays(1);
+        OvertimeRequestDto dto = new OvertimeRequestDto();
+        dto.setWorkDate(workDate);
+        dto.setStartTime(LocalDateTime.of(workDate, LocalTime.of(18, 0)));
+        dto.setEndTime(LocalDateTime.of(workDate, LocalTime.of(20, 0)));
+
+        Employee emp = new Employee();
+        ReflectionTestUtils.setField(emp, "employeeId", 9L);
+
+        when(employeeRepository.findOne(any(Specification.class))).thenReturn(Optional.of(emp));
+        when(defaultConfig.getTimeZone()).thenReturn(zoneId);
+        when(leaveRequestRepository.existsActiveOverlapForEmployee(any(), any(), any())).thenReturn(true);
+
+        OverlappingDatesException error = Assertions.assertThrows(
+                OverlappingDatesException.class,
+                () -> overtimeService.createOvertimeRequest(dto, username)
+        );
+
+        Assertions.assertTrue(error.getMessage().contains("same day"));
     }
 
     @Test

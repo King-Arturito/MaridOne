@@ -1,6 +1,7 @@
 package org.example.maridone.overtime;
 
 import jakarta.persistence.LockModeType;
+import java.time.LocalDateTime;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
@@ -22,4 +23,18 @@ public interface OvertimeRequestRepository extends JpaRepository<OvertimeRequest
         and o.employee.employeeId = u.employee.employeeId
 """)
     boolean isOvertimeOwnedByUser(@Param("overtimeId") Long overtimeId, @Param("username") String username);
+
+    @Query("""
+        SELECT COUNT(o) > 0
+        FROM OvertimeRequest o
+        WHERE o.employee.employeeId = :employeeId
+        AND o.requestStatus NOT IN ('CANCELLED', 'REJECTED')
+        AND o.startTime < :endDateTime
+        AND o.endTime > :startDateTime
+    """)
+    boolean existsActiveOverlapForEmployee(
+            @Param("employeeId") Long employeeId,
+            @Param("startDateTime") LocalDateTime startDateTime,
+            @Param("endDateTime") LocalDateTime endDateTime
+    );
 }

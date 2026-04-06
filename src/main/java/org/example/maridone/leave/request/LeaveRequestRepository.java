@@ -42,6 +42,20 @@ public interface LeaveRequestRepository extends JpaRepository<LeaveRequest,Long>
             @Param("endOfDay") LocalDateTime endOfDay
     );
 
+    @Query("""
+        SELECT COUNT(lr) > 0
+        FROM LeaveRequest lr
+        WHERE lr.employee.employeeId = :employeeId
+        AND lr.requestStatus NOT IN ('CANCELLED', 'REJECTED')
+        AND lr.startDateTime < :endDateTime
+        AND lr.endDateTime > :startDateTime
+    """)
+    boolean existsActiveOverlapForEmployee(
+            @Param("employeeId") Long employeeId,
+            @Param("startDateTime") LocalDateTime startDateTime,
+            @Param("endDateTime") LocalDateTime endDateTime
+    );
+
 
     @Query("SELECT COUNT(l) > 0 FROM LeaveRequest l, UserAccount u " +
             "WHERE l.requestId = :leaveRequestId " +

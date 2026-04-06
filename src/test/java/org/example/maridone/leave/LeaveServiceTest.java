@@ -21,6 +21,7 @@ import org.example.maridone.enums.EmploymentStatus;
 import org.example.maridone.enums.Position;
 import org.example.maridone.enums.Status;
 import org.example.maridone.core.user.UserAccount;
+import org.example.maridone.exception.conflict.OverlappingDatesException;
 import org.example.maridone.exception.unauthorized.InvalidActionException;
 import org.example.maridone.leave.balance.LeaveBalance;
 import org.example.maridone.leave.balance.LeaveBalanceRepository;
@@ -30,6 +31,7 @@ import org.example.maridone.leave.dto.LeaveRequestDto;
 import org.example.maridone.leave.request.LeaveRequest;
 import org.example.maridone.leave.request.LeaveRequestRepository;
 import org.example.maridone.notification.NotificationService;
+import org.example.maridone.overtime.OvertimeRequestRepository;
 import org.example.maridone.schedule.shift.TemplateShiftRepository;
 import org.example.maridone.schedule.shift.TemplateShiftSchedule;
 import org.junit.jupiter.api.Assertions;
@@ -62,6 +64,7 @@ class LeaveServiceTest {
     @Mock private LeaveMapper leaveMapper;
     @Mock private PayrollConfig payrollConfig;
     @Mock private NotificationService notificationService;
+    @Mock private OvertimeRequestRepository overtimeRequestRepository;
 
     @InjectMocks
     private LeaveService leaveService;
@@ -118,6 +121,7 @@ class LeaveServiceTest {
         when(employeeRepository.findById(empId)).thenReturn(Optional.of(emp));
         when(leaveBalanceRepository.findByLeaveTypeAndEmployee_EmployeeId(LeaveType.VACATION_LEAVE, empId))
                 .thenReturn(Optional.of(leaveBalance));
+        when(overtimeRequestRepository.existsActiveOverlapForEmployee(any(), any(), any())).thenReturn(false);
         when(templateShiftRepository.findAllByEmployeeId(empId)).thenReturn(List.of(
                 createSchedule(DayOfWeek.MONDAY, LocalTime.of(8, 0), LocalTime.of(17, 0), emp)
         ));
@@ -169,6 +173,7 @@ class LeaveServiceTest {
         when(employeeRepository.findById(empId)).thenReturn(Optional.of(emp));
         when(leaveBalanceRepository.findByLeaveTypeAndEmployee_EmployeeId(LeaveType.SICK_LEAVE, empId))
                 .thenReturn(Optional.of(leaveBalance));
+        when(overtimeRequestRepository.existsActiveOverlapForEmployee(any(), any(), any())).thenReturn(false);
         when(templateShiftRepository.findAllByEmployeeId(empId)).thenReturn(List.of(
                 createSchedule(DayOfWeek.TUESDAY, LocalTime.of(8, 0), LocalTime.of(17, 0), emp)
         ));
@@ -197,6 +202,7 @@ class LeaveServiceTest {
         when(employeeRepository.findById(empId)).thenReturn(Optional.of(emp));
         when(leaveBalanceRepository.findByLeaveTypeAndEmployee_EmployeeId(LeaveType.VACATION_LEAVE, empId))
                 .thenReturn(Optional.of(leaveBalance));
+        when(overtimeRequestRepository.existsActiveOverlapForEmployee(any(), any(), any())).thenReturn(false);
         when(templateShiftRepository.findAllByEmployeeId(empId)).thenReturn(List.of(
                 createSchedule(DayOfWeek.MONDAY, LocalTime.of(9, 0), LocalTime.of(17, 0), emp),
                 createSchedule(DayOfWeek.TUESDAY, LocalTime.of(9, 0), LocalTime.of(17, 0), emp),
@@ -238,6 +244,7 @@ class LeaveServiceTest {
         when(employeeRepository.findById(empId)).thenReturn(Optional.of(emp));
         when(leaveBalanceRepository.findByLeaveTypeAndEmployee_EmployeeId(LeaveType.SICK_LEAVE, empId))
                 .thenReturn(Optional.of(leaveBalance));
+        when(overtimeRequestRepository.existsActiveOverlapForEmployee(any(), any(), any())).thenReturn(false);
         when(templateShiftRepository.findAllByEmployeeId(empId)).thenReturn(List.of(
                 createSchedule(DayOfWeek.MONDAY, LocalTime.of(9, 0), LocalTime.of(17, 0), emp),
                 createSchedule(DayOfWeek.TUESDAY, LocalTime.of(9, 0), LocalTime.of(17, 0), emp),
@@ -289,6 +296,7 @@ class LeaveServiceTest {
         when(employeeRepository.findById(empId)).thenReturn(Optional.of(emp));
         when(leaveBalanceRepository.findByLeaveTypeAndEmployee_EmployeeId(LeaveType.VACATION_LEAVE, empId))
                 .thenReturn(Optional.of(leaveBalance));
+        when(overtimeRequestRepository.existsActiveOverlapForEmployee(any(), any(), any())).thenReturn(false);
         when(templateShiftRepository.findAllByEmployeeId(empId)).thenReturn(List.of(
                 createSchedule(DayOfWeek.MONDAY, LocalTime.of(8, 0), LocalTime.of(17, 0), emp)
         ));
@@ -299,6 +307,29 @@ class LeaveServiceTest {
                 manager,
                 "New team leave request from Richard Moore (2026-03-23 to 2026-03-23)",
                 "HIGH");
+    }
+
+    @Test
+    void createLeaveRequest_ShouldReject_WhenOvertimeExistsOnAnyCoveredDay() {
+        Long empId = 1L;
+        LeaveRequestDto dto = new LeaveRequestDto();
+        dto.setStartDateTime(LocalDate.of(2026, 4, 10).atTime(8, 0));
+        dto.setEndDateTime(LocalDate.of(2026, 4, 10).atTime(17, 0));
+        dto.setReason("Medical leave");
+        dto.setLeaveType(LeaveType.SICK_LEAVE);
+
+        Employee emp = new Employee();
+        ReflectionTestUtils.setField(emp, "employeeId", empId);
+
+        when(employeeRepository.findById(empId)).thenReturn(Optional.of(emp));
+        when(overtimeRequestRepository.existsActiveOverlapForEmployee(any(), any(), any())).thenReturn(true);
+
+        OverlappingDatesException error = Assertions.assertThrows(
+                OverlappingDatesException.class,
+                () -> leaveService.createLeaveRequest(dto, empId, null)
+        );
+
+        Assertions.assertTrue(error.getMessage().contains("same day"));
     }
 
     @Test
