@@ -119,11 +119,18 @@ public class DisputeService {
     public DisputeResponseDto updateDisputeStatus(Long disputeId, DisputeActionDto payload, String approverUsername) {
         DisputeRequest disputeRequest = disputeRepository.findByIdWithEmployeeForUpdate(disputeId)
                 .orElseThrow(() -> new RequestNotFoundException("Dispute Request",disputeId));
+
+
         if (disputeRequest.getStatus() != Status.PENDING) {
             throw new InvalidActionException("Dispute ID: " + disputeId + " has been processed already.");
         }
         UserAccount approver = userAccountRepository.findByUsername(approverUsername)
                 .orElseThrow(() -> new AccountNotFoundException(approverUsername));
+
+        Long empId = disputeRepository.findEmployeeIdByDisputeRequestId(disputeId);
+        if ( empId !=  null && empId.equals(approver.getEmployeeId())) {
+            throw new InvalidActionException("You cannot approve your own request");
+        }
         disputeRequest.setStatus(payload.getStatus());
         disputeRequest.setStatusReason(payload.getStatusReason());
         if (approver.getEmployee() != null) {
