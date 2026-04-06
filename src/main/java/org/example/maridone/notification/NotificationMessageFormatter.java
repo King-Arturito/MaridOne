@@ -3,7 +3,9 @@ package org.example.maridone.notification;
 import org.example.maridone.core.employee.Employee;
 import org.example.maridone.payroll.run.PayrollRun;
 
+import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -48,5 +50,40 @@ public final class NotificationMessageFormatter {
             return "an unspecified payroll period";
         }
         return formatDateRange(payrollRun.getPeriodStart(), payrollRun.getPeriodEnd());
+    }
+
+    public static String formatAnnouncementMessage(
+            Employee employee,
+            Instant startDate,
+            Instant endDate,
+            String title,
+            ZoneId zoneId
+    ) {
+        String announcementTitle = title == null || title.isBlank() ? "Untitled announcement" : title.trim();
+        String message = formatEmployeeName(employee)
+                + " made an announcement for "
+                + formatAnnouncementDateRange(startDate, endDate, zoneId)
+                + ": "
+                + announcementTitle;
+        return endsWithTerminalPunctuation(announcementTitle) ? message : message + ".";
+    }
+
+    public static String formatAnnouncementDateRange(Instant startDate, Instant endDate, ZoneId zoneId) {
+        ZoneId resolvedZoneId = zoneId == null ? ZoneId.systemDefault() : zoneId;
+        LocalDate normalizedStart = startDate == null ? null : startDate.atZone(resolvedZoneId).toLocalDate();
+        LocalDate normalizedEnd = endDate == null ? null : endDate.atZone(resolvedZoneId).toLocalDate();
+
+        if (normalizedStart == null && normalizedEnd == null) {
+            return "an unspecified date - an unspecified date";
+        }
+
+        LocalDate safeStart = normalizedStart == null ? normalizedEnd : normalizedStart;
+        LocalDate safeEnd = normalizedEnd == null ? normalizedStart : normalizedEnd;
+
+        return formatDate(safeStart) + " - " + formatDate(safeEnd);
+    }
+
+    private static boolean endsWithTerminalPunctuation(String value) {
+        return value.endsWith(".") || value.endsWith("!") || value.endsWith("?");
     }
 }
