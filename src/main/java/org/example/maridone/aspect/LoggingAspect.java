@@ -16,7 +16,7 @@ import org.example.maridone.leave.dto.LeaveRequestDto;
 import org.example.maridone.leave.dto.UpdateBalanceDto;
 import org.example.maridone.leave.request.LeaveRequest;
 import org.example.maridone.leave.request.LeaveRequestRepository;
-import org.example.maridone.log.LogService;
+import org.example.maridone.log.ActivityLogService;
 import org.example.maridone.log.dto.ActivityRequestDto;
 import org.example.maridone.overtime.OvertimeRequest;
 import org.example.maridone.overtime.OvertimeRequestRepository;
@@ -71,20 +71,20 @@ public class LoggingAspect {
     private static final Pattern DISPUTE_ENDPOINT_PATTERN = Pattern.compile("^/api/payroll/item/dispute/update/(?<disputeId>\\d+)\\b");
     private static final Pattern DISPUTE_CANCEL_ENDPOINT_PATTERN = Pattern.compile("^/api/payroll/item/dispute/cancel/(?<disputeId>\\d+)\\b");
 
-    private final LogService logService;
+    private final ActivityLogService activityLogService;
     private final EmployeeRepository employeeRepository;
     private final OvertimeRequestRepository overtimeRequestRepository;
     private final LeaveRequestRepository leaveRequestRepository;
     private final DisputeRequestRepository disputeRequestRepository;
     private final PayrollItemRepository payrollItemRepository;
 
-    public LoggingAspect(LogService logService,
+    public LoggingAspect(ActivityLogService activityLogService,
                          EmployeeRepository employeeRepository,
                          OvertimeRequestRepository overtimeRequestRepository,
                          LeaveRequestRepository leaveRequestRepository,
                          DisputeRequestRepository disputeRequestRepository,
                          PayrollItemRepository payrollItemRepository) {
-        this.logService = logService;
+        this.activityLogService = activityLogService;
         this.employeeRepository = employeeRepository;
         this.overtimeRequestRepository = overtimeRequestRepository;
         this.leaveRequestRepository = leaveRequestRepository;
@@ -107,7 +107,7 @@ public class LoggingAspect {
         Activity activity = resolveActivity(httpMethod);
         String message = buildAuditMessage(username, activity, requestURI, joinPoint.getArgs(), result);
         logger.info("Inserting to database: {}", message);
-        logService.activity(new ActivityRequestDto(username, activity, message));
+        activityLogService.activity(new ActivityRequestDto(username, activity, message));
     }
 
     @AfterReturning("auditScheduling()")
@@ -116,7 +116,7 @@ public class LoggingAspect {
                 + joinPoint.getSignature().getDeclaringType().getSimpleName()
                 + " -> " + joinPoint.getSignature().getName();
         logger.info("Scheduled System run inserted to database: {}", message);
-        logService.activity(new ActivityRequestDto("System SUCCESS",  Activity.SYSTEM, message));
+        activityLogService.activity(new ActivityRequestDto("System SUCCESS",  Activity.SYSTEM, message));
     }
 
     @AfterThrowing(value = "auditScheduling()", throwing = "error")
@@ -132,7 +132,7 @@ public class LoggingAspect {
                 + joinPoint.getSignature().getDeclaringType().getSimpleName()
                 + " -> " + joinPoint.getSignature().getName() + " ERROR: " + rawErrorMessage;
         logger.error("Scheduled System run failed: {}", message);
-        logService.activity(new ActivityRequestDto("System FAILURE",  Activity.SYSTEM, message));
+        activityLogService.activity(new ActivityRequestDto("System FAILURE",  Activity.SYSTEM, message));
     }
 
     private String resolveUsername() {
