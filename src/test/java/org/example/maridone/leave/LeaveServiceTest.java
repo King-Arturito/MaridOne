@@ -1,10 +1,13 @@
 package org.example.maridone.leave;
 
 import java.math.BigDecimal;
+import java.time.Clock;
 import java.time.DayOfWeek;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 
@@ -30,6 +33,7 @@ import org.example.maridone.notification.NotificationService;
 import org.example.maridone.schedule.shift.TemplateShiftRepository;
 import org.example.maridone.schedule.shift.TemplateShiftSchedule;
 import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import static org.mockito.ArgumentMatchers.any;
@@ -61,6 +65,15 @@ class LeaveServiceTest {
 
     @InjectMocks
     private LeaveService leaveService;
+
+    @BeforeEach
+    void setUpClock() {
+        ReflectionTestUtils.setField(
+                leaveService,
+                "clock",
+                Clock.fixed(Instant.parse("2026-03-16T00:00:00Z"), ZoneOffset.UTC)
+        );
+    }
 
     @Test
     void createLeaveBalance_ShouldSave_WhenNoDuplicate() {
@@ -116,6 +129,54 @@ class LeaveServiceTest {
             Assertions.assertEquals(emp, result.getEmployee());
             Assertions.assertEquals("Vacation", result.getReason());
         });
+    }
+
+    @Test
+    void createLeaveRequest_ShouldRejectNonSickLeaveWithoutOneWeekNotice() {
+        Long empId = 1L;
+        LeaveRequestDto dto = new LeaveRequestDto();
+        dto.setStartDateTime(LocalDate.of(2026, 3, 22).atTime(8, 0));
+        dto.setEndDateTime(LocalDate.of(2026, 3, 22).atTime(17, 0));
+        dto.setReason("Vacation");
+        dto.setLeaveType(LeaveType.VACATION_LEAVE);
+
+        Employee emp = new Employee();
+        ReflectionTestUtils.setField(emp, "employeeId", empId);
+
+        when(employeeRepository.findById(empId)).thenReturn(Optional.of(emp));
+
+        InvalidActionException error =
+                Assertions.assertThrows(InvalidActionException.class, () -> leaveService.createLeaveRequest(dto, empId, null));
+
+        Assertions.assertTrue(error.getMessage().contains("at least 7 days before the leave date"));
+    }
+
+    @Test
+    void createLeaveRequest_ShouldAllowSickLeaveWithoutOneWeekNotice() {
+        Long empId = 1L;
+        LeaveRequestDto dto = new LeaveRequestDto();
+        dto.setStartDateTime(LocalDate.of(2026, 3, 17).atTime(8, 0));
+        dto.setEndDateTime(LocalDate.of(2026, 3, 17).atTime(17, 0));
+        dto.setReason("Flu symptoms");
+        dto.setLeaveType(LeaveType.SICK_LEAVE);
+
+        Employee emp = new Employee();
+        ReflectionTestUtils.setField(emp, "employeeId", empId);
+
+        LeaveBalance leaveBalance = new LeaveBalance();
+        leaveBalance.setBalanceHours(BigDecimal.valueOf(9));
+
+        when(employeeRepository.findById(empId)).thenReturn(Optional.of(emp));
+        when(leaveBalanceRepository.findByLeaveTypeAndEmployee_EmployeeId(LeaveType.SICK_LEAVE, empId))
+                .thenReturn(Optional.of(leaveBalance));
+        when(templateShiftRepository.findAllByEmployeeId(empId)).thenReturn(List.of(
+                createSchedule(DayOfWeek.TUESDAY, LocalTime.of(8, 0), LocalTime.of(17, 0), emp)
+        ));
+
+        List<LeaveRequest> results = leaveService.createLeaveRequest(dto, empId, null);
+
+        Assertions.assertEquals(1, results.size());
+        Assertions.assertEquals(LeaveType.SICK_LEAVE, results.get(0).getLeaveType());
     }
 
     @Test

@@ -41,6 +41,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.Clock;
 import java.time.DayOfWeek;
 import java.time.Duration;
 import java.time.Instant;
@@ -54,6 +55,7 @@ import java.util.stream.Collectors;
 
 @Service
 public class LeaveService {
+    private static final int NON_SICK_LEAVE_NOTICE_DAYS = 7;
 
     private final LeaveBalanceRepository leaveBalanceRepository;
     private final LeaveRequestRepository leaveRequestRepository;
@@ -65,6 +67,7 @@ public class LeaveService {
     private final DocumentService documentService;
     private final PayrollConfig payrollConfig;
     private final NotificationService notificationService;
+    private Clock clock = Clock.systemDefaultZone();
 
     public LeaveService(
             LeaveBalanceRepository leaveBalanceRepository,
@@ -231,6 +234,7 @@ public class LeaveService {
             importance = "HIGH")
     public List<LeaveRequest> createLeaveRequest(LeaveRequestDto payload, Long empId, MultipartFile file) {
         Employee emp =  employeeRepository.findById(empId).orElseThrow(() -> new EmployeeNotFoundException(empId));
+        validateAdvanceNotice(payload);
         List<LeaveRequest> requests = new ArrayList<>();
 
         BigDecimal remainingHours = leaveBalanceRepository
@@ -401,6 +405,20 @@ public class LeaveService {
         request.setReason(reason);
         request.setPaid(isPaid);
         return request;
+    }
+
+    private void validateAdvanceNotice(LeaveRequestDto payload) {
+        if (payload.getLeaveType() == null || payload.getLeaveType() == LeaveType.SICK_LEAVE || payload.getStartDateTime() == null) {
+            return;
+        }
+
+        LocalDate earliestAllowedDate = LocalDate.now(clock).plusDays(NON_SICK_LEAVE_NOTICE_DAYS);
+        LocalDate requestedStartDate = payload.getStartDateTime().toLocalDate();
+        if (requestedStartDate.isBefore(earliestAllowedDate)) {
+            throw new InvalidActionException(
+                    "Non-sick leave requests must be filed at least " + NON_SICK_LEAVE_NOTICE_DAYS + " days before the leave date."
+            );
+        }
     }
 
     private List<LeaveWindow> resolveLeaveWindows(LeaveRequestDto payload, Long empId) {
