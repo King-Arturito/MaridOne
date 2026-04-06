@@ -109,6 +109,31 @@ public class EarningsService {
         return toDtos(List.of(updatedLine), buildContext(List.of(updatedLine))).get(0);
     }
 
+    @Transactional
+    public EarningsDto createEarning(EarningsDto payload, Long itemId) {
+        if (payload == null) {
+            throw new InvalidActionException("Earnings create payload is required.");
+        }
+
+        PayrollItem item = payrollItemRepository.findById(itemId)
+                .orElseThrow(() -> new InvalidActionException("Payroll item ID:" + itemId + " not found."));
+        PayrollRun run = requireEditableAdjustmentRun(item);
+        BigDecimal amount = normalizePositive(payload.getAmount(), "Earnings amount must be greater than zero.");
+
+        EarningsLine line = new EarningsLine();
+        line.setPayrollItem(item);
+        line.setHours(BigDecimal.ONE.setScale(2));
+        line.setRate(amount);
+        line.setAmount(amount);
+        line.setEarningsDate(run.getPeriodEnd());
+        line.setOvertime(false);
+        line.setOvertimeRequest(null);
+
+        EarningsLine createdLine = earningsRepository.save(line);
+        refreshItemTotals(item);
+        return toDtos(List.of(createdLine), buildContext(List.of(createdLine))).get(0);
+    }
+
     private List<EarningsDto> toDtos(List<EarningsLine> earnings, EarningsContext context) {
         return earnings.stream()
                 .map(line -> {
@@ -252,6 +277,15 @@ public class EarningsService {
         return item;
     }
 
+    private PayrollRun requireEditableAdjustmentRun(PayrollItem item) {
+        PayrollItem editableItem = getEditablePayrollItem(item);
+        PayrollRun run = editableItem.getPayrollRun();
+        if (run == null || run.getRunType() != RunType.ADJUSTMENT) {
+            throw new InvalidActionException("Manual lines can only be added to adjustment payroll items.");
+        }
+        return run;
+    }
+
     private boolean isRegularRun(PayrollItem item) {
         return item.getPayrollRun() != null && item.getPayrollRun().getRunType() == RunType.REGULAR;
     }
@@ -270,6 +304,17 @@ public class EarningsService {
         }
         BigDecimal normalized = normalize(value);
         if (normalized.compareTo(BigDecimal.ZERO.setScale(2)) < 0) {
+            throw new InvalidActionException(errorMessage);
+        }
+        return normalized;
+    }
+
+    private BigDecimal normalizePositive(BigDecimal value, String errorMessage) {
+        if (value == null) {
+            throw new InvalidActionException(errorMessage);
+        }
+        BigDecimal normalized = normalize(value);
+        if (normalized.compareTo(BigDecimal.ZERO.setScale(2)) <= 0) {
             throw new InvalidActionException(errorMessage);
         }
         return normalized;

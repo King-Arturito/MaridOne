@@ -74,6 +74,27 @@ public class DeductionsService {
         return toDtos(List.of(updatedLine)).get(0);
     }
 
+    @Transactional
+    public DeductionsDto createDeduction(DeductionsDto payload, Long itemId) {
+        if (payload == null) {
+            throw new InvalidActionException("Deduction create payload is required.");
+        }
+
+        PayrollItem item = payrollItemRepository.findById(itemId)
+                .orElseThrow(() -> new InvalidActionException("Payroll item ID:" + itemId + " not found."));
+        requireEditableAdjustmentRun(item);
+        BigDecimal amount = normalizePositive(payload.getAmount(), "Deduction amount must be greater than zero.");
+
+        DeductionsLine line = new DeductionsLine();
+        line.setPayrollItem(item);
+        line.setDeductionType(DeductionType.MANUAL_ADJUSTMENT);
+        line.setAmount(amount);
+
+        DeductionsLine createdLine = deductionsRepository.save(line);
+        refreshItemTotals(item);
+        return toDtos(List.of(createdLine)).get(0);
+    }
+
     private List<DeductionsDto> toDtos(List<DeductionsLine> deductions) {
         return deductions.stream()
                 .map(line -> {
@@ -124,6 +145,15 @@ public class DeductionsService {
         return item;
     }
 
+    private PayrollRun requireEditableAdjustmentRun(PayrollItem item) {
+        PayrollItem editableItem = getEditablePayrollItem(item);
+        PayrollRun run = editableItem.getPayrollRun();
+        if (run == null || run.getRunType() != RunType.ADJUSTMENT) {
+            throw new InvalidActionException("Manual lines can only be added to adjustment payroll items.");
+        }
+        return run;
+    }
+
     private boolean isRegularRun(PayrollItem item) {
         return item.getPayrollRun() != null && item.getPayrollRun().getRunType() == RunType.REGULAR;
     }
@@ -142,6 +172,17 @@ public class DeductionsService {
         }
         BigDecimal normalized = CommonCalculator.normalize(value);
         if (normalized.compareTo(BigDecimal.ZERO.setScale(2)) < 0) {
+            throw new InvalidActionException(errorMessage);
+        }
+        return normalized;
+    }
+
+    private BigDecimal normalizePositive(BigDecimal value, String errorMessage) {
+        if (value == null) {
+            throw new InvalidActionException(errorMessage);
+        }
+        BigDecimal normalized = CommonCalculator.normalize(value);
+        if (normalized.compareTo(BigDecimal.ZERO.setScale(2)) <= 0) {
             throw new InvalidActionException(errorMessage);
         }
         return normalized;

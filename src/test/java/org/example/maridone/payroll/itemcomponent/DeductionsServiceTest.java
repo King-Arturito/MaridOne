@@ -26,6 +26,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
@@ -82,6 +83,48 @@ class DeductionsServiceTest {
         Assertions.assertEquals(1, result.size());
         Assertions.assertEquals("SSS Contribution", result.get(0).getDescription());
         Assertions.assertEquals(new BigDecimal("900.00"), result.get(0).getAmount());
+    }
+
+    @Test
+    void createDeduction_ShouldCreateManualAdjustmentLineForAdjustmentItem() {
+        PayrollRun run = new PayrollRun();
+        run.setRunType(RunType.ADJUSTMENT);
+        run.setPayrollStatus(PayrollStatus.IN_PROGRESS);
+
+        PayrollItem item = new PayrollItem();
+        ReflectionTestUtils.setField(item, "itemId", 81L);
+        item.setPayrollRun(run);
+
+        DeductionsDto payload = new DeductionsDto();
+        payload.setAmount(new BigDecimal("275.00"));
+        AtomicReference<DeductionsLine> savedLineRef = new AtomicReference<>();
+
+        when(payrollItemRepository.findById(81L)).thenReturn(Optional.of(item));
+        when(deductionsRepository.save(any(DeductionsLine.class))).thenAnswer(invocation -> {
+            DeductionsLine savedLine = invocation.getArgument(0);
+            savedLineRef.set(savedLine);
+            return savedLine;
+        });
+        when(deductionsRepository.findByPayrollItem_ItemId(81L)).thenAnswer(invocation ->
+                savedLineRef.get() == null ? List.of() : List.of(savedLineRef.get())
+        );
+        when(earningsRepository.findByPayrollItem_ItemId(81L)).thenReturn(List.of());
+        when(payrollItemRepository.save(any(PayrollItem.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(payrollMapper.toDeductionsDto(any(DeductionsLine.class))).thenAnswer(invocation -> {
+            DeductionsLine savedLine = invocation.getArgument(0);
+            DeductionsDto dto = new DeductionsDto();
+            dto.setAmount(savedLine.getAmount());
+            dto.setDeductionType(savedLine.getDeductionType());
+            return dto;
+        });
+
+        DeductionsDto result = deductionsService.createDeduction(payload, 81L);
+
+        Assertions.assertEquals(new BigDecimal("275.00"), result.getAmount());
+        Assertions.assertEquals(DeductionType.MANUAL_ADJUSTMENT, result.getDeductionType());
+        Assertions.assertEquals("Manual Adjustment", result.getDescription());
+        Assertions.assertEquals(new BigDecimal("0.00"), item.getGrossPay());
+        Assertions.assertEquals(new BigDecimal("-275.00"), item.getNetPay());
     }
 
     @Test
@@ -160,5 +203,23 @@ class DeductionsServiceTest {
         when(deductionsRepository.findById(15L)).thenReturn(Optional.of(line));
 
         Assertions.assertThrows(InvalidActionException.class, () -> deductionsService.updateDeduction(payload, 15L));
+    }
+
+    @Test
+    void createDeduction_ShouldRejectRegularRunItem() {
+        PayrollRun run = new PayrollRun();
+        run.setRunType(RunType.REGULAR);
+        run.setPayrollStatus(PayrollStatus.IN_PROGRESS);
+
+        PayrollItem item = new PayrollItem();
+        ReflectionTestUtils.setField(item, "itemId", 82L);
+        item.setPayrollRun(run);
+
+        DeductionsDto payload = new DeductionsDto();
+        payload.setAmount(new BigDecimal("200.00"));
+
+        when(payrollItemRepository.findById(82L)).thenReturn(Optional.of(item));
+
+        Assertions.assertThrows(InvalidActionException.class, () -> deductionsService.createDeduction(payload, 82L));
     }
 }

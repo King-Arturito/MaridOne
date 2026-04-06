@@ -18,16 +18,19 @@ public interface EarningsRepository extends JpaRepository<EarningsLine, Long> {
     @Query(value = """
     SELECT
         CASE
+            WHEN pr.run_type = 'ADJUSTMENT' THEN 'MANUAL_ADJUSTMENT'
             WHEN e.is_overtime = false THEN 'BASIC'
             ELSE cast(otr.overtime_type as text)
         END AS type,
         SUM(e.amount) AS totalAmount
     FROM earnings_line e
     JOIN payroll_item pi ON e.item_id = pi.item_id
+    JOIN payroll_run pr ON pi.pay_id = pr.pay_id
     LEFT JOIN overtime_request otr ON e.overtime_id = otr.overtime_id
     WHERE pi.pay_id = :payId
     GROUP BY 
         CASE 
+            WHEN pr.run_type = 'ADJUSTMENT' THEN 'MANUAL_ADJUSTMENT'
             WHEN e.is_overtime = false THEN 'BASIC'
             ELSE cast(otr.overtime_type as text)
         END

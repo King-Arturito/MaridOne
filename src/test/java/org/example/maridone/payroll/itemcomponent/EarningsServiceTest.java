@@ -35,6 +35,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
@@ -169,6 +170,51 @@ class EarningsServiceTest {
     }
 
     @Test
+    void createEarning_ShouldCreateManualAdjustmentLineForAdjustmentItem() {
+        PayrollRun run = new PayrollRun();
+        run.setRunType(RunType.ADJUSTMENT);
+        run.setPayrollStatus(PayrollStatus.IN_PROGRESS);
+        run.setPeriodEnd(LocalDate.of(2026, 4, 15));
+
+        PayrollItem item = new PayrollItem();
+        ReflectionTestUtils.setField(item, "itemId", 71L);
+        item.setPayrollRun(run);
+
+        EarningsDto payload = new EarningsDto();
+        payload.setAmount(new BigDecimal("1500.00"));
+        AtomicReference<EarningsLine> savedLineRef = new AtomicReference<>();
+
+        when(payrollItemRepository.findById(71L)).thenReturn(Optional.of(item));
+        when(earningsRepository.save(any(EarningsLine.class))).thenAnswer(invocation -> {
+            EarningsLine savedLine = invocation.getArgument(0);
+            savedLineRef.set(savedLine);
+            return savedLine;
+        });
+        when(earningsRepository.findByPayrollItem_ItemId(71L)).thenAnswer(invocation ->
+                savedLineRef.get() == null ? List.of() : List.of(savedLineRef.get())
+        );
+        when(deductionsRepository.findByPayrollItem_ItemId(71L)).thenReturn(List.of());
+        when(payrollItemRepository.save(any(PayrollItem.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(payrollMapper.toEarningsDto(any(EarningsLine.class))).thenAnswer(invocation -> {
+            EarningsLine savedLine = invocation.getArgument(0);
+            EarningsDto dto = new EarningsDto();
+            dto.setAmount(savedLine.getAmount());
+            dto.setRate(savedLine.getRate());
+            dto.setHours(savedLine.getHours());
+            return dto;
+        });
+
+        EarningsDto result = earningsService.createEarning(payload, 71L);
+
+        Assertions.assertEquals(new BigDecimal("1500.00"), result.getAmount());
+        Assertions.assertEquals(new BigDecimal("1500.00"), result.getRate());
+        Assertions.assertEquals(new BigDecimal("1.00"), result.getHours());
+        Assertions.assertEquals("Manual Adjustment", result.getDescription());
+        Assertions.assertEquals(new BigDecimal("1500.00"), item.getGrossPay());
+        Assertions.assertEquals(new BigDecimal("1500.00"), item.getNetPay());
+    }
+
+    @Test
     void updateEarning_ShouldStampAdjustmentMetadataForRegularInProgressRun() {
         PayrollRun run = new PayrollRun();
         run.setRunType(RunType.REGULAR);
@@ -247,5 +293,23 @@ class EarningsServiceTest {
         when(earningsRepository.findById(21L)).thenReturn(Optional.of(line));
 
         Assertions.assertThrows(InvalidActionException.class, () -> earningsService.updateEarning(payload, 21L));
+    }
+
+    @Test
+    void createEarning_ShouldRejectRegularRunItem() {
+        PayrollRun run = new PayrollRun();
+        run.setRunType(RunType.REGULAR);
+        run.setPayrollStatus(PayrollStatus.IN_PROGRESS);
+
+        PayrollItem item = new PayrollItem();
+        ReflectionTestUtils.setField(item, "itemId", 91L);
+        item.setPayrollRun(run);
+
+        EarningsDto payload = new EarningsDto();
+        payload.setAmount(new BigDecimal("500.00"));
+
+        when(payrollItemRepository.findById(91L)).thenReturn(Optional.of(item));
+
+        Assertions.assertThrows(InvalidActionException.class, () -> earningsService.createEarning(payload, 91L));
     }
 }

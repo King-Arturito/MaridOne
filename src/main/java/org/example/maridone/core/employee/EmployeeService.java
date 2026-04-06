@@ -3,6 +3,7 @@ package org.example.maridone.core.employee;
 import org.example.maridone.annotation.ExecutionTime;
 import org.example.maridone.config.PayrollConfig;
 import org.example.maridone.core.dto.EmployeeDetailsDto;
+import org.example.maridone.core.dto.EmployeeOptionDto;
 import org.example.maridone.core.dto.EmployeeRequestDto;
 import org.example.maridone.core.dto.EmployeeResponseDto;
 import org.example.maridone.core.mapper.CoreMapper;
@@ -36,6 +37,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 @Service
 public class EmployeeService {
@@ -89,6 +91,14 @@ public class EmployeeService {
         Map<Long, List<ShiftResponseDto>> schedulesByEmployeeId =
                 findSchedulesByEmployeeId(employeePage.stream().map(Employee::getEmployeeId).toList());
         return employeePage.map(employee -> toEmployeeResponse(employee, schedulesByEmployeeId));
+    }
+
+    @ExecutionTime
+    public List<EmployeeOptionDto> getEmployeeOptions() {
+        return employeeRepository.findByEmploymentStatusNotOrderByLastNameAscFirstNameAsc(EmploymentStatus.TERMINATED)
+                .stream()
+                .map(this::toEmployeeOption)
+                .toList();
     }
 
     @ExecutionTime
@@ -234,6 +244,14 @@ public class EmployeeService {
         return toEmployeeResponse(employee, findSchedulesByEmployeeId(List.of(employee.getEmployeeId())));
     }
 
+    private EmployeeOptionDto toEmployeeOption(Employee employee) {
+        return new EmployeeOptionDto(
+                employee.getEmployeeId(),
+                formatEmployeeName(employee),
+                employee.getEmploymentStatus()
+        );
+    }
+
     private EmployeeResponseDto toEmployeeResponse(Employee employee, Map<Long, List<ShiftResponseDto>> schedulesByEmployeeId) {
         EmployeeResponseDto response = coreMapper.toEmployeeResponse(employee);
         response.setDepartment(resolveDepartment(employee));
@@ -259,6 +277,12 @@ public class EmployeeService {
 
     private Long resolveGracePeriodMinutes() {
         return Math.max(payrollConfig.getGracePeriod().toMinutes(), 0L);
+    }
+
+    private String formatEmployeeName(Employee employee) {
+        return Stream.of(employee.getFirstName(), employee.getMiddleName(), employee.getLastName())
+                .filter(part -> part != null && !part.isBlank())
+                .collect(Collectors.joining(" "));
     }
 
     private EmployeeDetailsDto toEmployeeDetails(Employee employee) {

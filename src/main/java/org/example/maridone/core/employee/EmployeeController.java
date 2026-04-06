@@ -3,6 +3,7 @@ package org.example.maridone.core.employee;
 import jakarta.validation.groups.Default;
 import org.example.maridone.annotation.AuditLog;
 import org.example.maridone.core.dto.EmployeeDetailsDto;
+import org.example.maridone.core.dto.EmployeeOptionDto;
 import org.example.maridone.core.dto.EmployeeRequestDto;
 import org.example.maridone.core.dto.EmployeeResponseDto;
 import org.example.maridone.core.filter.EmployeeFilter;
@@ -56,6 +57,12 @@ public class EmployeeController {
             EmployeeFilter employeeFilter,
             @PageableDefault(sort = "employeeId", direction = Sort.Direction.ASC) Pageable pageable) {
         return employeeService.getAllEmployees(employeeFilter,pageable);
+    }
+
+    @GetMapping("/options")
+    @PreAuthorize("hasRole('HR')")
+    public List<EmployeeOptionDto> getEmployeeOptions() {
+        return employeeService.getEmployeeOptions();
     }
 
     @GetMapping("/team")

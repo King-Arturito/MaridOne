@@ -5,6 +5,7 @@ import java.util.List;
 import org.example.maridone.annotation.AuditLog;
 import org.example.maridone.payroll.dto.DeductionsDto;
 import org.example.maridone.payroll.dto.EarningsDto;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -34,6 +35,20 @@ public class ItemComponentController {
     @PreAuthorize("hasAnyRole('HR', 'ACCOUNTING') or @itemOwnerCheck.isSelf(#itemId, authentication.getName())")
     public List<DeductionsDto> getDeductions(@PathVariable Long itemId) {
         return deductionsService.getDeductions(itemId);
+    }
+
+    @PostMapping("/earnings/create/{itemId}")
+    @PreAuthorize("hasRole('HR')")
+    @AuditLog
+    public EarningsDto createEarning(@RequestBody EarningsDto payload, @PathVariable Long itemId) {
+        return earningsService.createEarning(payload, itemId);
+    }
+
+    @PostMapping("/deductions/create/{itemId}")
+    @PreAuthorize("hasRole('HR')")
+    @AuditLog
+    public DeductionsDto createDeduction(@RequestBody DeductionsDto payload, @PathVariable Long itemId) {
+        return deductionsService.createDeduction(payload, itemId);
     }
 
     @PatchMapping("/earnings/update/{earningsId}")
