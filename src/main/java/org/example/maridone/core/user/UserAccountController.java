@@ -3,10 +3,12 @@ package org.example.maridone.core.user;
 import java.net.URI;
 
 import org.example.maridone.annotation.AuditLog;
+import org.example.maridone.core.dto.ChangePasswordDto;
 import org.example.maridone.core.dto.CreateUserAccountDto;
 import org.example.maridone.document.dto.DocumentResponseDto;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -46,6 +48,14 @@ public class UserAccountController {
             @RequestBody CreateUserAccountDto payload) {
         payload.setEmployeeId(employeeId);
         return ResponseEntity.ok(userAccountService.updateUserAccount(payload));
+    }
+
+    @PatchMapping("/password/change")
+    public ResponseEntity<String> changeOwnPassword(
+            Authentication authentication,
+            @RequestBody ChangePasswordDto payload) {
+        userAccountService.changeOwnPassword(authentication.getName(), payload);
+        return ResponseEntity.ok("Password updated successfully.");
     }
 
     //view your own UserAccount

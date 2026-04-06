@@ -4,6 +4,8 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import org.example.maridone.core.user.UserAccount;
+import org.example.maridone.core.user.UserAccountRepository;
 import org.example.maridone.core.user.UserLoginService;
 import org.springframework.lang.NonNull;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -20,10 +22,16 @@ public class JwtFilter extends OncePerRequestFilter {
 
     private final JwtService jwtService;
     private final UserLoginService userLoginService;
+    private final UserAccountRepository userAccountRepository;
 
-    public JwtFilter(JwtService jwtService, UserLoginService userLoginService) {
+    public JwtFilter(
+            JwtService jwtService,
+            UserLoginService userLoginService,
+            UserAccountRepository userAccountRepository
+    ) {
         this.jwtService = jwtService;
         this.userLoginService = userLoginService;
+        this.userAccountRepository = userAccountRepository;
     }
 
     @Override
@@ -48,6 +56,17 @@ public class JwtFilter extends OncePerRequestFilter {
         if (username != null && SecurityContextHolder.getContext().getAuthentication() == null) {
             UserDetails userDetails = this.userLoginService.loadUserByUsername(username);
             if (jwtService.isTokenValid(jwt, userDetails) && jwtService.isAccessToken(jwt)) {
+                UserAccount userAccount = userAccountRepository.findByUsername(username).orElse(null);
+                if (userAccount != null
+                        && Boolean.TRUE.equals(userAccount.getPasswordChangeRequired())
+                        && !isPasswordChangeAllowedPath(request)) {
+                    response.sendError(
+                            HttpServletResponse.SC_FORBIDDEN,
+                            "You must change your temporary password before continuing."
+                    );
+                    return;
+                }
+
                 UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(
                         userDetails,
                         null,
@@ -59,5 +78,12 @@ public class JwtFilter extends OncePerRequestFilter {
         }
 
         filterChain.doFilter(request, response);
+    }
+
+    private boolean isPasswordChangeAllowedPath(HttpServletRequest request) {
+        String path = request.getRequestURI();
+        return "/api/user/password/change".equals(path)
+                || "/api/auth/logout".equals(path)
+                || "/api/auth/refresh".equals(path);
     }
 }

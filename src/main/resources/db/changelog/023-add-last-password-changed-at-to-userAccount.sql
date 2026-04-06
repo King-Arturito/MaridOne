@@ -1,0 +1,2 @@
+ALTER TABLE user_account
+ADD COLUMN IF NOT EXISTS last_password_changed_at TIMESTAMP WITH TIME ZONE;

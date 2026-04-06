@@ -28,6 +28,18 @@ public class AuthController {
         return ResponseEntity.ok(authService.refreshToken(request));
     }
 
+    @PostMapping("/auth/forgot-password/request")
+    public ResponseEntity<String> requestPasswordReset(@RequestBody ForgotPasswordRequest request) {
+        authService.requestPasswordReset(request);
+        return ResponseEntity.ok("If the account exists, a reset code has been sent to the email on file.");
+    }
+
+    @PostMapping("/auth/forgot-password/reset")
+    public ResponseEntity<String> resetForgottenPassword(@RequestBody ForgotPasswordResetRequest request) {
+        authService.resetForgottenPassword(request);
+        return ResponseEntity.ok("Password reset successfully.");
+    }
+
     @PostMapping("/auth/logout")
     public ResponseEntity<String> logout(@RequestBody LogoutRequest request) {
         authService.logoutUser(request);

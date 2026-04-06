@@ -60,7 +60,8 @@ public class GlobalExceptionHandler {
             InvalidRangeException.class,
             DuplicateAccountException.class,
             CloudReadException.class,
-            CloudWriteException.class
+            CloudWriteException.class,
+            IllegalArgumentException.class
     })
     public ResponseEntity<Map<String, String>> handleBadRequestExceptions(RuntimeException ex) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)

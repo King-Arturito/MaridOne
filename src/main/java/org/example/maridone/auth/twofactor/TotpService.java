@@ -15,6 +15,7 @@ import org.springframework.stereotype.Service;
 
 @Service
 public class TotpService {
+    private static final int PASSWORD_RESET_ALLOWED_TIME_PERIOD_DISCREPANCY = 20;
 
     private final SecretGenerator secretGenerator;
     private final QrGenerator qrGenerator;
@@ -65,5 +66,11 @@ public class TotpService {
 
     public boolean verifyCode(String secret, String code) {
         return codeVerifier.isValidCode(secret, code);
+    }
+
+    public boolean verifyPasswordResetCode(String secret, String code) {
+        DefaultCodeVerifier verifier = new DefaultCodeVerifier(this.codeGenerator, this.timeProvider);
+        verifier.setAllowedTimePeriodDiscrepancy(PASSWORD_RESET_ALLOWED_TIME_PERIOD_DISCREPANCY);
+        return verifier.isValidCode(secret, code);
     }
 }
