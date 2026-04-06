@@ -317,9 +317,14 @@ public class LeaveService {
         LeaveRequest request = leaveRequestRepository.findByIdForUpdate(requestId).orElseThrow(
                 () -> new LeaveNotFoundException("Leave Request of Id: " + requestId + " is not found."));
 
+
         Long requestEmpId  = leaveRequestRepository.findEmployeeIdByRequestId(requestId).orElse(null);
         if (requestEmpId == null) {
             throw new IllegalStateException("Employee ID connected to request not found.");
+        }
+
+        if  (requestEmpId.equals(verifyOwnEmployeeId(authentication.getName()))) {
+            throw new InvalidActionException("You cannot approve your own request.");
         }
 
         validateApproverAccess(user, requestEmpId);
@@ -351,7 +356,12 @@ public class LeaveService {
         return request;
     }
 
-
+    private Long verifyOwnEmployeeId(String name) {
+        UserAccount userAccount = userAccountRepository.findByUsername(name).orElseThrow((
+                () -> new AccountNotFoundException(name)
+                ));
+        return userAccount.getEmployeeId();
+    }
 
 
     //HELPER METHODS

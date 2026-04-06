@@ -57,4 +57,7 @@ public interface DisputeRequestRepository extends JpaRepository<DisputeRequest, 
         and d.payrollItem.employee.employeeId = u.employee.employeeId
 """)
     boolean isDisputeOwnedByUser(@Param("disputeId") Long disputeId, @Param("username")  String username);
+
+    @Query("SELECT d.payrollItem.employee.employeeId FROM DisputeRequest d WHERE d.disputeId = :disputeRequestId")
+    Long findEmployeeIdByDisputeRequestId(@Param("disputeRequestId") Long disputeRequestId);
 }
