@@ -2,6 +2,7 @@ package org.example.maridone.payroll.item.component;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
+import org.example.maridone.enums.EarningsType;
 import org.example.maridone.overtime.OvertimeRequest;
 import org.example.maridone.payroll.item.PayrollItem;
 
@@ -33,6 +34,16 @@ public class EarningsLine {
     // employee_rate * this.rate * hours
     @Column(name = "amount", nullable = false)
     private BigDecimal amount;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "earnings_type", nullable = false)
+    private EarningsType earningsType = EarningsType.FIXED;
+
+    @Column(name = "taxable_amount", nullable = false)
+    private BigDecimal taxableAmount = BigDecimal.ZERO;
+
+    @Column(name = "non_taxable_amount", nullable = false)
+    private BigDecimal nonTaxableAmount = BigDecimal.ZERO;
 
     @Column(name = "earnings_date", nullable = false)
     private LocalDate earningsDate;
@@ -96,6 +107,30 @@ public class EarningsLine {
 
     public void setEarningsDate(LocalDate earningsDate) {
         this.earningsDate = earningsDate;
+    }
+
+    public EarningsType getEarningsType() {
+        return earningsType;
+    }
+
+    public void setEarningsType(EarningsType earningsType) {
+        this.earningsType = earningsType;
+    }
+
+    public BigDecimal getTaxableAmount() {
+        return taxableAmount;
+    }
+
+    public void setTaxableAmount(BigDecimal taxableAmount) {
+        this.taxableAmount = taxableAmount;
+    }
+
+    public BigDecimal getNonTaxableAmount() {
+        return nonTaxableAmount;
+    }
+
+    public void setNonTaxableAmount(BigDecimal nonTaxableAmount) {
+        this.nonTaxableAmount = nonTaxableAmount;
     }
 
     public Boolean getOvertime() {

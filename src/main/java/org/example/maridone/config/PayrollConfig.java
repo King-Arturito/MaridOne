@@ -25,6 +25,7 @@ public class PayrollConfig {
     private BigDecimal regularHolidayWorkMultiplier = BigDecimal.valueOf(1.00);
     private BigDecimal vacationLeaveHours = BigDecimal.valueOf(40);
     private BigDecimal sickLeaveHours =  BigDecimal.valueOf(40);
+    private BigDecimal taxFreeBonusAnnualCap = BigDecimal.valueOf(90_000);
     private BigDecimal sssEmployeeRate = BigDecimal.valueOf(0.05);
     private BigDecimal sssMinimumMsc = BigDecimal.valueOf(5_000);
     private BigDecimal sssMaximumMsc = BigDecimal.valueOf(35_000);
@@ -131,6 +132,14 @@ public class PayrollConfig {
 
     public void setSickLeaveHours(BigDecimal sickLeaveHours) {
         this.sickLeaveHours = sickLeaveHours;
+    }
+
+    public BigDecimal getTaxFreeBonusAnnualCap() {
+        return taxFreeBonusAnnualCap;
+    }
+
+    public void setTaxFreeBonusAnnualCap(BigDecimal taxFreeBonusAnnualCap) {
+        this.taxFreeBonusAnnualCap = taxFreeBonusAnnualCap;
     }
 
     public BigDecimal getSssEmployeeRate() {

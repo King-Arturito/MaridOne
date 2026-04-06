@@ -77,6 +77,9 @@ public class PayrollCalculator {
         line.setEarningsDate(earningsDate);
         line.setPayrollItem(item);
         line.setOvertime(false);
+        line.setEarningsType(EarningsType.BASIC);
+        line.setTaxableAmount(CommonCalculator.normalize(amount));
+        line.setNonTaxableAmount(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
         return line;
     }
 
@@ -137,6 +140,14 @@ public class PayrollCalculator {
             }
             if (line.getAmount() == null) {
                 line.setAmount(BigDecimal.ZERO);
+            }
+            if (line.getEarningsType() == null) {
+                line.setEarningsType(EarningsType.FIXED);
+            }
+            if (line.getEarningsType() != EarningsType.BONUS) {
+                BigDecimal normalizedAmount = CommonCalculator.normalize(line.getAmount());
+                line.setTaxableAmount(normalizedAmount);
+                line.setNonTaxableAmount(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
             }
             earnings.add(line);
         }

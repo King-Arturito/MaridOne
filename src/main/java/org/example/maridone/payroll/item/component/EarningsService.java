@@ -44,32 +44,32 @@ public class EarningsService {
     private static final String PREMIUM_PAY = "Premium Pay";
 
     private final EarningsRepository earningsRepository;
-    private final DeductionsRepository deductionsRepository;
     private final PayrollItemRepository payrollItemRepository;
     private final PayrollMapper payrollMapper;
     private final HolidayService holidayService;
     private final DailyShiftRepository dailyShiftRepository;
     private final PayrollCalculator payrollCalculator;
     private final PayrollConfig payrollConfig;
+    private final PayrollItemTotalsService payrollItemTotalsService;
 
     public EarningsService(
             EarningsRepository earningsRepository,
-            DeductionsRepository deductionsRepository,
             PayrollItemRepository payrollItemRepository,
             PayrollMapper payrollMapper,
             HolidayService holidayService,
             DailyShiftRepository dailyShiftRepository,
             PayrollCalculator payrollCalculator,
-            PayrollConfig payrollConfig
+            PayrollConfig payrollConfig,
+            PayrollItemTotalsService payrollItemTotalsService
     ) {
         this.earningsRepository = earningsRepository;
-        this.deductionsRepository = deductionsRepository;
         this.payrollItemRepository = payrollItemRepository;
         this.payrollMapper = payrollMapper;
         this.holidayService = holidayService;
         this.dailyShiftRepository = dailyShiftRepository;
         this.payrollCalculator = payrollCalculator;
         this.payrollConfig = payrollConfig;
+        this.payrollItemTotalsService = payrollItemTotalsService;
     }
 
     @Transactional(readOnly = true)
@@ -107,9 +107,23 @@ public class EarningsService {
         }
 
         line.setAmount(updatedAmount);
+        if (line.getEarningsType() == null) {
+            line.setEarningsType(EarningsType.FIXED);
+        }
+        if (line.getEarningsType() != EarningsType.BONUS) {
+            payrollItemTotalsService.applyNonBonusTaxSplit(line, updatedAmount);
+        }
+
         EarningsLine updatedLine = earningsRepository.save(line);
-        refreshItemTotals(item);
-        return toDtos(List.of(updatedLine), buildContext(List.of(updatedLine))).get(0);
+        if (updatedLine.getEarningsType() == EarningsType.BONUS) {
+            payrollItemTotalsService.syncBonusTaxationForEmployeeYear(
+                    item.getEmployee(),
+                    updatedLine.getEarningsDate()
+            );
+        } else {
+            payrollItemTotalsService.refreshItem(item);
+        }
+        return toDtos(List.of(refetch(updatedLine)), buildContext(List.of(refetch(updatedLine)))).get(0);
     }
 
     @Transactional
@@ -122,19 +136,36 @@ public class EarningsService {
                 .orElseThrow(() -> new InvalidActionException("Payroll item ID:" + itemId + " not found."));
         PayrollRun run = requireEditableAdjustmentRun(item);
         BigDecimal amount = normalizePositive(payload.getAmount(), "Earnings amount must be greater than zero.");
+        EarningsType requestedType = payload.getEarningsType() == EarningsType.BONUS
+                ? EarningsType.BONUS
+                : EarningsType.FIXED;
 
         EarningsLine line = new EarningsLine();
         line.setPayrollItem(item);
-        line.setHours(BigDecimal.ONE.setScale(2));
-        line.setRate(amount);
+        line.setHours(requestedType == EarningsType.BONUS ? BigDecimal.ZERO.setScale(2) : BigDecimal.ONE.setScale(2));
+        line.setRate(requestedType == EarningsType.BONUS ? BigDecimal.ZERO.setScale(2) : amount);
         line.setAmount(amount);
         line.setEarningsDate(run.getPeriodEnd());
         line.setOvertime(false);
         line.setOvertimeRequest(null);
+        line.setEarningsType(requestedType);
+        if (requestedType == EarningsType.BONUS) {
+            line.setTaxableAmount(BigDecimal.ZERO.setScale(2));
+            line.setNonTaxableAmount(BigDecimal.ZERO.setScale(2));
+        } else {
+            payrollItemTotalsService.applyNonBonusTaxSplit(line, amount);
+        }
 
         EarningsLine createdLine = earningsRepository.save(line);
-        refreshItemTotals(item);
-        return toDtos(List.of(createdLine), buildContext(List.of(createdLine))).get(0);
+        if (requestedType == EarningsType.BONUS) {
+            payrollItemTotalsService.syncBonusTaxationForEmployeeYear(
+                    item.getEmployee(),
+                    createdLine.getEarningsDate()
+            );
+        } else {
+            payrollItemTotalsService.refreshItem(item);
+        }
+        return toDtos(List.of(refetch(createdLine)), buildContext(List.of(refetch(createdLine)))).get(0);
     }
 
     private List<EarningsDto> toDtos(List<EarningsLine> earnings, EarningsContext context) {
@@ -192,10 +223,15 @@ public class EarningsService {
     }
 
     private boolean needsClassificationContext(EarningsLine line) {
-        return !isBasicPay(line) && !Boolean.TRUE.equals(line.getOvertime());
+        return line.getEarningsType() != EarningsType.BONUS
+                && !isBasicPay(line)
+                && !Boolean.TRUE.equals(line.getOvertime());
     }
 
     private String describeLine(EarningsLine line, EarningsContext context) {
+        if (line.getEarningsType() == EarningsType.BONUS) {
+            return "Bonus";
+        }
         if (line.getPayrollItem() != null
                 && line.getPayrollItem().getPayrollRun() != null
                 && line.getPayrollItem().getPayrollRun().getRunType() == RunType.ADJUSTMENT) {
@@ -352,26 +388,11 @@ public class EarningsService {
         return normalized;
     }
 
-    private void refreshItemTotals(PayrollItem item) {
-        List<EarningsLine> earnings = earningsRepository.findByPayrollItem_ItemId(item.getItemId());
-        List<DeductionsLine> deductions = deductionsRepository.findByPayrollItem_ItemId(item.getItemId());
-
-        item.setEarnings(earnings);
-        item.setDeductions(deductions);
-
-        BigDecimal totalEarnings = earnings.stream()
-                .map(EarningsLine::getAmount)
-                .filter(amount -> amount != null)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-
-        BigDecimal totalDeductions = deductions.stream()
-                .map(DeductionsLine::getAmount)
-                .filter(amount -> amount != null)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-
-        item.setGrossPay(CommonCalculator.normalize(totalEarnings));
-        item.setNetPay(CommonCalculator.normalize(totalEarnings.subtract(totalDeductions)));
-        payrollItemRepository.save(item);
+    private EarningsLine refetch(EarningsLine line) {
+        if (line == null || line.getEarningsId() <= 0L) {
+            return line;
+        }
+        return earningsRepository.findById(line.getEarningsId()).orElse(line);
     }
 
     private String getCurrentUsername() {

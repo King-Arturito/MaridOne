@@ -23,20 +23,20 @@ import java.util.List;
 public class DeductionsService {
 
     private final DeductionsRepository deductionsRepository;
-    private final EarningsRepository earningsRepository;
     private final PayrollItemRepository payrollItemRepository;
     private final PayrollMapper payrollMapper;
+    private final PayrollItemTotalsService payrollItemTotalsService;
 
     public DeductionsService(
             DeductionsRepository deductionsRepository,
-            EarningsRepository earningsRepository,
             PayrollItemRepository payrollItemRepository,
-            PayrollMapper payrollMapper
+            PayrollMapper payrollMapper,
+            PayrollItemTotalsService payrollItemTotalsService
     ) {
         this.deductionsRepository = deductionsRepository;
-        this.earningsRepository = earningsRepository;
         this.payrollItemRepository = payrollItemRepository;
         this.payrollMapper = payrollMapper;
+        this.payrollItemTotalsService = payrollItemTotalsService;
     }
 
     @Transactional(readOnly = true)
@@ -70,7 +70,7 @@ public class DeductionsService {
 
         line.setAmount(updatedAmount);
         DeductionsLine updatedLine = deductionsRepository.save(line);
-        refreshItemTotals(item);
+        payrollItemTotalsService.refreshItem(item);
         return toDtos(List.of(updatedLine)).get(0);
     }
 
@@ -91,7 +91,7 @@ public class DeductionsService {
         line.setAmount(amount);
 
         DeductionsLine createdLine = deductionsRepository.save(line);
-        refreshItemTotals(item);
+        payrollItemTotalsService.refreshItem(item);
         return toDtos(List.of(createdLine)).get(0);
     }
 
@@ -186,28 +186,6 @@ public class DeductionsService {
             throw new InvalidActionException(errorMessage);
         }
         return normalized;
-    }
-
-    private void refreshItemTotals(PayrollItem item) {
-        List<EarningsLine> earnings = earningsRepository.findByPayrollItem_ItemId(item.getItemId());
-        List<DeductionsLine> deductions = deductionsRepository.findByPayrollItem_ItemId(item.getItemId());
-
-        item.setEarnings(earnings);
-        item.setDeductions(deductions);
-
-        BigDecimal totalEarnings = earnings.stream()
-                .map(EarningsLine::getAmount)
-                .filter(amount -> amount != null)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-
-        BigDecimal totalDeductions = deductions.stream()
-                .map(DeductionsLine::getAmount)
-                .filter(amount -> amount != null)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-
-        item.setGrossPay(CommonCalculator.normalize(totalEarnings));
-        item.setNetPay(CommonCalculator.normalize(totalEarnings.subtract(totalDeductions)));
-        payrollItemRepository.save(item);
     }
 
     private String getCurrentUsername() {

@@ -7,7 +7,9 @@ import org.example.maridone.core.employee.EmployeeRepository;
 import org.example.maridone.core.user.UserAccount;
 import org.example.maridone.document.DocumentService;
 import org.example.maridone.enums.Directories;
+import org.example.maridone.enums.EarningsType;
 import org.example.maridone.enums.ManagerTitle;
+import org.example.maridone.enums.RunType;
 import org.example.maridone.log.AttendanceLogRepository;
 import org.example.maridone.log.attendance.AttendanceLog;
 import org.example.maridone.payroll.item.PayrollItem;
@@ -275,9 +277,27 @@ public class PayslipService {
     public List<PayBreakdown> buildEarningsList(List<EarningsLine> earningsLines) {
         List<PayBreakdown> earnings = new ArrayList<>();
         for (EarningsLine earningsLine : earningsLines) {
-            String name = earningsLine.getOvertime() != null && earningsLine.getOvertime()
-                    ? "Overtime: " + earningsLine.getEarningsDate().toString()
-                    : earningsLine.getEarningsDate().toString();
+            String name;
+            if (earningsLine.getEarningsType() == EarningsType.BONUS) {
+                name = "Bonus";
+            } else if (earningsLine.getPayrollItem() != null
+                    && earningsLine.getPayrollItem().getPayrollRun() != null
+                    && earningsLine.getPayrollItem().getPayrollRun().getRunType() == RunType.ADJUSTMENT) {
+                name = "Manual Adjustment";
+            } else if (Boolean.TRUE.equals(earningsLine.getOvertime())) {
+                name = earningsLine.getEarningsDate() != null
+                        ? "Overtime: " + earningsLine.getEarningsDate()
+                        : "Overtime";
+            } else if (earningsLine.getHours() != null
+                    && earningsLine.getRate() != null
+                    && earningsLine.getHours().compareTo(BigDecimal.ZERO) == 0
+                    && earningsLine.getRate().compareTo(BigDecimal.ZERO) == 0) {
+                name = "Basic Pay";
+            } else {
+                name = earningsLine.getEarningsDate() != null
+                        ? earningsLine.getEarningsDate().toString()
+                        : "Earning";
+            }
 
             PayBreakdown breakdown = new PayBreakdown(name, earningsLine.getAmount());
             earnings.add(breakdown);

@@ -1,5 +1,6 @@
 package org.example.maridone.payroll.item.component;
 
+import org.example.maridone.enums.EarningsType;
 import org.example.maridone.payroll.projection.PayTypeSummaryProjection;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -15,9 +16,17 @@ public interface EarningsRepository extends JpaRepository<EarningsLine, Long> {
 
     List<EarningsLine>  findByPayrollItem_ItemIdOrderByEarningsDateAsc(Long itemId);
 
+    List<EarningsLine> findByPayrollItem_Employee_EmployeeIdAndEarningsTypeAndEarningsDateBetweenOrderByEarningsDateAscEarningsIdAsc(
+            Long employeeId,
+            EarningsType earningsType,
+            java.time.LocalDate startDate,
+            java.time.LocalDate endDate
+    );
+
     @Query(value = """
     SELECT
         CASE
+            WHEN e.earnings_type = 'BONUS' THEN 'BONUS'
             WHEN pr.run_type = 'ADJUSTMENT' THEN 'MANUAL_ADJUSTMENT'
             WHEN e.is_overtime = false THEN 'BASIC'
             ELSE cast(otr.overtime_type as text)
@@ -30,6 +39,7 @@ public interface EarningsRepository extends JpaRepository<EarningsLine, Long> {
     WHERE pi.pay_id = :payId
     GROUP BY 
         CASE 
+            WHEN e.earnings_type = 'BONUS' THEN 'BONUS'
             WHEN pr.run_type = 'ADJUSTMENT' THEN 'MANUAL_ADJUSTMENT'
             WHEN e.is_overtime = false THEN 'BASIC'
             ELSE cast(otr.overtime_type as text)

@@ -25,6 +25,7 @@ import org.example.maridone.config.DefaultConfig;
 import org.example.maridone.config.PayrollConfig;
 import org.example.maridone.core.employee.Employee;
 import org.example.maridone.core.employee.EmployeeRepository;
+import org.example.maridone.enums.EarningsType;
 import org.example.maridone.enums.EmploymentStatus;
 import org.example.maridone.enums.ExemptionStatus;
 import org.example.maridone.enums.PayrollStatus;
@@ -472,6 +473,9 @@ public class PayrollService {
                             restDayEarnings.setRate(hourlyRate.multiply(premiumMultiplier));
                             restDayEarnings.setAmount(restDayEarnings.getHours().multiply(restDayEarnings.getRate()));
                             restDayEarnings.setOvertime(false);
+                            restDayEarnings.setEarningsType(EarningsType.HOLIDAY);
+                            restDayEarnings.setTaxableAmount(restDayEarnings.getAmount());
+                            restDayEarnings.setNonTaxableAmount(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
                             earningsLines.add(restDayEarnings);
                         }
                     }
@@ -519,6 +523,9 @@ public class PayrollService {
                         nsdLine.setRate(hourlyRate.multiply(nsdRateMultiplier));
                         nsdLine.setAmount(regularNightHours.multiply(nsdLine.getRate()));
                         nsdLine.setOvertime(false);
+                        nsdLine.setEarningsType(EarningsType.NIGHTDIFF);
+                        nsdLine.setTaxableAmount(nsdLine.getAmount());
+                        nsdLine.setNonTaxableAmount(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
                         earningsLines.add(nsdLine);
                     }
 
@@ -537,6 +544,9 @@ public class PayrollService {
                         overtimeNsdLine.setRate(hourlyRate.multiply(overtimeNsdRateMultiplier));
                         overtimeNsdLine.setAmount(payableOt.nightHours().multiply(overtimeNsdLine.getRate()));
                         overtimeNsdLine.setOvertime(false);
+                        overtimeNsdLine.setEarningsType(EarningsType.NIGHTDIFF);
+                        overtimeNsdLine.setTaxableAmount(overtimeNsdLine.getAmount());
+                        overtimeNsdLine.setNonTaxableAmount(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
                         earningsLines.add(overtimeNsdLine);
                     }
                 }
@@ -553,6 +563,9 @@ public class PayrollService {
                     otLine.setAmount(otLine.getHours().multiply(otLine.getRate()));
                     otLine.setOvertime(true);
                     otLine.setOvertimeRequest(payableOt.request());
+                    otLine.setEarningsType(payableOt.request().getOvertimeType());
+                    otLine.setTaxableAmount(otLine.getAmount());
+                    otLine.setNonTaxableAmount(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
                     earningsLines.add(otLine);
                 }
 

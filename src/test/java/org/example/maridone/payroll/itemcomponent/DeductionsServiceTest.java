@@ -9,7 +9,7 @@ import org.example.maridone.payroll.item.PayrollItem;
 import org.example.maridone.payroll.item.component.DeductionsLine;
 import org.example.maridone.payroll.item.component.DeductionsRepository;
 import org.example.maridone.payroll.item.component.DeductionsService;
-import org.example.maridone.payroll.item.component.EarningsRepository;
+import org.example.maridone.payroll.item.component.PayrollItemTotalsService;
 import org.example.maridone.payroll.mapper.PayrollMapper;
 import org.example.maridone.payroll.run.PayrollItemRepository;
 import org.example.maridone.payroll.run.PayrollRun;
@@ -29,6 +29,7 @@ import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -38,13 +39,13 @@ class DeductionsServiceTest {
     private DeductionsRepository deductionsRepository;
 
     @Mock
-    private EarningsRepository earningsRepository;
-
-    @Mock
     private PayrollItemRepository payrollItemRepository;
 
     @Mock
     private PayrollMapper payrollMapper;
+
+    @Mock
+    private PayrollItemTotalsService payrollItemTotalsService;
 
     @InjectMocks
     private DeductionsService deductionsService;
@@ -105,11 +106,6 @@ class DeductionsServiceTest {
             savedLineRef.set(savedLine);
             return savedLine;
         });
-        when(deductionsRepository.findByPayrollItem_ItemId(81L)).thenAnswer(invocation ->
-                savedLineRef.get() == null ? List.of() : List.of(savedLineRef.get())
-        );
-        when(earningsRepository.findByPayrollItem_ItemId(81L)).thenReturn(List.of());
-        when(payrollItemRepository.save(any(PayrollItem.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(payrollMapper.toDeductionsDto(any(DeductionsLine.class))).thenAnswer(invocation -> {
             DeductionsLine savedLine = invocation.getArgument(0);
             DeductionsDto dto = new DeductionsDto();
@@ -117,6 +113,11 @@ class DeductionsServiceTest {
             dto.setDeductionType(savedLine.getDeductionType());
             return dto;
         });
+        doAnswer(invocation -> {
+            item.setGrossPay(new BigDecimal("0.00"));
+            item.setNetPay(new BigDecimal("-275.00"));
+            return null;
+        }).when(payrollItemTotalsService).refreshItem(item);
 
         DeductionsDto result = deductionsService.createDeduction(payload, 81L);
 
@@ -149,9 +150,6 @@ class DeductionsServiceTest {
 
         when(deductionsRepository.findById(14L)).thenReturn(Optional.of(line));
         when(deductionsRepository.save(any(DeductionsLine.class))).thenAnswer(invocation -> invocation.getArgument(0));
-        when(deductionsRepository.findByPayrollItem_ItemId(80L)).thenReturn(List.of(line));
-        when(earningsRepository.findByPayrollItem_ItemId(80L)).thenReturn(List.of());
-        when(payrollItemRepository.save(any(PayrollItem.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(payrollMapper.toDeductionsDto(any(DeductionsLine.class))).thenAnswer(invocation -> {
             DeductionsLine savedLine = invocation.getArgument(0);
             DeductionsDto dto = new DeductionsDto();
@@ -162,6 +160,11 @@ class DeductionsServiceTest {
             dto.setDeductionType(savedLine.getDeductionType());
             return dto;
         });
+        doAnswer(invocation -> {
+            item.setGrossPay(new BigDecimal("0.00"));
+            item.setNetPay(new BigDecimal("-850.00"));
+            return null;
+        }).when(payrollItemTotalsService).refreshItem(item);
 
         SecurityContextHolder.getContext().setAuthentication(
                 new UsernamePasswordAuthenticationToken("hr.payroll", "ignored", List.of())
