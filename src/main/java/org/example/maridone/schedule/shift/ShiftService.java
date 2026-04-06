@@ -13,6 +13,7 @@ import org.example.maridone.exception.notfound.ShiftsNotFoundException;
 import org.example.maridone.exception.unauthorized.InvalidActionException;
 import org.example.maridone.leave.request.LeaveRequest;
 import org.example.maridone.leave.request.LeaveRequestRepository;
+import org.example.maridone.notification.NotificationService;
 import org.example.maridone.schedule.dto.DailyShiftOverrideRequestDto;
 import org.example.maridone.schedule.dto.ShiftRequestDto;
 import org.example.maridone.schedule.dto.ShiftResponseDto;
@@ -20,6 +21,8 @@ import org.example.maridone.schedule.mapper.ScheduleMapper;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.time.format.DateTimeFormatter;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -27,12 +30,15 @@ import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
 public class ShiftService {
+    private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("MMMM d, yyyy", Locale.ENGLISH);
+    private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("h:mm a", Locale.ENGLISH);
 
     private final TemplateShiftRepository templateShiftRepository;
     private final DailyShiftRepository dailyShiftRepository;
@@ -40,6 +46,7 @@ public class ShiftService {
     private final LeaveRequestRepository leaveRequestRepository;
     private final ScheduleMapper scheduleMapper;
     private final DefaultConfig defaultConfig;
+    private final NotificationService notificationService;
 
     public ShiftService(
             TemplateShiftRepository templateShiftRepository,
@@ -47,13 +54,15 @@ public class ShiftService {
             DailyShiftRepository dailyShiftRepository,
             LeaveRequestRepository leaveRequestRepository,
             ScheduleMapper scheduleMapper,
-            DefaultConfig defaultConfig) {
+            DefaultConfig defaultConfig,
+            NotificationService notificationService) {
         this.templateShiftRepository = templateShiftRepository;
         this.employeeRepository = employeeRepository;
         this.dailyShiftRepository = dailyShiftRepository;
         this.leaveRequestRepository = leaveRequestRepository;
         this.scheduleMapper = scheduleMapper;
         this.defaultConfig = defaultConfig;
+        this.notificationService = notificationService;
     }
 
     //create all for 7 days [monday, ...., sunday]
@@ -154,6 +163,7 @@ public class ShiftService {
         templateShiftSchedule.setEndTime(payload.getEndTime());
         templateShiftSchedule.setDayOfWeek(payload.getDayOfWeek());
         templateShiftRepository.save(templateShiftSchedule);
+        notifyTemplateShiftChange(emp, payload.getDayOfWeek(), payload.getStartTime(), payload.getEndTime(), "set");
         return templateShiftSchedule;
     }
 
@@ -165,6 +175,7 @@ public class ShiftService {
         schedule.setEndTime(payload.getEndTime());
         schedule.setDayOfWeek(payload.getDayOfWeek());
         templateShiftRepository.save(schedule);
+        notifyTemplateShiftChange(schedule.getEmployee(), payload.getDayOfWeek(), payload.getStartTime(), payload.getEndTime(), "updated");
         return schedule;
     }
 
@@ -174,13 +185,15 @@ public class ShiftService {
         Employee employee = employeeRepository.findById(payload.getEmpId())
                 .orElseThrow(() -> new EmployeeNotFoundException(payload.getEmpId()));
 
-        return upsertDailyShiftOverride(
+        DailyShiftSchedule shift = upsertDailyShiftOverride(
                 employee,
                 payload.getWorkDate(),
                 payload.getStartTime(),
                 payload.getEndTime(),
                 payload.isDayOff()
         );
+        notifyDailyShiftOverride(employee, payload.getWorkDate(), payload.getStartTime(), payload.getEndTime(), payload.isDayOff());
+        return shift;
     }
 
     /*
@@ -372,5 +385,43 @@ public class ShiftService {
         if (startTime.equals(endTime)) {
             throw new InvalidActionException("Start time and end time cannot be the same unless the date is marked as day off.");
         }
+    }
+
+    private void notifyTemplateShiftChange(Employee employee, DayOfWeek dayOfWeek, LocalTime startTime, LocalTime endTime, String action) {
+        if (employee == null || dayOfWeek == null || startTime == null || endTime == null) {
+            return;
+        }
+
+        String message = String.format(
+                "Your recurring %s shift was %s to %s.",
+                formatDayOfWeek(dayOfWeek),
+                action,
+                formatTimeRange(startTime, endTime)
+        );
+        notificationService.createNotification(employee, message, "HIGH");
+    }
+
+    private void notifyDailyShiftOverride(Employee employee, LocalDate workDate, LocalTime startTime, LocalTime endTime, boolean dayOff) {
+        if (employee == null || workDate == null) {
+            return;
+        }
+
+        String message = dayOff
+                ? String.format("Your shift for %s was marked as day off.", DATE_FORMATTER.format(workDate))
+                : String.format(
+                "Your shift for %s was updated to %s.",
+                DATE_FORMATTER.format(workDate),
+                formatTimeRange(startTime, endTime)
+        );
+        notificationService.createNotification(employee, message, "HIGH");
+    }
+
+    private String formatDayOfWeek(DayOfWeek dayOfWeek) {
+        String lower = dayOfWeek.name().toLowerCase();
+        return Character.toUpperCase(lower.charAt(0)) + lower.substring(1);
+    }
+
+    private String formatTimeRange(LocalTime startTime, LocalTime endTime) {
+        return TIME_FORMATTER.format(startTime) + " - " + TIME_FORMATTER.format(endTime);
     }
 }

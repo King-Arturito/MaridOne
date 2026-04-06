@@ -23,8 +23,8 @@ public class PayrollConfig {
     private BigDecimal restDayWorkMultiplier = BigDecimal.valueOf(0.30);
     private BigDecimal specialHolidayWorkMultiplier = BigDecimal.valueOf(0.30);
     private BigDecimal regularHolidayWorkMultiplier = BigDecimal.valueOf(1.00);
-    private BigDecimal vacationLeaveHours = BigDecimal.valueOf(120);
-    private BigDecimal sickLeaveHours =  BigDecimal.valueOf(120);
+    private BigDecimal vacationLeaveHours = BigDecimal.valueOf(40);
+    private BigDecimal sickLeaveHours =  BigDecimal.valueOf(40);
     private BigDecimal sssEmployeeRate = BigDecimal.valueOf(0.05);
     private BigDecimal sssMinimumMsc = BigDecimal.valueOf(5_000);
     private BigDecimal sssMaximumMsc = BigDecimal.valueOf(35_000);

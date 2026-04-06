@@ -96,8 +96,8 @@ class EmployeeServiceTest {
         when(employeeRepository.save(any(Employee.class))).thenReturn(employee);
         when(coreMapper.toEmployeeResponse(any(Employee.class))).thenReturn(responseDto);
         when(userAccountRepository.findUsernameByEmployeeEmployeeId(anyLong())).thenReturn(Optional.empty());
-        when(payrollConfig.getSickLeaveHours()).thenReturn(java.math.BigDecimal.valueOf(120));
-        when(payrollConfig.getVacationLeaveHours()).thenReturn(java.math.BigDecimal.valueOf(120));
+        when(payrollConfig.getSickLeaveHours()).thenReturn(java.math.BigDecimal.valueOf(40));
+        when(payrollConfig.getVacationLeaveHours()).thenReturn(java.math.BigDecimal.valueOf(40));
 
         EmployeeResponseDto result = employeeService.createEmployee(requestDto);
 
@@ -226,8 +226,8 @@ class EmployeeServiceTest {
         when(employeeRepository.save(any(Employee.class))).thenReturn(employee);
         when(coreMapper.toEmployeeResponse(any(Employee.class))).thenReturn(responseDto);
         when(userAccountRepository.findUsernameByEmployeeEmployeeId(anyLong())).thenReturn(Optional.empty());
-        when(payrollConfig.getSickLeaveHours()).thenReturn(java.math.BigDecimal.valueOf(120));
-        when(payrollConfig.getVacationLeaveHours()).thenReturn(java.math.BigDecimal.valueOf(120));
+        when(payrollConfig.getSickLeaveHours()).thenReturn(java.math.BigDecimal.valueOf(40));
+        when(payrollConfig.getVacationLeaveHours()).thenReturn(java.math.BigDecimal.valueOf(40));
 
         employeeService.createEmployee(requestDto);
 

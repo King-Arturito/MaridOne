@@ -14,6 +14,7 @@ import org.example.maridone.core.employee.Employee;
 import org.example.maridone.core.employee.EmployeeRepository;
 import org.example.maridone.exception.unauthorized.InvalidActionException;
 import org.example.maridone.leave.request.LeaveRequestRepository;
+import org.example.maridone.notification.NotificationService;
 import org.example.maridone.schedule.dto.DailyShiftOverrideRequestDto;
 import org.example.maridone.schedule.dto.ShiftRequestDto;
 import org.example.maridone.schedule.dto.ShiftResponseDto;
@@ -43,6 +44,7 @@ class ShiftServiceTest {
     @Mock private LeaveRequestRepository leaveRequestRepository;
     @Mock private ScheduleMapper scheduleMapper;
     @Mock private DefaultConfig defaultConfig;
+    @Mock private NotificationService notificationService;
 
     @InjectMocks
     private ShiftService shiftService;
@@ -102,6 +104,7 @@ class ShiftServiceTest {
        
         Assertions.assertNotNull(result);
         Assertions.assertEquals(DayOfWeek.MONDAY, result.getDayOfWeek());
+        verify(notificationService).createNotification(emp, "Your recurring Monday shift was set to 9:00 AM - 6:00 PM.", "HIGH");
     }
 
     @Test
@@ -218,6 +221,45 @@ class ShiftServiceTest {
         Assertions.assertTrue(saved.isDayOff());
         Assertions.assertEquals(LocalDateTime.of(workDate, LocalTime.MIDNIGHT), saved.getStartDateTime());
         Assertions.assertEquals(LocalDateTime.of(workDate, LocalTime.MIDNIGHT), saved.getEndDateTime());
+        verify(notificationService).createNotification(
+                employee,
+                "Your shift for " + workDate.format(java.time.format.DateTimeFormatter.ofPattern("MMMM d, yyyy")) + " was marked as day off.",
+                "HIGH"
+        );
+    }
+
+    @Test
+    void updateShiftSchedule_ShouldNotifyEmployee() {
+        Long empId = 1L;
+        Long shiftId = 5L;
+
+        Employee employee = new Employee();
+        ReflectionTestUtils.setField(employee, "employeeId", empId);
+
+        TemplateShiftSchedule schedule = new TemplateShiftSchedule();
+        schedule.setEmployee(employee);
+        schedule.setDayOfWeek(DayOfWeek.TUESDAY);
+        schedule.setStartTime(LocalTime.of(8, 0));
+        schedule.setEndTime(LocalTime.of(17, 0));
+
+        ShiftRequestDto payload = new ShiftRequestDto();
+        ReflectionTestUtils.setField(payload, "shiftId", shiftId);
+        payload.setDayOfWeek(DayOfWeek.TUESDAY);
+        payload.setStartTime(LocalTime.of(10, 0));
+        payload.setEndTime(LocalTime.of(21, 0));
+
+        when(templateShiftRepository.findById(shiftId)).thenReturn(Optional.of(schedule));
+        when(templateShiftRepository.save(any(TemplateShiftSchedule.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        TemplateShiftSchedule updated = shiftService.updateShiftSchedule(payload);
+
+        Assertions.assertEquals(LocalTime.of(10, 0), updated.getStartTime());
+        Assertions.assertEquals(LocalTime.of(21, 0), updated.getEndTime());
+        verify(notificationService).createNotification(
+                employee,
+                "Your recurring Tuesday shift was updated to 10:00 AM - 9:00 PM.",
+                "HIGH"
+        );
     }
 
     @Test

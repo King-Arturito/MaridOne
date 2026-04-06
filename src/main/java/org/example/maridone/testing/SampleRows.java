@@ -297,7 +297,7 @@ public class SampleRows {
                 LeaveBalance leaveBalance = new LeaveBalance();
                 leaveBalance.setEmployee(employee);
                 leaveBalance.setLeaveType(leaveType);
-                leaveBalance.setBalanceHours(BigDecimal.valueOf(60.00));
+                leaveBalance.setBalanceHours(BigDecimal.valueOf(40.00));
                 leaveBalances.add(leaveBalance);
             }
         }
