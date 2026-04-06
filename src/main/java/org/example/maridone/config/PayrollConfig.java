@@ -1,15 +1,15 @@
 package org.example.maridone.config;
 
-import org.example.maridone.enums.DeductionType;
-import org.springframework.boot.context.properties.ConfigurationProperties;
-import org.springframework.stereotype.Component;
-import org.springframework.validation.annotation.Validated;
-
 import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
+
+import org.example.maridone.enums.DeductionType;
+import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.stereotype.Component;
+import org.springframework.validation.annotation.Validated;
 
 @Component
 @ConfigurationProperties("payroll")
@@ -17,6 +17,8 @@ import java.util.List;
 public class PayrollConfig {
     private Duration gracePeriod = Duration.of(15, ChronoUnit.MINUTES);
     private BigDecimal overtimeMultiplier = BigDecimal.valueOf(1.25);
+    private BigDecimal doubleOvertimeMultiplier = BigDecimal.valueOf(2.00);
+    private BigDecimal tripleOvertimeMultiplier = BigDecimal.valueOf(3.00);
     private BigDecimal nightDifferentialMultiplier = BigDecimal.valueOf(0.10);
     private BigDecimal restDayWorkMultiplier = BigDecimal.valueOf(0.30);
     private BigDecimal specialHolidayWorkMultiplier = BigDecimal.valueOf(0.30);
@@ -57,6 +59,22 @@ public class PayrollConfig {
 
     public void setOvertimeMultiplier(BigDecimal overtimeMultiplier) {
         this.overtimeMultiplier = overtimeMultiplier;
+    }
+
+    public BigDecimal getDoubleOvertimeMultiplier() {
+        return doubleOvertimeMultiplier;
+    }
+
+    public void setDoubleOvertimeMultiplier(BigDecimal doubleOvertimeMultiplier) {
+        this.doubleOvertimeMultiplier = doubleOvertimeMultiplier;
+    }
+
+    public BigDecimal getTripleOvertimeMultiplier() {
+        return tripleOvertimeMultiplier;
+    }
+
+    public void setTripleOvertimeMultiplier(BigDecimal tripleOvertimeMultiplier) {
+        this.tripleOvertimeMultiplier = tripleOvertimeMultiplier;
     }
 
     public BigDecimal getNightDifferentialMultiplier() {

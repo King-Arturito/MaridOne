@@ -3,6 +3,7 @@ package org.example.maridone.payroll.item.component;
 import org.example.maridone.common.CommonCalculator;
 import org.example.maridone.config.PayrollConfig;
 import org.example.maridone.core.employee.Employee;
+import org.example.maridone.enums.EarningsType;
 import org.example.maridone.enums.PayrollStatus;
 import org.example.maridone.holiday.HolidayLookup;
 import org.example.maridone.holiday.HolidayService;
@@ -33,6 +34,8 @@ public class EarningsService {
     private static final BigDecimal RATE_TOLERANCE = new BigDecimal("0.02");
     private static final String BASIC_PAY = "Basic Pay";
     private static final String APPROVED_OVERTIME = "Approved Overtime";
+    private static final String APPROVED_DOUBLE_OVERTIME = "Approved Double Overtime";
+    private static final String APPROVED_TRIPLE_OVERTIME = "Approved Triple Overtime";
     private static final String REGULAR_HOLIDAY_PREMIUM = "Regular Holiday Premium";
     private static final String SPECIAL_HOLIDAY_PREMIUM = "Special Holiday Premium";
     private static final String REST_DAY_PREMIUM = "Rest Day Premium";
@@ -200,7 +203,7 @@ public class EarningsService {
             return BASIC_PAY;
         }
         if (Boolean.TRUE.equals(line.getOvertime())) {
-            return APPROVED_OVERTIME;
+            return describeOvertimeLine(line);
         }
 
         LocalDate earningDate = line.getEarningsDate();
@@ -218,12 +221,7 @@ public class EarningsService {
         BigDecimal nightDiffExpectedRate = context.hourlyRate()
                 .multiply(workdayMultiplier)
                 .multiply(payrollConfig.getNightDifferentialMultiplier());
-        BigDecimal overtimeNightDiffExpectedRate = context.hourlyRate()
-                .multiply(workdayMultiplier)
-                .multiply(payrollConfig.getOvertimeMultiplier())
-                .multiply(payrollConfig.getNightDifferentialMultiplier());
-
-        if (matchesRate(line.getRate(), overtimeNightDiffExpectedRate)) {
+        if (matchesOvertimeNightDiffRate(line.getRate(), context.hourlyRate(), workdayMultiplier)) {
             return OT_NIGHT_DIFFERENTIAL;
         }
         if (matchesRate(line.getRate(), nightDiffExpectedRate)) {
@@ -244,6 +242,17 @@ public class EarningsService {
         return PREMIUM_PAY;
     }
 
+    private String describeOvertimeLine(EarningsLine line) {
+        if (line.getOvertimeRequest() == null || line.getOvertimeRequest().getOvertimeType() == null) {
+            return APPROVED_OVERTIME;
+        }
+        return switch (line.getOvertimeRequest().getOvertimeType()) {
+            case DOUBLE_OVERTIME -> APPROVED_DOUBLE_OVERTIME;
+            case TRIPLE_OVERTIME -> APPROVED_TRIPLE_OVERTIME;
+            default -> APPROVED_OVERTIME;
+        };
+    }
+
     private boolean isBasicPay(EarningsLine line) {
         return isZero(line.getHours()) && isZero(line.getRate());
     }
@@ -257,6 +266,27 @@ public class EarningsService {
                 .subtract(normalize(expected))
                 .abs()
                 .compareTo(RATE_TOLERANCE) <= 0;
+    }
+
+    private boolean matchesOvertimeNightDiffRate(
+            BigDecimal actualRate,
+            BigDecimal hourlyRate,
+            BigDecimal workdayMultiplier
+    ) {
+        for (EarningsType overtimeType : List.of(
+                EarningsType.OVERTIME,
+                EarningsType.DOUBLE_OVERTIME,
+                EarningsType.TRIPLE_OVERTIME
+        )) {
+            BigDecimal expectedRate = hourlyRate
+                    .multiply(workdayMultiplier)
+                    .multiply(payrollCalculator.resolveOvertimeMultiplier(overtimeType))
+                    .multiply(payrollConfig.getNightDifferentialMultiplier());
+            if (matchesRate(actualRate, expectedRate)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private BigDecimal normalize(BigDecimal value) {

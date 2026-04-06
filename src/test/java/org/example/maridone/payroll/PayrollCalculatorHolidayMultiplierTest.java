@@ -2,6 +2,7 @@ package org.example.maridone.payroll;
 
 import org.example.maridone.config.DefaultConfig;
 import org.example.maridone.config.PayrollConfig;
+import org.example.maridone.enums.EarningsType;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
@@ -45,6 +46,29 @@ class PayrollCalculatorHolidayMultiplierTest {
         ));
         Assertions.assertEquals(0, new BigDecimal("2.00").compareTo(
                 payrollCalculator.resolveHolidayOrRestDayMultiplier(false, true, true)
+        ));
+    }
+
+    @Test
+    void resolveOvertimeMultiplier_ShouldRespectOvertimeType() {
+        PayrollConfig payrollConfig = new PayrollConfig();
+        PayrollCalculator payrollCalculator = new PayrollCalculator(
+                new BracketService(payrollConfig),
+                Mockito.mock(DefaultConfig.class),
+                payrollConfig
+        );
+
+        Assertions.assertEquals(0, new BigDecimal("1.25").compareTo(
+                payrollCalculator.resolveOvertimeMultiplier(null)
+        ));
+        Assertions.assertEquals(0, new BigDecimal("1.25").compareTo(
+                payrollCalculator.resolveOvertimeMultiplier(EarningsType.OVERTIME)
+        ));
+        Assertions.assertEquals(0, new BigDecimal("2.00").compareTo(
+                payrollCalculator.resolveOvertimeMultiplier(EarningsType.DOUBLE_OVERTIME)
+        ));
+        Assertions.assertEquals(0, new BigDecimal("3.00").compareTo(
+                payrollCalculator.resolveOvertimeMultiplier(EarningsType.TRIPLE_OVERTIME)
         ));
     }
 }

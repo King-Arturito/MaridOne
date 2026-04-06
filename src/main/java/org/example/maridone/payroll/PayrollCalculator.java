@@ -16,6 +16,7 @@ import org.example.maridone.config.DefaultConfig;
 import org.example.maridone.config.PayrollConfig;
 import org.example.maridone.core.employee.Employee;
 import org.example.maridone.enums.DeductionType;
+import org.example.maridone.enums.EarningsType;
 import org.example.maridone.enums.ExemptionStatus;
 import org.example.maridone.leave.request.LeaveRequest;
 import org.example.maridone.log.attendance.AttendanceLog;
@@ -627,6 +628,16 @@ public class PayrollCalculator {
     public BigDecimal resolveHolidayOrRestDayMultiplier(boolean isRestDay, boolean isHoliday, boolean isRegularHoliday) {
         BigDecimal premiumRate = resolveHolidayOrRestDayPremiumRate(isRestDay, isHoliday, isRegularHoliday);
         return premiumRate.add(BigDecimal.ONE);
+    }
+
+    public BigDecimal resolveOvertimeMultiplier(EarningsType overtimeType) {
+        if (overtimeType == EarningsType.DOUBLE_OVERTIME) {
+            return payrollConfig.getDoubleOvertimeMultiplier();
+        }
+        if (overtimeType == EarningsType.TRIPLE_OVERTIME) {
+            return payrollConfig.getTripleOvertimeMultiplier();
+        }
+        return payrollConfig.getOvertimeMultiplier();
     }
 
     private BigDecimal resolveSssMsc(BigDecimal monthlyCompensation) {

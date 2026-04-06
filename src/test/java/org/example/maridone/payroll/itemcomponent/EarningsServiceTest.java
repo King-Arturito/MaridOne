@@ -2,11 +2,13 @@ package org.example.maridone.payroll.itemcomponent;
 
 import org.example.maridone.config.PayrollConfig;
 import org.example.maridone.core.employee.Employee;
+import org.example.maridone.enums.EarningsType;
 import org.example.maridone.enums.PayrollStatus;
 import org.example.maridone.enums.RunType;
 import org.example.maridone.exception.unauthorized.InvalidActionException;
 import org.example.maridone.holiday.HolidayLookup;
 import org.example.maridone.holiday.HolidayService;
+import org.example.maridone.overtime.OvertimeRequest;
 import org.example.maridone.payroll.PayrollCalculator;
 import org.example.maridone.payroll.dto.EarningsDto;
 import org.example.maridone.payroll.item.PayrollItem;
@@ -95,6 +97,30 @@ class EarningsServiceTest {
     }
 
     @Test
+    void getEarnings_ShouldReturnApprovedDoubleOvertimeDescription() {
+        Long itemId = 53L;
+        EarningsLine line = new EarningsLine();
+        ReflectionTestUtils.setField(line, "earningsId", 22L);
+        line.setHours(new BigDecimal("2.00"));
+        line.setRate(new BigDecimal("500.00"));
+        line.setAmount(new BigDecimal("1000.00"));
+        line.setOvertime(true);
+
+        OvertimeRequest overtimeRequest = new OvertimeRequest();
+        overtimeRequest.setOvertimeType(EarningsType.DOUBLE_OVERTIME);
+        line.setOvertimeRequest(overtimeRequest);
+
+        EarningsDto dto = new EarningsDto();
+
+        when(earningsRepository.findByPayrollItem_ItemId(itemId)).thenReturn(List.of(line));
+        when(payrollMapper.toEarningsDto(line)).thenReturn(dto);
+
+        List<EarningsDto> result = earningsService.getEarnings(itemId);
+
+        Assertions.assertEquals("Approved Double Overtime", result.get(0).getDescription());
+    }
+
+    @Test
     void getEarnings_ShouldLabelRegularHolidayPremium() {
         Long itemId = 51L;
         LocalDate earningDate = LocalDate.of(2026, 4, 9);
@@ -138,7 +164,9 @@ class EarningsServiceTest {
         when(payrollCalculator.resolveHolidayOrRestDayPremiumRate(false, true, true)).thenReturn(BigDecimal.ONE);
         when(payrollCalculator.resolveHolidayOrRestDayMultiplier(false, true, true)).thenReturn(new BigDecimal("2.00"));
         when(payrollConfig.getNightDifferentialMultiplier()).thenReturn(new BigDecimal("0.10"));
-        when(payrollConfig.getOvertimeMultiplier()).thenReturn(new BigDecimal("1.25"));
+        when(payrollCalculator.resolveOvertimeMultiplier(EarningsType.OVERTIME)).thenReturn(new BigDecimal("1.25"));
+        when(payrollCalculator.resolveOvertimeMultiplier(EarningsType.DOUBLE_OVERTIME)).thenReturn(new BigDecimal("2.00"));
+        when(payrollCalculator.resolveOvertimeMultiplier(EarningsType.TRIPLE_OVERTIME)).thenReturn(new BigDecimal("3.00"));
 
         List<EarningsDto> result = earningsService.getEarnings(itemId);
 

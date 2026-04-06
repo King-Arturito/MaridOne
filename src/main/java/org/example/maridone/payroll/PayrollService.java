@@ -6,6 +6,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -459,15 +460,20 @@ public class PayrollService {
                         earningsLines.add(nsdLine);
                     }
 
-                    if (payableNightOvertimeHours.compareTo(BigDecimal.ZERO) > 0) {
+                    for (PayableOvertimeBreakdown payableOt : payableTodaysOT) {
+                        if (payableOt.nightHours().compareTo(BigDecimal.ZERO) <= 0) {
+                            continue;
+                        }
                         EarningsLine overtimeNsdLine = new EarningsLine();
                         overtimeNsdLine.setEarningsDate(loopDate);
-                        overtimeNsdLine.setHours(payableNightOvertimeHours);
+                        overtimeNsdLine.setHours(payableOt.nightHours());
                         BigDecimal overtimeNsdRateMultiplier = dayWorkMultiplier
-                                .multiply(payrollConfig.getOvertimeMultiplier())
+                                .multiply(payrollCalculator.resolveOvertimeMultiplier(
+                                        payableOt.request().getOvertimeType()
+                                ))
                                 .multiply(payrollConfig.getNightDifferentialMultiplier());
                         overtimeNsdLine.setRate(hourlyRate.multiply(overtimeNsdRateMultiplier));
-                        overtimeNsdLine.setAmount(payableNightOvertimeHours.multiply(overtimeNsdLine.getRate()));
+                        overtimeNsdLine.setAmount(payableOt.nightHours().multiply(overtimeNsdLine.getRate()));
                         overtimeNsdLine.setOvertime(false);
                         earningsLines.add(overtimeNsdLine);
                     }
@@ -478,7 +484,9 @@ public class PayrollService {
                     EarningsLine otLine = new EarningsLine();
                     otLine.setEarningsDate(loopDate);
                     otLine.setHours(payableOt.payableHours());
-                    BigDecimal overtimeRateMultiplier = dayWorkMultiplier.multiply(payrollConfig.getOvertimeMultiplier());
+                    BigDecimal overtimeRateMultiplier = dayWorkMultiplier.multiply(
+                            payrollCalculator.resolveOvertimeMultiplier(payableOt.request().getOvertimeType())
+                    );
                     otLine.setRate(hourlyRate.multiply(overtimeRateMultiplier));
                     otLine.setAmount(otLine.getHours().multiply(otLine.getRate()));
                     otLine.setOvertime(true);
@@ -783,6 +791,16 @@ public class PayrollService {
         if (payload.getPeriodEnd().isBefore(payload.getPeriodStart())) {
             throw new InvalidActionException("Payroll period end cannot be earlier than the start date.");
         }
+        LocalDate today = LocalDate.now(resolvePayrollTimeZone());
+        if (payload.getPeriodStart().isAfter(today) || payload.getPeriodEnd().isAfter(today)) {
+            throw new InvalidActionException("Payroll period dates cannot be later than today.");
+        }
+    }
+
+    private ZoneId resolvePayrollTimeZone() {
+        return defaultConfig != null && defaultConfig.getTimeZone() != null
+                ? defaultConfig.getTimeZone()
+                : ZoneId.systemDefault();
     }
 
     private void assertProcessablePayroll(RunCreateDto payload) {

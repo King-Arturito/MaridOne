@@ -14,6 +14,7 @@ import org.example.maridone.config.PayrollConfig;
 import org.example.maridone.core.employee.Employee;
 import org.example.maridone.core.employee.EmployeeRepository;
 import org.example.maridone.enums.DeductionType;
+import org.example.maridone.enums.EarningsType;
 import org.example.maridone.enums.ExemptionStatus;
 import org.example.maridone.enums.PayrollStatus;
 import org.example.maridone.enums.RunType;
@@ -381,6 +382,59 @@ class PayrollServiceTest {
     }
 
     @Test
+    void processPayrollNonExempt_DoubleNightOvertimeShouldUseDoubleOvertimeRates() {
+        LocalDate workDate = LocalDate.of(2026, 3, 24);
+        PayrollRun run = buildSingleDayRun(workDate);
+        Employee employee = buildEmployee(17L, ExemptionStatus.NON_EXEMPT, "624000.00");
+        DailyShiftSchedule dailyShift = buildDailyShift(employee, workDate, LocalTime.of(14, 0), LocalTime.of(22, 0));
+        OvertimeRequest overtimeRequest = buildOvertimeRequest(
+                employee,
+                workDate,
+                workDate.atTime(22, 0),
+                workDate.plusDays(1).atTime(0, 0),
+                EarningsType.DOUBLE_OVERTIME
+        );
+        List<AttendanceLog> attendanceLogs = List.of(
+                buildAttendanceLog(employee, workDate, LocalTime.of(14, 0), "IN"),
+                buildAttendanceLog(employee, workDate.plusDays(1), LocalTime.of(0, 0), "OUT")
+        );
+
+        when(defaultConfig.getTimeZone()).thenReturn(ZONE);
+        when(attendanceLogRepository.findByEmployeeIdInAndTimestampBetween(anyList(), any(Instant.class), any(Instant.class), any()))
+                .thenReturn(attendanceLogs);
+        when(overtimeRequestRepository.findAll(any(Specification.class)))
+                .thenReturn(List.of(overtimeRequest));
+        when(dailyShiftRepository.findAllByEmployeeIdsAndPeriod(anyList(), any(LocalDateTime.class), any(LocalDateTime.class)))
+                .thenReturn(List.of(dailyShift));
+        when(leaveRequestRepository.findApprovedLeavesForPeriod(anyList(), any(LocalDateTime.class), any(LocalDateTime.class)))
+                .thenReturn(List.of());
+        when(holidayService.getHolidayLookup(any(LocalDate.class), any(LocalDate.class)))
+                .thenReturn(HolidayLookup.empty());
+
+        List<PayrollItem> items = new ArrayList<>();
+        payrollService.processPayrollNonExempt(run, items, List.of(employee));
+
+        Assertions.assertEquals(1, items.size());
+        PayrollItem item = items.get(0);
+
+        EarningsLine overtimeLine = item.getEarnings().stream()
+                .filter(line -> Boolean.TRUE.equals(line.getOvertime()))
+                .findFirst()
+                .orElseThrow();
+        assertBigDecimalEquals("2.00", overtimeLine.getHours());
+        assertBigDecimalEquals("1000.00", overtimeLine.getAmount());
+
+        EarningsLine overtimeNightDiffLine = item.getEarnings().stream()
+                .filter(line -> !Boolean.TRUE.equals(line.getOvertime()))
+                .filter(line -> line.getHours() != null && line.getHours().compareTo(BigDecimal.ZERO) > 0)
+                .findFirst()
+                .orElseThrow();
+        assertBigDecimalEquals("2.00", overtimeNightDiffLine.getHours());
+        assertBigDecimalEquals("100.00", overtimeNightDiffLine.getAmount());
+        assertBigDecimalEquals("27100.00", item.getGrossPay());
+    }
+
+    @Test
     void processPayroll_RegularRunShouldReturnGeneratedRunView() {
         LocalDate workDate = LocalDate.of(2026, 3, 25);
         RunCreateDto payload = buildRunPayload(workDate, workDate, RunType.REGULAR);
@@ -485,8 +539,8 @@ class PayrollServiceTest {
 
     @Test
     void processPayroll_ShouldExcludeEmployeeWithoutDailyShiftsOrPaidLeave() {
-        LocalDate periodStart = LocalDate.of(2026, 4, 1);
-        LocalDate periodEnd = LocalDate.of(2026, 4, 15);
+        LocalDate periodStart = LocalDate.of(2026, 4, 5);
+        LocalDate periodEnd = LocalDate.of(2026, 4, 5);
         RunCreateDto payload = buildRunPayload(periodStart, periodEnd, RunType.REGULAR);
         PayrollRunViewDto viewDto = new PayrollRunViewDto(
                 79L,
@@ -532,8 +586,8 @@ class PayrollServiceTest {
 
     @Test
     void processPayroll_ShouldKeepEmployeeWithPaidLeaveEvenWithoutDailyShifts() {
-        LocalDate periodStart = LocalDate.of(2026, 4, 16);
-        LocalDate periodEnd = LocalDate.of(2026, 4, 16);
+        LocalDate periodStart = LocalDate.of(2026, 4, 5);
+        LocalDate periodEnd = LocalDate.of(2026, 4, 5);
         RunCreateDto payload = buildRunPayload(periodStart, periodEnd, RunType.REGULAR);
         PayrollRunViewDto viewDto = new PayrollRunViewDto(
                 80L,
@@ -594,6 +648,24 @@ class PayrollServiceTest {
         RunCreateDto payload = buildRunPayload(workDate, workDate, RunType.ADJUSTMENT);
 
         Assertions.assertThrows(InvalidActionException.class, () -> payrollService.processPayroll(payload));
+    }
+
+    @Test
+    void processPayroll_FuturePeriodShouldRejectGeneration() {
+        when(defaultConfig.getTimeZone()).thenReturn(ZONE);
+        LocalDate tomorrow = LocalDate.now(ZONE).plusDays(1);
+        RunCreateDto payload = buildRunPayload(tomorrow, tomorrow, RunType.REGULAR);
+
+        Assertions.assertThrows(InvalidActionException.class, () -> payrollService.processPayroll(payload));
+    }
+
+    @Test
+    void createRun_FuturePeriodShouldRejectCreation() {
+        when(defaultConfig.getTimeZone()).thenReturn(ZONE);
+        LocalDate tomorrow = LocalDate.now(ZONE).plusDays(1);
+        RunCreateDto payload = buildRunPayload(tomorrow, tomorrow, RunType.ADJUSTMENT);
+
+        Assertions.assertThrows(InvalidActionException.class, () -> payrollService.createRun(payload));
     }
 
     @Test
@@ -716,11 +788,22 @@ class PayrollServiceTest {
             LocalDateTime startDateTime,
             LocalDateTime endDateTime
     ) {
+        return buildOvertimeRequest(employee, workDate, startDateTime, endDateTime, EarningsType.OVERTIME);
+    }
+
+    private OvertimeRequest buildOvertimeRequest(
+            Employee employee,
+            LocalDate workDate,
+            LocalDateTime startDateTime,
+            LocalDateTime endDateTime,
+            EarningsType overtimeType
+    ) {
         OvertimeRequest overtimeRequest = new OvertimeRequest();
         overtimeRequest.setEmployee(employee);
         overtimeRequest.setWorkDate(workDate);
         overtimeRequest.setStartTime(startDateTime);
         overtimeRequest.setEndTime(endDateTime);
+        overtimeRequest.setOvertimeType(overtimeType);
         overtimeRequest.setRequestStatus(Status.APPROVED);
         overtimeRequest.setReason("Test overtime");
         ReflectionTestUtils.setField(overtimeRequest, "employeeId", employee.getEmployeeId());
