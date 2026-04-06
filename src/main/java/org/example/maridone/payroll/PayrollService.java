@@ -10,6 +10,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -154,9 +155,11 @@ public class PayrollService {
         //create a payroll run for periodStart - periodEnd
         PayrollRun run = createRun(payload);
 
-        Specification<Employee> spec = CommonSpecs.fieldNotEquals("employmentStatus", EmploymentStatus.TERMINATED);
-        //get non-terminated employees
-        List<Employee> employees = findActiveEmployees(spec);
+        // Only include employees whose employment window overlaps the payroll period.
+        List<Employee> employees = findPayrollEligibleEmployees(run);
+        // Automatic payroll should only include employees with generated work schedules
+        // for the period, or paid leave that legitimately replaces those schedules.
+        employees = filterEmployeesWithPayrollInputs(run, employees);
         //separate employees by exempt and nonexempt
         Map<Boolean, List<Employee>> partitioned = partitionEmployeesByExemption(employees);
         List<Employee> exemptEmployees = partitioned.getOrDefault(true, List.of());
@@ -638,8 +641,58 @@ public class PayrollService {
         return values == null ? List.of() : values;
     }
 
-    private List<Employee> findActiveEmployees(Specification<Employee> spec) {
-        return employeeRepository.findAll(spec);
+    private List<Employee> findPayrollEligibleEmployees(PayrollRun run) {
+        return employeeRepository.findPayrollEligibleEmployees(
+                run.getPeriodStart(),
+                run.getPeriodEnd(),
+                EmploymentStatus.TERMINATED
+        );
+    }
+
+    private List<Employee> filterEmployeesWithPayrollInputs(PayrollRun run, List<Employee> employees) {
+        if (employees == null || employees.isEmpty()) {
+            return List.of();
+        }
+
+        List<Long> employeeIds = employees.stream()
+                .map(Employee::getEmployeeId)
+                .filter(Objects::nonNull)
+                .toList();
+
+        if (employeeIds.isEmpty()) {
+            return List.of();
+        }
+
+        LocalDateTime schedulePeriodStart = run.getPeriodStart().atStartOfDay();
+        LocalDateTime schedulePeriodEndExclusive = run.getPeriodEnd().plusDays(1).atStartOfDay();
+
+        Set<Long> scheduledEmployeeIds = findDailySchedules(
+                employeeIds,
+                schedulePeriodStart,
+                schedulePeriodEndExclusive
+        ).stream()
+                .map(DailyShiftSchedule::getEmployeeId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+
+        Set<Long> paidLeaveEmployeeIds = findApprovedLeaves(
+                employeeIds,
+                schedulePeriodStart,
+                schedulePeriodEndExclusive
+        ).stream()
+                .map(LeaveRequest::getEmployee)
+                .filter(Objects::nonNull)
+                .map(Employee::getEmployeeId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+
+        return employees.stream()
+                .filter(employee -> {
+                    Long employeeId = employee.getEmployeeId();
+                    return employeeId != null
+                            && (scheduledEmployeeIds.contains(employeeId) || paidLeaveEmployeeIds.contains(employeeId));
+                })
+                .toList();
     }
 
     private Map<Boolean, List<Employee>> partitionEmployeesByExemption(List<Employee> employees) {

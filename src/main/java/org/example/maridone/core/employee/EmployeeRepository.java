@@ -9,6 +9,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.time.LocalDate;
 import java.util.List;
 
 @Repository
@@ -32,5 +33,18 @@ public interface EmployeeRepository extends JpaRepository<Employee, Long>, JpaSp
     List<Employee> findByManager_EmployeeIdAndEmploymentStatusNotOrderByLastNameAscFirstNameAsc(
             Long managerId,
             EmploymentStatus employmentStatus
+    );
+
+    @Query("""
+        SELECT e
+        FROM Employee e
+        WHERE e.employmentStatus <> :excludedStatus
+          AND e.employmentDateStart <= :periodEnd
+          AND (e.employmentDateEnd IS NULL OR e.employmentDateEnd >= :periodStart)
+    """)
+    List<Employee> findPayrollEligibleEmployees(
+            @Param("periodStart") LocalDate periodStart,
+            @Param("periodEnd") LocalDate periodEnd,
+            @Param("excludedStatus") EmploymentStatus excludedStatus
     );
 }
