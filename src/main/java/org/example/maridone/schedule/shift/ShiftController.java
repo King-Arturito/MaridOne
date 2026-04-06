@@ -3,6 +3,7 @@ package org.example.maridone.schedule.shift;
 import org.example.maridone.annotation.AuditLog;
 import org.example.maridone.marker.OnCreate;
 import org.example.maridone.marker.OnUpdate;
+import org.example.maridone.schedule.dto.DailyShiftOverrideRequestDto;
 import org.example.maridone.schedule.dto.ShiftRequestDto;
 import org.example.maridone.schedule.dto.ShiftResponseDto;
 import org.springframework.http.ResponseEntity;
@@ -31,7 +32,7 @@ public class ShiftController {
     //add shift
     // if missing some shifts for some reason.
     @PostMapping("/add")
-    @PreAuthorize("hasRole('HR')")
+    @PreAuthorize("hasRole('HR') or @managedEmployeeCheck.canManageEmployee(#payload.empId, authentication.name)")
     public ResponseEntity<TemplateShiftSchedule> addShiftSchedule(
             @RequestBody @Validated(OnCreate.class) ShiftRequestDto payload) {
         TemplateShiftSchedule schedule = shiftService.addShiftSchedule(payload);
@@ -44,7 +45,7 @@ public class ShiftController {
 
     //update shift
     @PatchMapping("/update")
-    @PreAuthorize("hasRole('HR')")
+    @PreAuthorize("hasRole('HR') or @managedEmployeeCheck.canManageShift(#payload.shiftId, authentication.name)")
     @AuditLog
     public ResponseEntity<TemplateShiftSchedule> updateShiftSchedule(
             @RequestBody @Validated(OnUpdate.class) ShiftRequestDto payload) {
@@ -54,7 +55,7 @@ public class ShiftController {
     //shift change request
 
     //get employee shifts
-    @PreAuthorize("@userCheck.isSelf(#empId, Authentication.getName())")
+    @PreAuthorize("hasRole('HR') or @userCheck.isSelf(#empId, authentication.name) or @managedEmployeeCheck.canManageEmployee(#empId, authentication.name)")
     @GetMapping("/{empId}")
     public List<ShiftResponseDto> getShiftSchedule(
             @PathVariable Long empId) {
@@ -73,9 +74,45 @@ public class ShiftController {
                         shift.getEmployeeId(),
                         shift.getWorkDate(),
                         shift.getStartDateTime(),
-                        shift.getEndDateTime()
+                        shift.getEndDateTime(),
+                        shift.isDayOff()
                 ))
                 .toList();
+    }
+
+    @GetMapping("/daily/{empId}")
+    @PreAuthorize("hasRole('HR') or @userCheck.isSelf(#empId, authentication.name) or @managedEmployeeCheck.canManageEmployee(#empId, authentication.name)")
+    public List<DailyShiftResponse> getDailyShiftsForEmployee(
+            @PathVariable Long empId,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate
+    ) {
+        return shiftService.getDailyShiftsForEmployee(empId, startDate, endDate).stream()
+                .map(shift -> new DailyShiftResponse(
+                        shift.getDailyShiftId(),
+                        shift.getEmployeeId(),
+                        shift.getWorkDate(),
+                        shift.getStartDateTime(),
+                        shift.getEndDateTime(),
+                        shift.isDayOff()
+                ))
+                .toList();
+    }
+
+    @PutMapping("/daily/override")
+    @PreAuthorize("hasRole('HR') or @managedEmployeeCheck.canManageEmployee(#payload.empId, authentication.name)")
+    @AuditLog
+    public ResponseEntity<DailyShiftResponse> upsertDailyShiftOverride(
+            @RequestBody @Validated DailyShiftOverrideRequestDto payload) {
+        DailyShiftSchedule shift = shiftService.upsertDailyShiftOverride(payload);
+        return ResponseEntity.ok(new DailyShiftResponse(
+                shift.getDailyShiftId(),
+                shift.getEmployeeId(),
+                shift.getWorkDate(),
+                shift.getStartDateTime(),
+                shift.getEndDateTime(),
+                shift.isDayOff()
+        ));
     }
 
     public record DailyShiftResponse(
@@ -83,7 +120,8 @@ public class ShiftController {
             Long employeeId,
             LocalDate workDate,
             LocalDateTime startDateTime,
-            LocalDateTime endDateTime
+            LocalDateTime endDateTime,
+            boolean dayOff
     ) {
     }
 }

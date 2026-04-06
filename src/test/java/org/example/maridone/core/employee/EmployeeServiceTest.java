@@ -21,6 +21,7 @@ import org.example.maridone.exception.unauthorized.InvalidActionException;
 import org.example.maridone.leave.balance.LeaveBalance;
 import org.example.maridone.leave.balance.LeaveBalanceRepository;
 import org.example.maridone.schedule.mapper.ScheduleMapper;
+import org.example.maridone.schedule.shift.ShiftService;
 import org.example.maridone.schedule.shift.TemplateShiftRepository;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
@@ -54,6 +55,9 @@ class EmployeeServiceTest {
 
     @Mock
     private ScheduleMapper scheduleMapper;
+
+    @Mock
+    private ShiftService shiftService;
 
     @Mock
     private PayrollConfig payrollConfig;
@@ -103,6 +107,7 @@ class EmployeeServiceTest {
         Assertions.assertNotNull(employee.getEmploymentDateStart());
         Assertions.assertEquals(ExemptionStatus.NON_EXEMPT, employee.getExemptionStatus());
         verify(employeeRepository).save(any(Employee.class));
+        verify(shiftService).createShifts(employee);
         verify(leaveBalanceRepository).saveAll(argThat(balances -> {
                     List<LeaveBalance> collected = new ArrayList<>();
                     balances.forEach(collected::add);

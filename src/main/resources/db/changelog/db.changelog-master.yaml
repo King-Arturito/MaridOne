@@ -43,3 +43,5 @@ databaseChangeLog:
       file: db/changelog/022-add-password-reset-fields-to-userAccount.sql
   - include:
       file: db/changelog/023-add-last-password-changed-at-to-userAccount.sql
+  - include:
+      file: db/changelog/024-add-day-off-flag-to-dailyShiftSchedule.sql

@@ -170,7 +170,9 @@ public class EarningsService {
                 List.of(employee.getEmployeeId()),
                 run.getPeriodStart().atStartOfDay(),
                 run.getPeriodEnd().plusDays(1).atStartOfDay()
-        );
+        ).stream()
+                .filter(schedule -> !schedule.isDayOff())
+                .toList();
         Map<LocalDate, List<DailyShiftSchedule>> schedulesByDate = schedules.stream()
                 .collect(Collectors.groupingBy(DailyShiftSchedule::getWorkDate));
 

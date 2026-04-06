@@ -1,7 +1,10 @@
 package org.example.maridone.schedule.shift;
 
 import java.time.DayOfWeek;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.time.ZoneId;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
@@ -9,24 +12,30 @@ import java.util.Optional;
 import org.example.maridone.config.DefaultConfig;
 import org.example.maridone.core.employee.Employee;
 import org.example.maridone.core.employee.EmployeeRepository;
+import org.example.maridone.exception.unauthorized.InvalidActionException;
 import org.example.maridone.leave.request.LeaveRequestRepository;
+import org.example.maridone.schedule.dto.DailyShiftOverrideRequestDto;
 import org.example.maridone.schedule.dto.ShiftRequestDto;
 import org.example.maridone.schedule.dto.ShiftResponseDto;
 import org.example.maridone.schedule.mapper.ScheduleMapper;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.never;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
 @ExtendWith(MockitoExtension.class)
 class ShiftServiceTest {
+
+    private static final ZoneId MANILA = ZoneId.of("Asia/Manila");
 
     @Mock private TemplateShiftRepository templateShiftRepository;
     @Mock private DailyShiftRepository dailyShiftRepository;
@@ -49,18 +58,25 @@ class ShiftServiceTest {
 
         shiftService.createShifts(empId);
 
-        verify(templateShiftRepository).saveAll(anyList());
+        ArgumentCaptor<List<TemplateShiftSchedule>> schedulesCaptor = ArgumentCaptor.forClass(List.class);
+        verify(templateShiftRepository).saveAll(schedulesCaptor.capture());
+        List<TemplateShiftSchedule> schedules = schedulesCaptor.getValue();
+        Assertions.assertEquals(7, schedules.size());
+        Assertions.assertTrue(schedules.stream().allMatch(schedule -> LocalTime.of(8, 0).equals(schedule.getStartTime())));
+        Assertions.assertTrue(schedules.stream().allMatch(schedule -> LocalTime.of(17, 0).equals(schedule.getEndTime())));
     }
 
     @Test
     void getShiftSchedule_ShouldReturnList_WhenFound() {
         Long empId = 1L;
-        Employee emp = new Employee();
-        ReflectionTestUtils.setField(emp, "employeeId", empId);
+        TemplateShiftSchedule schedule = new TemplateShiftSchedule();
+        schedule.setDayOfWeek(DayOfWeek.MONDAY);
+        schedule.setStartTime(LocalTime.of(8, 0));
+        schedule.setEndTime(LocalTime.of(17, 0));
 
-        when(templateShiftRepository.findAllByEmployeeId(empId)).thenReturn(List.of(new TemplateShiftSchedule()));
+        when(templateShiftRepository.findAllByEmployeeId(empId)).thenReturn(List.of(schedule));
         when(employeeRepository.existsById(empId)).thenReturn(true);
-        when(shiftService.getShiftSchedule(empId)).thenReturn(List.of(new ShiftResponseDto()));
+        when(scheduleMapper.toResponseDtos(List.of(schedule))).thenReturn(List.of(new ShiftResponseDto()));
         List<ShiftResponseDto> result = shiftService.getShiftSchedule(empId);
         Assertions.assertFalse(result.isEmpty());
     }
@@ -86,5 +102,142 @@ class ShiftServiceTest {
        
         Assertions.assertNotNull(result);
         Assertions.assertEquals(DayOfWeek.MONDAY, result.getDayOfWeek());
+    }
+
+    @Test
+    void upsertDailyShiftOverride_ShouldReplaceExistingDailyShiftForSpecificDate() {
+        Long empId = 1L;
+        LocalDate workDate = LocalDate.now(MANILA).plusDays(14);
+
+        Employee employee = new Employee();
+        ReflectionTestUtils.setField(employee, "employeeId", empId);
+
+        TemplateShiftSchedule templateShift = new TemplateShiftSchedule();
+        templateShift.setEmployee(employee);
+        templateShift.setDayOfWeek(workDate.getDayOfWeek());
+        templateShift.setStartTime(LocalTime.of(8, 0));
+        templateShift.setEndTime(LocalTime.of(17, 0));
+
+        DailyShiftSchedule existingDailyShift = new DailyShiftSchedule();
+        existingDailyShift.setTemplateShiftSchedule(templateShift);
+        existingDailyShift.setStartDateTime(LocalDateTime.of(workDate, LocalTime.of(8, 0)));
+        existingDailyShift.setEndDateTime(LocalDateTime.of(workDate, LocalTime.of(17, 0)));
+
+        DailyShiftOverrideRequestDto payload = new DailyShiftOverrideRequestDto();
+        payload.setEmpId(empId);
+        payload.setWorkDate(workDate);
+        payload.setStartTime(LocalTime.of(13, 0));
+        payload.setEndTime(LocalTime.of(22, 0));
+
+        when(defaultConfig.getTimeZone()).thenReturn(MANILA);
+        when(employeeRepository.findById(empId)).thenReturn(Optional.of(employee));
+        when(templateShiftRepository.findByEmployeeIdAndDayOfWeek(empId, workDate.getDayOfWeek()))
+                .thenReturn(Optional.of(templateShift));
+        when(dailyShiftRepository.findAllByEmployeeIdAndPeriod(
+                empId,
+                workDate.atStartOfDay(),
+                workDate.plusDays(1).atStartOfDay()
+        )).thenReturn(List.of(existingDailyShift));
+        when(dailyShiftRepository.save(any(DailyShiftSchedule.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        DailyShiftSchedule saved = shiftService.upsertDailyShiftOverride(payload);
+
+        verify(dailyShiftRepository).deleteAll(List.of(existingDailyShift));
+        verify(templateShiftRepository, never()).save(any(TemplateShiftSchedule.class));
+        Assertions.assertEquals(LocalDateTime.of(workDate, LocalTime.of(13, 0)), saved.getStartDateTime());
+        Assertions.assertEquals(LocalDateTime.of(workDate, LocalTime.of(22, 0)), saved.getEndDateTime());
+        Assertions.assertEquals(empId, saved.getEmployeeId());
+    }
+
+    @Test
+    void upsertDailyShiftOverride_ShouldCreateFallbackTemplateWhenMissing() {
+        Long empId = 1L;
+        LocalDate workDate = LocalDate.now(MANILA).plusDays(15);
+
+        Employee employee = new Employee();
+        ReflectionTestUtils.setField(employee, "employeeId", empId);
+
+        DailyShiftOverrideRequestDto payload = new DailyShiftOverrideRequestDto();
+        payload.setEmpId(empId);
+        payload.setWorkDate(workDate);
+        payload.setStartTime(LocalTime.of(9, 0));
+        payload.setEndTime(LocalTime.of(18, 0));
+
+        when(defaultConfig.getTimeZone()).thenReturn(MANILA);
+        when(employeeRepository.findById(empId)).thenReturn(Optional.of(employee));
+        when(templateShiftRepository.findByEmployeeIdAndDayOfWeek(empId, workDate.getDayOfWeek()))
+                .thenReturn(Optional.empty());
+        when(templateShiftRepository.save(any(TemplateShiftSchedule.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(dailyShiftRepository.findAllByEmployeeIdAndPeriod(
+                empId,
+                workDate.atStartOfDay(),
+                workDate.plusDays(1).atStartOfDay()
+        )).thenReturn(List.of());
+        when(dailyShiftRepository.save(any(DailyShiftSchedule.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        DailyShiftSchedule saved = shiftService.upsertDailyShiftOverride(payload);
+
+        verify(templateShiftRepository).save(any(TemplateShiftSchedule.class));
+        Assertions.assertEquals(LocalDateTime.of(workDate, LocalTime.of(9, 0)), saved.getStartDateTime());
+        Assertions.assertEquals(LocalDateTime.of(workDate, LocalTime.of(18, 0)), saved.getEndDateTime());
+        Assertions.assertEquals(empId, saved.getEmployeeId());
+    }
+
+    @Test
+    void upsertDailyShiftOverride_ShouldPersistDayOffEntry() {
+        Long empId = 1L;
+        LocalDate workDate = LocalDate.now(MANILA).plusDays(16);
+
+        Employee employee = new Employee();
+        ReflectionTestUtils.setField(employee, "employeeId", empId);
+
+        TemplateShiftSchedule template = new TemplateShiftSchedule();
+        template.setEmployee(employee);
+        template.setDayOfWeek(workDate.getDayOfWeek());
+        template.setStartTime(LocalTime.of(8, 0));
+        template.setEndTime(LocalTime.of(17, 0));
+
+        DailyShiftOverrideRequestDto payload = new DailyShiftOverrideRequestDto();
+        payload.setEmpId(empId);
+        payload.setWorkDate(workDate);
+        payload.setDayOff(true);
+
+        when(defaultConfig.getTimeZone()).thenReturn(MANILA);
+        when(employeeRepository.findById(empId)).thenReturn(Optional.of(employee));
+        when(templateShiftRepository.findByEmployeeIdAndDayOfWeek(empId, workDate.getDayOfWeek()))
+                .thenReturn(Optional.of(template));
+        when(dailyShiftRepository.findAllByEmployeeIdAndPeriod(
+                empId,
+                workDate.atStartOfDay(),
+                workDate.plusDays(1).atStartOfDay()
+        )).thenReturn(List.of());
+        when(dailyShiftRepository.save(any(DailyShiftSchedule.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        DailyShiftSchedule saved = shiftService.upsertDailyShiftOverride(payload);
+
+        Assertions.assertTrue(saved.isDayOff());
+        Assertions.assertEquals(LocalDateTime.of(workDate, LocalTime.MIDNIGHT), saved.getStartDateTime());
+        Assertions.assertEquals(LocalDateTime.of(workDate, LocalTime.MIDNIGHT), saved.getEndDateTime());
+    }
+
+    @Test
+    void upsertDailyShiftOverride_ShouldRejectPastDates() {
+        Long empId = 1L;
+        LocalDate workDate = LocalDate.now(MANILA).minusDays(1);
+
+        Employee employee = new Employee();
+        ReflectionTestUtils.setField(employee, "employeeId", empId);
+
+        DailyShiftOverrideRequestDto payload = new DailyShiftOverrideRequestDto();
+        payload.setEmpId(empId);
+        payload.setWorkDate(workDate);
+        payload.setStartTime(LocalTime.of(8, 0));
+        payload.setEndTime(LocalTime.of(17, 0));
+
+        when(defaultConfig.getTimeZone()).thenReturn(MANILA);
+        when(employeeRepository.findById(empId)).thenReturn(Optional.of(employee));
+
+        Assertions.assertThrows(InvalidActionException.class, () -> shiftService.upsertDailyShiftOverride(payload));
+        verify(dailyShiftRepository, never()).save(any(DailyShiftSchedule.class));
     }
 }

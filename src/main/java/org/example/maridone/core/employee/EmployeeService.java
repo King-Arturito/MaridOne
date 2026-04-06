@@ -23,6 +23,7 @@ import org.example.maridone.leave.balance.LeaveBalance;
 import org.example.maridone.leave.balance.LeaveBalanceRepository;
 import org.example.maridone.schedule.dto.ShiftResponseDto;
 import org.example.maridone.schedule.mapper.ScheduleMapper;
+import org.example.maridone.schedule.shift.ShiftService;
 import org.example.maridone.schedule.shift.TemplateShiftRepository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -47,6 +48,7 @@ public class EmployeeService {
     private final UserAccountRepository userAccountRepository;
     private final TemplateShiftRepository templateShiftRepository;
     private final ScheduleMapper scheduleMapper;
+    private final ShiftService shiftService;
     private final PayrollConfig payrollConfig;
     private final LeaveBalanceRepository leaveBalanceRepository;
 
@@ -55,6 +57,7 @@ public class EmployeeService {
                     UserAccountRepository userAccountRepository,
                     TemplateShiftRepository templateShiftRepository,
                     ScheduleMapper scheduleMapper,
+                    ShiftService shiftService,
                     PayrollConfig payrollConfig,
                     LeaveBalanceRepository leaveBalanceRepository) {
         this.employeeRepository = employeeRepository;
@@ -62,6 +65,7 @@ public class EmployeeService {
         this.userAccountRepository = userAccountRepository;
         this.templateShiftRepository = templateShiftRepository;
         this.scheduleMapper = scheduleMapper;
+        this.shiftService = shiftService;
         this.payrollConfig = payrollConfig;
         this.leaveBalanceRepository = leaveBalanceRepository;
     }
@@ -81,6 +85,7 @@ public class EmployeeService {
         applyDepartmentAssignment(employee, employeeRequestDto);
         employee.setManager(resolveManager(employeeRequestDto.getManagerId(), null));
         employeeRepository.save(employee);
+        shiftService.createShifts(employee);
         seedDefaultLeaveBalances(employee);
         return toEmployeeResponse(employee);
     }

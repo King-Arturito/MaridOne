@@ -733,7 +733,9 @@ public class PayrollService {
                 employeeIds,
                 schedulePeriodStart,
                 schedulePeriodEndExclusive
-        );
+        ).stream()
+                .filter(schedule -> !schedule.isDayOff())
+                .toList();
     }
 
     private List<LeaveRequest> findApprovedLeaves(

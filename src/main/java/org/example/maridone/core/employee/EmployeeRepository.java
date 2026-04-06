@@ -35,6 +35,8 @@ public interface EmployeeRepository extends JpaRepository<Employee, Long>, JpaSp
             EmploymentStatus employmentStatus
     );
 
+    boolean existsByEmployeeIdAndManager_EmployeeId(Long employeeId, Long managerId);
+
     @Query("""
         SELECT e
         FROM Employee e

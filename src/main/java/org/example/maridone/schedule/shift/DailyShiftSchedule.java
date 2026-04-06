@@ -22,6 +22,9 @@ public class DailyShiftSchedule {
     @Column(name = "end_date_time", nullable = false)
     private LocalDateTime endDateTime;
 
+    @Column(name = "is_day_off", nullable = false)
+    private boolean dayOff;
+
     public Long getDailyShiftId() {
         return dailyShiftId;
     }
@@ -48,6 +51,14 @@ public class DailyShiftSchedule {
 
     public void setEndDateTime(LocalDateTime endDateTime) {
         this.endDateTime = endDateTime;
+    }
+
+    public boolean isDayOff() {
+        return dayOff;
+    }
+
+    public void setDayOff(boolean dayOff) {
+        this.dayOff = dayOff;
     }
 
     @Transient

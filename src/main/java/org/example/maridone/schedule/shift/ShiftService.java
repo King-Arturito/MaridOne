@@ -10,8 +10,10 @@ import org.example.maridone.core.employee.EmployeeRepository;
 import org.example.maridone.enums.EmploymentStatus;
 import org.example.maridone.exception.notfound.EmployeeNotFoundException;
 import org.example.maridone.exception.notfound.ShiftsNotFoundException;
+import org.example.maridone.exception.unauthorized.InvalidActionException;
 import org.example.maridone.leave.request.LeaveRequest;
 import org.example.maridone.leave.request.LeaveRequestRepository;
+import org.example.maridone.schedule.dto.DailyShiftOverrideRequestDto;
 import org.example.maridone.schedule.dto.ShiftRequestDto;
 import org.example.maridone.schedule.dto.ShiftResponseDto;
 import org.example.maridone.schedule.mapper.ScheduleMapper;
@@ -26,6 +28,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
@@ -59,11 +62,24 @@ public class ShiftService {
     @ExecutionTime
     public void createShifts(Long empId) {
         Employee emp = employeeRepository.findById(empId).orElseThrow(() -> new EmployeeNotFoundException(empId));
+        createShifts(emp);
+    }
+
+    @Transactional
+    @ExecutionTime
+    public void createShifts(Employee employee) {
+        if (employee == null || employee.getEmployeeId() == null) {
+            throw new IllegalArgumentException("Employee is required to create template shifts.");
+        }
+        createTemplateShifts(employee);
+    }
+
+    private void createTemplateShifts(Employee emp) {
         List<TemplateShiftSchedule> schedules = Arrays.stream(DayOfWeek.values()).map(day -> {
             TemplateShiftSchedule templateShiftSchedule = new TemplateShiftSchedule();
             templateShiftSchedule.setEmployee(emp);
-            templateShiftSchedule.setStartTime(LocalTime.of(1,0));
-            templateShiftSchedule.setEndTime(LocalTime.of(2,0));
+            templateShiftSchedule.setStartTime(LocalTime.of(8,0));
+            templateShiftSchedule.setEndTime(LocalTime.of(17,0));
             templateShiftSchedule.setDayOfWeek(day);
             return templateShiftSchedule;
         }).collect(Collectors.toList());
@@ -103,6 +119,31 @@ public class ShiftService {
         );
     }
 
+    @Transactional(readOnly = true)
+    @ExecutionTime
+    public List<DailyShiftSchedule> getDailyShiftsForEmployee(Long empId, LocalDate startDate, LocalDate endDate) {
+        if (empId == null || !employeeRepository.existsById(empId)) {
+            throw new EmployeeNotFoundException(empId);
+        }
+
+        if (startDate == null || endDate == null) {
+            return List.of();
+        }
+
+        LocalDate from = startDate;
+        LocalDate to = endDate;
+        if (to.isBefore(from)) {
+            from = endDate;
+            to = startDate;
+        }
+
+        return dailyShiftRepository.findAllByEmployeeIdAndPeriod(
+                empId,
+                from.atStartOfDay(),
+                to.plusDays(1).atStartOfDay()
+        );
+    }
+
     @Transactional
     @ExecutionTime
     public TemplateShiftSchedule addShiftSchedule(ShiftRequestDto payload) {
@@ -127,6 +168,21 @@ public class ShiftService {
         return schedule;
     }
 
+    @Transactional
+    @ExecutionTime
+    public DailyShiftSchedule upsertDailyShiftOverride(DailyShiftOverrideRequestDto payload) {
+        Employee employee = employeeRepository.findById(payload.getEmpId())
+                .orElseThrow(() -> new EmployeeNotFoundException(payload.getEmpId()));
+
+        return upsertDailyShiftOverride(
+                employee,
+                payload.getWorkDate(),
+                payload.getStartTime(),
+                payload.getEndTime(),
+                payload.isDayOff()
+        );
+    }
+
     /*
         for task scheduling:
     */
@@ -147,6 +203,16 @@ public class ShiftService {
                 .map(Employee::getEmployeeId)
                 .toList();
 
+        List<DailyShiftSchedule> existingDailyShifts = dailyShiftRepository.findAllByEmployeeIdsAndPeriod(
+                empIds,
+                today.atStartOfDay(),
+                today.plusDays(1).atStartOfDay()
+        );
+        Set<Long> employeesWithDailyShifts = existingDailyShifts.stream()
+                .map(DailyShiftSchedule::getEmployeeId)
+                .filter(java.util.Objects::nonNull)
+                .collect(Collectors.toSet());
+
         //create a mapping for empId -> many TemplateShiftSchedule
         Map<Long, List<TemplateShiftSchedule>> empToTemplates = templateShiftRepository
                 .findAllByEmployeeIdInAndDayOfWeek(empIds, targetDay)
@@ -164,6 +230,9 @@ public class ShiftService {
 
         //iterate through empIds in empToTemplates
         empToTemplates.forEach((empId, schedules) -> {
+            if (employeesWithDailyShifts.contains(empId)) {
+                return;
+            }
             List<LeaveRequest> leaves = empToRequests.getOrDefault(empId, List.of());
             schedules.forEach(schedule -> {
                 if (leaves.isEmpty()) {
@@ -225,6 +294,83 @@ public class ShiftService {
         daily.setStartDateTime(start);
         daily.setEndDateTime(end);
         daily.setTemplateShiftSchedule(schedule);
+        daily.setDayOff(false);
         return daily;
+    }
+
+    private DailyShiftSchedule upsertDailyShiftOverride(
+            Employee employee,
+            LocalDate workDate,
+            LocalTime startTime,
+            LocalTime endTime,
+            boolean dayOff
+    ) {
+        assertEditableWorkDate(workDate);
+        TemplateShiftSchedule templateSchedule = resolveTemplateSchedule(employee, workDate);
+
+        LocalDateTime rangeStart = workDate.atStartOfDay();
+        LocalDateTime rangeEndExclusive = workDate.plusDays(1).atStartOfDay();
+
+        List<DailyShiftSchedule> existingShifts = dailyShiftRepository.findAllByEmployeeIdAndPeriod(
+                employee.getEmployeeId(),
+                rangeStart,
+                rangeEndExclusive
+        );
+        if (!existingShifts.isEmpty()) {
+            dailyShiftRepository.deleteAll(existingShifts);
+        }
+
+        DailyShiftSchedule overrideShift = new DailyShiftSchedule();
+        overrideShift.setTemplateShiftSchedule(templateSchedule);
+        overrideShift.setDayOff(dayOff);
+
+        if (dayOff) {
+            overrideShift.setStartDateTime(rangeStart);
+            overrideShift.setEndDateTime(rangeStart);
+        } else {
+            assertValidOverrideTimes(startTime, endTime);
+            overrideShift.setStartDateTime(LocalDateTime.of(workDate, startTime));
+            overrideShift.setEndDateTime(LocalDateTime.of(workDate, endTime).plusDays(
+                    endTime.isBefore(startTime) ? 1 : 0
+            ));
+        }
+
+        return dailyShiftRepository.save(overrideShift);
+    }
+
+    private TemplateShiftSchedule resolveTemplateSchedule(Employee employee, LocalDate workDate) {
+        return templateShiftRepository
+                .findByEmployeeIdAndDayOfWeek(employee.getEmployeeId(), workDate.getDayOfWeek())
+                .orElseGet(() -> createFallbackTemplateShift(employee, workDate.getDayOfWeek()));
+    }
+
+    private TemplateShiftSchedule createFallbackTemplateShift(Employee employee, DayOfWeek dayOfWeek) {
+        TemplateShiftSchedule templateShiftSchedule = new TemplateShiftSchedule();
+        templateShiftSchedule.setEmployee(employee);
+        templateShiftSchedule.setStartTime(LocalTime.of(8, 0));
+        templateShiftSchedule.setEndTime(LocalTime.of(17, 0));
+        templateShiftSchedule.setDayOfWeek(dayOfWeek);
+        return templateShiftRepository.save(templateShiftSchedule);
+    }
+
+    private void assertEditableWorkDate(LocalDate workDate) {
+        if (workDate == null) {
+            throw new InvalidActionException("A work date is required.");
+        }
+
+        LocalDate today = LocalDate.now(defaultConfig.getTimeZone());
+        if (workDate.isBefore(today)) {
+            throw new InvalidActionException("Past schedule dates can no longer be changed.");
+        }
+    }
+
+    private void assertValidOverrideTimes(LocalTime startTime, LocalTime endTime) {
+        if (startTime == null || endTime == null) {
+            throw new InvalidActionException("Start time and end time are required unless the date is marked as day off.");
+        }
+
+        if (startTime.equals(endTime)) {
+            throw new InvalidActionException("Start time and end time cannot be the same unless the date is marked as day off.");
+        }
     }
 }

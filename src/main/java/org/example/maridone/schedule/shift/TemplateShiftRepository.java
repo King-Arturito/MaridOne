@@ -8,10 +8,15 @@ import org.springframework.stereotype.Repository;
 import java.time.DayOfWeek;
 import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 
 @Repository
 public interface TemplateShiftRepository extends JpaRepository<TemplateShiftSchedule, Long> {
     List<TemplateShiftSchedule> findAllByEmployeeId(Long empId);
+
+    Optional<TemplateShiftSchedule> findByEmployeeIdAndDayOfWeek(Long empId, DayOfWeek dayOfWeek);
+
+    boolean existsByShiftIdAndEmployee_Manager_EmployeeId(Long shiftId, Long managerId);
 
     List<TemplateShiftSchedule> findByEmployee_EmployeeIdIn(List<Long> employeeIds);
 
