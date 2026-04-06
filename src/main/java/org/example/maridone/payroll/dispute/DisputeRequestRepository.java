@@ -1,5 +1,6 @@
 package org.example.maridone.payroll.dispute;
 
+import jakarta.persistence.LockModeType;
 import org.example.maridone.enums.Status;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -7,6 +8,7 @@ import org.springframework.data.jpa.domain.Specification;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -30,6 +32,15 @@ public interface DisputeRequestRepository extends JpaRepository<DisputeRequest, 
         where d.disputeId = :disputeId
 """)
     Optional<DisputeRequest> findByIdWithEmployee(@Param("disputeId") Long disputeId);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+        select d from DisputeRequest d
+        Join fetch d.payrollItem p
+        Join fetch p.employee e
+        where d.disputeId = :disputeId
+""")
+    Optional<DisputeRequest> findByIdWithEmployeeForUpdate(@Param("disputeId") Long disputeId);
 
     Page<DisputeRequest> findAllByPayrollItem_Employee_EmployeeIdAndStatus(Long employeeId, Status status, Pageable pageable);
 

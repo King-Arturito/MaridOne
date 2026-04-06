@@ -153,14 +153,11 @@ public class EmployeeService {
 
         Optional.ofNullable(updated.getEmail())
                 .filter(v -> !v.equals(emp.getEmail()))
-                .ifPresent(newEmail -> {
-                    emp.setEmail(newEmail);
-                    emp.setIsVerified(false);
-                });
+                .ifPresent(newEmail -> updateEmail(emp, newEmail));
 
         Optional.ofNullable(updated.getPhoneNumber())
                 .filter(v -> !v.equals(emp.getPhoneNumber()))
-                .ifPresent(phone -> emp.setPhoneNumber(normalizePhoneNumber(phone)));
+                .ifPresent(phone -> updatePhoneNumber(emp, phone));
 
         Optional.ofNullable(updated.getPosition())
                 .filter(v -> !v.equals(emp.getPosition()))
@@ -186,40 +183,30 @@ public class EmployeeService {
                 .filter(v -> emp.getManager() == null || !v.equals(emp.getManager().getEmployeeId()))
                 .ifPresent(managerId -> emp.setManager(resolveManager(managerId, id)));
 
-        Optional.ofNullable(updated.getAddress()).ifPresent(newAddr -> {
-            Address existing = Optional.ofNullable(emp.getAddress()).orElseGet(() -> {
-                Address a = new Address();
-                emp.setAddress(a);
-                return a;
-            });
-
-            Optional.ofNullable(newAddr.getPermanentAddress())
-                    .filter(v -> !v.equals(existing.getPermanentAddress()))
-                    .ifPresent(existing::setPermanentAddress);
-
-            Optional.ofNullable(newAddr.getTemporaryAddress())
-                    .filter(v -> !v.equals(existing.getTemporaryAddress()))
-                    .ifPresent(existing::setTemporaryAddress);
-
-            Optional.ofNullable(newAddr.getCity())
-                    .filter(v -> !v.equals(existing.getCity()))
-                    .ifPresent(existing::setCity);
-
-            Optional.ofNullable(newAddr.getState())
-                    .filter(v -> !v.equals(existing.getState()))
-                    .ifPresent(existing::setState);
-
-            Optional.ofNullable(newAddr.getCountry())
-                    .filter(v -> !v.equals(existing.getCountry()))
-                    .ifPresent(existing::setCountry);
-
-            Optional.ofNullable(newAddr.getZipCode())
-                    .filter(v -> !v.equals(existing.getZipCode()))
-                    .ifPresent(existing::setZipCode);
-        });
+        Optional.ofNullable(updated.getAddress()).ifPresent(newAddr -> updateAddress(emp, newAddr));
 
         employeeRepository.save(emp);
 
+        return toEmployeeResponse(emp);
+    }
+
+    @Transactional
+    @ExecutionTime
+    public EmployeeResponseDto updateSelfEmployeeProfile(Long id, EmployeeRequestDto updated) {
+        Employee emp = employeeRepository.findById(id).orElseThrow(() -> new EmployeeNotFoundException(id));
+        assertSelfEditableFieldsOnly(updated);
+
+        Optional.ofNullable(updated.getEmail())
+                .filter(v -> !v.equals(emp.getEmail()))
+                .ifPresent(newEmail -> updateEmail(emp, newEmail));
+
+        Optional.ofNullable(updated.getPhoneNumber())
+                .filter(v -> !v.equals(emp.getPhoneNumber()))
+                .ifPresent(phone -> updatePhoneNumber(emp, phone));
+
+        Optional.ofNullable(updated.getAddress()).ifPresent(newAddr -> updateAddress(emp, newAddr));
+
+        employeeRepository.save(emp);
         return toEmployeeResponse(emp);
     }
 
@@ -305,6 +292,66 @@ public class EmployeeService {
             throw new IllegalArgumentException("Phone number must be exactly 11 digits.");
         }
         return digitsOnly;
+    }
+
+    private void updateEmail(Employee employee, String email) {
+        employee.setEmail(email);
+        employee.setIsVerified(false);
+    }
+
+    private void updatePhoneNumber(Employee employee, String phoneNumber) {
+        employee.setPhoneNumber(normalizePhoneNumber(phoneNumber));
+    }
+
+    private void updateAddress(Employee employee, Address incoming) {
+        Address existing = Optional.ofNullable(employee.getAddress()).orElseGet(() -> {
+            Address address = new Address();
+            employee.setAddress(address);
+            return address;
+        });
+
+        Optional.ofNullable(incoming.getPermanentAddress())
+                .filter(v -> !v.equals(existing.getPermanentAddress()))
+                .ifPresent(existing::setPermanentAddress);
+
+        Optional.ofNullable(incoming.getTemporaryAddress())
+                .filter(v -> !v.equals(existing.getTemporaryAddress()))
+                .ifPresent(existing::setTemporaryAddress);
+
+        Optional.ofNullable(incoming.getCity())
+                .filter(v -> !v.equals(existing.getCity()))
+                .ifPresent(existing::setCity);
+
+        Optional.ofNullable(incoming.getState())
+                .filter(v -> !v.equals(existing.getState()))
+                .ifPresent(existing::setState);
+
+        Optional.ofNullable(incoming.getCountry())
+                .filter(v -> !v.equals(existing.getCountry()))
+                .ifPresent(existing::setCountry);
+
+        Optional.ofNullable(incoming.getZipCode())
+                .filter(v -> !v.equals(existing.getZipCode()))
+                .ifPresent(existing::setZipCode);
+    }
+
+    private void assertSelfEditableFieldsOnly(EmployeeRequestDto updated) {
+        boolean hasRestrictedField =
+                updated.getFirstName() != null
+                        || updated.getMiddleName() != null
+                        || updated.getLastName() != null
+                        || updated.getBirthDate() != null
+                        || updated.getEmploymentStatus() != null
+                        || updated.getExemptionStatus() != null
+                        || updated.getEmploymentDateStart() != null
+                        || updated.getEmploymentDateEnd() != null
+                        || updated.getPosition() != null
+                        || updated.getYearlySalary() != null
+                        || updated.getManagerId() != null;
+
+        if (hasRestrictedField) {
+            throw new InvalidActionException("You can only update your contact information and address.");
+        }
     }
 
     private ExemptionStatus resolveExemptionStatus(Position position) {

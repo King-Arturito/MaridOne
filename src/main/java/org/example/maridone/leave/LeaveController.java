@@ -104,7 +104,7 @@ public class LeaveController {
 
     //create leave request
     @PostMapping("/create/{empId}")
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("@userCheck.isSelf(#empId, authentication.getName())")
     @AuditLog
     public ResponseEntity<List<LeaveRequest>> createLeaveRequest(
             @Valid @RequestBody LeaveRequestDto payload,

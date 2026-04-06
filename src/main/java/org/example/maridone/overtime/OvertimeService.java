@@ -108,7 +108,8 @@ public class OvertimeService {
             importance = "HIGH",
             targetEmployee = "#result.employeeId")
     public OvertimeResponseDto updateOvertimeRequest(OvertimeUpdateDto updateDto, String approverUsername) {
-        OvertimeRequest req = overtimeRequestRepository.findById(updateDto.getOvertimeId()).orElseThrow(() -> new OvertimeException("Overtime Not Found"));
+        OvertimeRequest req = overtimeRequestRepository.findByIdForUpdate(updateDto.getOvertimeId())
+                .orElseThrow(() -> new OvertimeException("Overtime Not Found"));
         if (req.getRequestStatus() != Status.PENDING) {
             throw new OvertimeException("Overtime Request Not Pending/Already Processed");
         }
@@ -171,7 +172,8 @@ public class OvertimeService {
     @Transactional
     @ExecutionTime
     public void cancelRequest(Long overtimeId) {
-        OvertimeRequest overtimeRequest =  overtimeRequestRepository.findById(overtimeId).orElseThrow(() -> new OvertimeException("Overtime Not Found"));
+        OvertimeRequest overtimeRequest = overtimeRequestRepository.findByIdForUpdate(overtimeId)
+                .orElseThrow(() -> new OvertimeException("Overtime Not Found"));
         if (overtimeRequest.getRequestStatus().equals(Status.APPROVED)) {
             throw new IllegalStateException("Cannot cancel. Overtime Request has been approved already.");
         }

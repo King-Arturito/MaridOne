@@ -10,6 +10,7 @@ import org.example.maridone.core.dto.EmployeeRequestDto;
 import org.example.maridone.core.dto.EmployeeResponseDto;
 import org.example.maridone.core.mapper.CoreMapper;
 import org.example.maridone.core.user.UserAccountRepository;
+import org.example.maridone.embeddable.Address;
 import org.example.maridone.enums.EmploymentStatus;
 import org.example.maridone.enums.ExemptionStatus;
 import org.example.maridone.enums.LeaveType;
@@ -242,6 +243,58 @@ class EmployeeServiceTest {
         );
 
         Assertions.assertEquals("This employee is already terminated.", error.getMessage());
+        verify(employeeRepository, never()).save(any(Employee.class));
+    }
+
+    @Test
+    void updateSelfEmployeeProfile_ShouldOnlyChangeContactFields() {
+        stubScheduleDependencies();
+        Employee employee = new Employee();
+        ReflectionTestUtils.setField(employee, "employeeId", 21L);
+        employee.setEmail("old@example.com");
+        employee.setPhoneNumber("09170000000");
+        employee.setIsVerified(true);
+
+        Address existingAddress = new Address();
+        existingAddress.setCity("Makati");
+        employee.setAddress(existingAddress);
+
+        EmployeeRequestDto requestDto = new EmployeeRequestDto();
+        requestDto.setEmail("new@example.com");
+        requestDto.setPhoneNumber("09171234567");
+        Address newAddress = new Address();
+        newAddress.setCity("Pasig");
+        requestDto.setAddress(newAddress);
+
+        when(employeeRepository.findById(21L)).thenReturn(Optional.of(employee));
+        when(employeeRepository.save(any(Employee.class))).thenReturn(employee);
+        when(coreMapper.toEmployeeResponse(any(Employee.class))).thenReturn(new EmployeeResponseDto());
+        when(userAccountRepository.findUsernameByEmployeeEmployeeId(anyLong())).thenReturn(Optional.empty());
+
+        employeeService.updateSelfEmployeeProfile(21L, requestDto);
+
+        Assertions.assertEquals("new@example.com", employee.getEmail());
+        Assertions.assertEquals("09171234567", employee.getPhoneNumber());
+        Assertions.assertEquals("Pasig", employee.getAddress().getCity());
+        Assertions.assertFalse(employee.getIsVerified());
+    }
+
+    @Test
+    void updateSelfEmployeeProfile_ShouldRejectRestrictedFields() {
+        Employee employee = new Employee();
+        ReflectionTestUtils.setField(employee, "employeeId", 22L);
+
+        EmployeeRequestDto requestDto = new EmployeeRequestDto();
+        requestDto.setPosition(Position.HR);
+
+        when(employeeRepository.findById(22L)).thenReturn(Optional.of(employee));
+
+        InvalidActionException error = Assertions.assertThrows(
+                InvalidActionException.class,
+                () -> employeeService.updateSelfEmployeeProfile(22L, requestDto)
+        );
+
+        Assertions.assertEquals("You can only update your contact information and address.", error.getMessage());
         verify(employeeRepository, never()).save(any(Employee.class));
     }
 }
