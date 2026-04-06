@@ -3,7 +3,6 @@ package org.example.maridone.core.employee;
 import java.util.Optional;
 import java.util.List;
 import java.util.ArrayList;
-import java.time.Duration;
 
 import org.example.maridone.config.PayrollConfig;
 import org.example.maridone.core.dto.EmployeeRequestDto;
@@ -70,7 +69,6 @@ class EmployeeServiceTest {
 
     private void stubScheduleDependencies() {
         when(templateShiftRepository.findAllByEmployeeIdIn(anyCollection())).thenReturn(List.of());
-        when(payrollConfig.getGracePeriod()).thenReturn(Duration.ZERO);
     }
 
     @Test

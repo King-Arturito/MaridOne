@@ -496,15 +496,8 @@ public class PayrollService {
                                 )
                         );
                         if (actualHours.compareTo(expectedHours) < 0) {
-                            // grace only softens the late-start portion, not every kind of missing hour.
                             BigDecimal missingHours = expectedHours.subtract(actualHours);
-                            BigDecimal chargeableMissingHours = payrollCalculator.applyGracePeriodToMissingHours(
-                                    primarySchedule,
-                                    dayInLog,
-                                    todaysLeave,
-                                    missingHours
-                            );
-                            lateDeductAmount = lateDeductAmount.add(chargeableMissingHours.multiply(hourlyRate));
+                            lateDeductAmount = lateDeductAmount.add(missingHours.multiply(hourlyRate));
                         }
                     }
                 }

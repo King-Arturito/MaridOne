@@ -1,8 +1,6 @@
 package org.example.maridone.config;
 
 import java.math.BigDecimal;
-import java.time.Duration;
-import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -15,7 +13,6 @@ import org.springframework.validation.annotation.Validated;
 @ConfigurationProperties("payroll")
 @Validated
 public class PayrollConfig {
-    private Duration gracePeriod = Duration.of(15, ChronoUnit.MINUTES);
     private BigDecimal overtimeMultiplier = BigDecimal.valueOf(1.25);
     private BigDecimal doubleOvertimeMultiplier = BigDecimal.valueOf(2.00);
     private BigDecimal tripleOvertimeMultiplier = BigDecimal.valueOf(3.00);
@@ -45,14 +42,6 @@ public class PayrollConfig {
     private BigDecimal defaultMinimumWeekly = BigDecimal.valueOf(48);
 
     private List<WithholdingTaxBracket> withholdingTaxBrackets = defaultWithholdingTaxBrackets();
-
-    public Duration getGracePeriod() {
-        return gracePeriod;
-    }
-
-    public void setGracePeriod(Duration gracePeriod) {
-        this.gracePeriod = gracePeriod;
-    }
 
     public BigDecimal getOvertimeMultiplier() {
         return overtimeMultiplier;

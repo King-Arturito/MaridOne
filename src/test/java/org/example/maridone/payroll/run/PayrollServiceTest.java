@@ -168,6 +168,44 @@ class PayrollServiceTest {
     }
 
     @Test
+    void processPayrollNonExempt_SmallLateArrivalShouldCreateLatePenalty() {
+        LocalDate workDate = LocalDate.of(2026, 3, 3);
+        PayrollRun run = buildSingleDayRun(workDate);
+        Employee employee = buildEmployee(19L, ExemptionStatus.NON_EXEMPT, "624000.00");
+        DailyShiftSchedule dailyShift = buildDailyShift(employee, workDate, LocalTime.of(8, 0), LocalTime.of(17, 0));
+        List<AttendanceLog> attendanceLogs = List.of(
+                buildAttendanceLog(employee, workDate, LocalTime.of(8, 10), "IN"),
+                buildAttendanceLog(employee, workDate, LocalTime.of(17, 0), "OUT")
+        );
+
+        when(defaultConfig.getTimeZone()).thenReturn(ZONE);
+        when(attendanceLogRepository.findByEmployeeIdInAndTimestampBetween(anyList(), any(Instant.class), any(Instant.class), any()))
+                .thenReturn(attendanceLogs);
+        when(overtimeRequestRepository.findAll(any(Specification.class)))
+                .thenReturn(List.of());
+        when(dailyShiftRepository.findAllByEmployeeIdsAndPeriod(anyList(), any(LocalDateTime.class), any(LocalDateTime.class)))
+                .thenReturn(List.of(dailyShift));
+        when(leaveRequestRepository.findApprovedLeavesForPeriod(anyList(), any(LocalDateTime.class), any(LocalDateTime.class)))
+                .thenReturn(List.of());
+        when(holidayService.getHolidayLookup(any(LocalDate.class), any(LocalDate.class)))
+                .thenReturn(HolidayLookup.empty());
+
+        List<PayrollItem> items = new ArrayList<>();
+        payrollService.processPayrollNonExempt(run, items, List.of(employee), Map.of());
+
+        Assertions.assertEquals(1, items.size());
+        BigDecimal latePenaltyAmount = items.get(0).getDeductions().stream()
+                .filter(line -> line.getDeductionType() == DeductionType.LATE_PENALTY)
+                .map(line -> line.getAmount())
+                .findFirst()
+                .orElse(BigDecimal.ZERO);
+
+        Assertions.assertTrue(latePenaltyAmount.compareTo(BigDecimal.ZERO) > 0);
+        Assertions.assertTrue(items.get(0).getDeductions().stream()
+                .noneMatch(line -> line.getDeductionType() == DeductionType.ABSENT_DEDUCTION));
+    }
+
+    @Test
     void processPayrollExempt_NoLogs_ShouldCreateAbsentDeductionWithoutLatePenalty() {
         LocalDate workDate = LocalDate.of(2026, 3, 2);
         PayrollRun run = buildSingleDayRun(workDate);

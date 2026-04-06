@@ -5,6 +5,7 @@ import org.aspectj.lang.annotation.AfterReturning;
 import org.aspectj.lang.annotation.AfterThrowing;
 import org.aspectj.lang.annotation.Aspect;
 import org.aspectj.lang.annotation.Pointcut;
+import org.example.maridone.config.DefaultConfig;
 import org.example.maridone.core.dto.CreateUserAccountDto;
 import org.example.maridone.core.dto.EmployeeResponseDto;
 import org.example.maridone.core.employee.Employee;
@@ -35,6 +36,9 @@ import org.example.maridone.payroll.dto.RunCreateDto;
 import org.example.maridone.payroll.dto.RunResponseDto;
 import org.example.maridone.payroll.item.PayrollItem;
 import org.example.maridone.payroll.run.PayrollItemRepository;
+import org.example.maridone.schedule.calendar.CalendarRepository;
+import org.example.maridone.schedule.dto.CalendarDto;
+import org.example.maridone.schedule.dto.CalendarEventResponseDto;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.core.annotation.Order;
@@ -45,6 +49,9 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -70,26 +77,33 @@ public class LoggingAspect {
     private static final Pattern DISPUTE_CREATE_ENDPOINT_PATTERN = Pattern.compile("^/api/payroll/item/dispute/create/(?<itemId>\\d+)\\b");
     private static final Pattern DISPUTE_ENDPOINT_PATTERN = Pattern.compile("^/api/payroll/item/dispute/update/(?<disputeId>\\d+)\\b");
     private static final Pattern DISPUTE_CANCEL_ENDPOINT_PATTERN = Pattern.compile("^/api/payroll/item/dispute/cancel/(?<disputeId>\\d+)\\b");
+    private static final Pattern CALENDAR_DELETE_ENDPOINT_PATTERN = Pattern.compile("^/api/calendar/events/delete/(?<calendarId>\\d+)\\b");
 
     private final ActivityLogService activityLogService;
+    private final DefaultConfig defaultConfig;
     private final EmployeeRepository employeeRepository;
     private final OvertimeRequestRepository overtimeRequestRepository;
     private final LeaveRequestRepository leaveRequestRepository;
     private final DisputeRequestRepository disputeRequestRepository;
     private final PayrollItemRepository payrollItemRepository;
+    private final CalendarRepository calendarRepository;
 
     public LoggingAspect(ActivityLogService activityLogService,
+                         DefaultConfig defaultConfig,
                          EmployeeRepository employeeRepository,
                          OvertimeRequestRepository overtimeRequestRepository,
                          LeaveRequestRepository leaveRequestRepository,
                          DisputeRequestRepository disputeRequestRepository,
-                         PayrollItemRepository payrollItemRepository) {
+                         PayrollItemRepository payrollItemRepository,
+                         CalendarRepository calendarRepository) {
         this.activityLogService = activityLogService;
+        this.defaultConfig = defaultConfig;
         this.employeeRepository = employeeRepository;
         this.overtimeRequestRepository = overtimeRequestRepository;
         this.leaveRequestRepository = leaveRequestRepository;
         this.disputeRequestRepository = disputeRequestRepository;
         this.payrollItemRepository = payrollItemRepository;
+        this.calendarRepository = calendarRepository;
     }
 
     @Pointcut("@annotation(org.example.maridone.annotation.AuditLog)")
@@ -231,6 +245,26 @@ public class LoggingAspect {
                 return detail + ". Leave type: " + humanizeToken(balancePayload.getLeaveType().name());
             }
             return detail;
+        }
+
+        if ("/api/calendar/events/create".equalsIgnoreCase(requestURI)) {
+            return describeCalendarEvent(
+                    extractBody(result, CalendarEventResponseDto.class),
+                    findArg(args, CalendarDto.class)
+            );
+        }
+
+        if ("/api/calendar/events/update".equalsIgnoreCase(requestURI)) {
+            return describeCalendarEvent(
+                    extractBody(result, CalendarEventResponseDto.class),
+                    findArg(args, CalendarDto.class)
+            );
+        }
+
+        Matcher calendarDeleteMatcher = CALENDAR_DELETE_ENDPOINT_PATTERN.matcher(requestURI);
+        if (calendarDeleteMatcher.find()) {
+            Long calendarId = Long.valueOf(calendarDeleteMatcher.group("calendarId"));
+            return describeCalendarDeletion(calendarId);
         }
 
         if ("/api/payroll/run/process".equalsIgnoreCase(requestURI)) {
@@ -405,6 +439,62 @@ public class LoggingAspect {
         return "User account for " + employeeReference;
     }
 
+    private String describeCalendarEvent(CalendarEventResponseDto response, CalendarDto payload) {
+        if (response == null && payload == null) {
+            return null;
+        }
+
+        String title = firstNonNull(
+                response != null ? response.getTitle() : null,
+                payload != null ? payload.getTitle() : null
+        );
+        Instant startDate = firstNonNull(
+                response != null ? response.getStartDate() : null,
+                payload != null ? payload.getStartDate() : null
+        );
+        Instant endDate = firstNonNull(
+                response != null ? response.getEndDate() : null,
+                payload != null ? payload.getEndDate() : null
+        );
+        Boolean isActive = firstNonNull(
+                response != null ? response.getIsActive() : null,
+                payload != null ? payload.getIsActive() : null
+        );
+
+        StringBuilder detail = new StringBuilder("Calendar event");
+        if (title != null && !title.isBlank()) {
+            detail.append(" \"").append(abbreviate(title, 60)).append("\"");
+        }
+
+        String schedule = formatInstantRange(startDate, endDate);
+        if (schedule != null) {
+            detail.append(" scheduled for ").append(schedule);
+        }
+
+        if (schedule == null && isActive != null && !Boolean.TRUE.equals(isActive)) {
+            detail.append(" marked inactive");
+        }
+
+        return detail.toString();
+    }
+
+    private String describeCalendarDeletion(Long calendarId) {
+        if (calendarId == null) {
+            return null;
+        }
+
+        return calendarRepository.findByIdWithEmployee(calendarId)
+                .map(calendar -> {
+                    CalendarEventResponseDto response = new CalendarEventResponseDto();
+                    response.setTitle(calendar.getTitle());
+                    response.setStartDate(calendar.getStartDate());
+                    response.setEndDate(calendar.getEndDate());
+                    response.setIsActive(calendar.getIsActive());
+                    return describeCalendarEvent(response, null);
+                })
+                .orElse("Calendar event");
+    }
+
     private String describePayrollItem(ItemDetailsDto item, PayrollItemDto payload) {
         if (item == null && payload == null) {
             return null;
@@ -436,6 +526,21 @@ public class LoggingAspect {
                     null,
                     runDetails != null && runDetails.getRunType() != null ? runDetails.getRunType().name() : null
             ));
+        }
+
+        String grossPay = item != null ? formatMoney(item.getGrossPay()) : null;
+        String netPay = item != null ? formatMoney(item.getNetPay()) : null;
+        if (grossPay != null || netPay != null) {
+            detail.append(". Totals:");
+            if (grossPay != null) {
+                detail.append(" gross ").append(grossPay);
+            }
+            if (netPay != null) {
+                if (grossPay != null) {
+                    detail.append(",");
+                }
+                detail.append(" net ").append(netPay);
+            }
         }
 
         return detail.toString();
@@ -683,6 +788,38 @@ public class LoggingAspect {
         return null;
     }
 
+    private String formatInstantRange(Instant startDate, Instant endDate) {
+        if (startDate == null && endDate == null) {
+            return null;
+        }
+
+        LocalDateTime startDateTime = startDate != null
+                ? LocalDateTime.ofInstant(startDate, defaultConfig.getTimeZone())
+                : null;
+        LocalDateTime endDateTime = endDate != null
+                ? LocalDateTime.ofInstant(endDate, defaultConfig.getTimeZone())
+                : null;
+
+        if (startDateTime != null && endDateTime != null) {
+            if (startDateTime.toLocalDate().equals(endDateTime.toLocalDate())) {
+                return AUDIT_DATE_FORMAT.format(startDateTime.toLocalDate())
+                        + ", "
+                        + AUDIT_TIME_FORMAT.format(startDateTime)
+                        + " to "
+                        + AUDIT_TIME_FORMAT.format(endDateTime);
+            }
+            return formatAuditDateTime(startDateTime) + " to " + formatAuditDateTime(endDateTime);
+        }
+        if (startDateTime != null) {
+            return formatAuditDateTime(startDateTime);
+        }
+        return formatAuditDateTime(endDateTime);
+    }
+
+    private String formatAuditDateTime(LocalDateTime value) {
+        return AUDIT_DATE_FORMAT.format(value.toLocalDate()) + ", " + AUDIT_TIME_FORMAT.format(value);
+    }
+
     private String formatTimeWindow(LocalDateTime startTime, LocalDateTime endTime) {
         if (startTime == null || endTime == null) {
             return null;
@@ -725,6 +862,13 @@ public class LoggingAspect {
             return normalized.substring(0, Math.max(0, maxLength));
         }
         return normalized.substring(0, maxLength - 3) + "...";
+    }
+
+    private String formatMoney(BigDecimal value) {
+        if (value == null) {
+            return null;
+        }
+        return value.setScale(2, RoundingMode.HALF_UP).toPlainString();
     }
 
     private String formatPayrollRunReference(Long payId,

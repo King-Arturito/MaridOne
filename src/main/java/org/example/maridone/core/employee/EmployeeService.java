@@ -254,7 +254,6 @@ public class EmployeeService {
         response.setDepartment(resolveDepartment(employee));
         response.setUserAccountName(findUsername(employee.getEmployeeId()));
         response.setShiftSchedules(resolveShiftSchedules(employee.getEmployeeId(), schedulesByEmployeeId));
-        response.setGracePeriodMinutes(resolveGracePeriodMinutes());
         return response;
     }
 
@@ -270,10 +269,6 @@ public class EmployeeService {
 
     private List<ShiftResponseDto> resolveShiftSchedules(Long employeeId, Map<Long, List<ShiftResponseDto>> schedulesByEmployeeId) {
         return schedulesByEmployeeId.getOrDefault(employeeId, List.of());
-    }
-
-    private Long resolveGracePeriodMinutes() {
-        return Math.max(payrollConfig.getGracePeriod().toMinutes(), 0L);
     }
 
     private String formatEmployeeName(Employee employee) {

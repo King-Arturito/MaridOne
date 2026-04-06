@@ -22,7 +22,6 @@ public class EmployeeResponseDto {
     private String department;
     private String userAccountName;
     private List<ShiftResponseDto> shiftSchedules = List.of();
-    private Long gracePeriodMinutes;
 
     public Long getId() {
         return id;
@@ -126,13 +125,5 @@ public class EmployeeResponseDto {
 
     public void setShiftSchedules(List<ShiftResponseDto> shiftSchedules) {
         this.shiftSchedules = shiftSchedules;
-    }
-
-    public Long getGracePeriodMinutes() {
-        return gracePeriodMinutes;
-    }
-
-    public void setGracePeriodMinutes(Long gracePeriodMinutes) {
-        this.gracePeriodMinutes = gracePeriodMinutes;
     }
 }
