@@ -5,6 +5,10 @@ CREATE TABLE user_account (
     emp_id                  BIGINT,
     two_factor_enabled      BOOLEAN DEFAULT FALSE   NOT NULL,
     two_factor_secret       VARCHAR(255),
+    password_change_required BOOLEAN DEFAULT FALSE  NOT NULL,
+    password_reset_secret   VARCHAR(255),
+    password_reset_expires_at TIMESTAMP WITH TIME ZONE,
+    last_password_changed_at TIMESTAMP WITH TIME ZONE,
 
     CONSTRAINT user_account_account_status_check CHECK (account_status IN ('INACTIVE', 'ACTIVE')),
     CONSTRAINT fk_user_account_employee FOREIGN KEY (emp_id) REFERENCES employee (emp_id)

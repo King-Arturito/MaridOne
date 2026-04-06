@@ -37,13 +37,3 @@ databaseChangeLog:
       file: db/changelog/019-create-documentPath.sql
   - include:
       file: db/changelog/020-create-refreshToken.sql
-  - include:
-      file: db/changelog/021-add-password-change-required-to-userAccount.sql
-  - include:
-      file: db/changelog/022-add-password-reset-fields-to-userAccount.sql
-  - include:
-      file: db/changelog/023-add-last-password-changed-at-to-userAccount.sql
-  - include:
-      file: db/changelog/024-add-day-off-flag-to-dailyShiftSchedule.sql
-  - include:
-      file: db/changelog/025-add-bonus-fields-to-earningsLine.sql

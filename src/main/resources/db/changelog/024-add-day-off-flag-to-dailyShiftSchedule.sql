@@ -1,2 +1,0 @@
-ALTER TABLE daily_shift_schedule
-ADD COLUMN is_day_off BOOLEAN NOT NULL DEFAULT FALSE;

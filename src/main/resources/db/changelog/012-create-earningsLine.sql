@@ -10,6 +10,9 @@ CREATE TABLE earnings_line (
     original_amount NUMERIC(38, 2),
     adjusted_by     VARCHAR(255),
     adjusted_at     TIMESTAMPTZ,
+    earnings_type   VARCHAR(32)     NOT NULL DEFAULT 'FIXED',
+    taxable_amount  NUMERIC(38, 2)  NOT NULL DEFAULT 0,
+    non_taxable_amount NUMERIC(38, 2) NOT NULL DEFAULT 0,
 
     CONSTRAINT fk_earnings_line_payroll_item     FOREIGN KEY (item_id)       REFERENCES payroll_item     (item_id),
     CONSTRAINT fk_earnings_line_overtime_request FOREIGN KEY (overtime_id) REFERENCES overtime_request (overtime_id)
