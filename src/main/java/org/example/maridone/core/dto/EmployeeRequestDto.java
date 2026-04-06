@@ -35,6 +35,7 @@ public class EmployeeRequestDto {
     @Pattern(regexp = "^\\D*(?:\\d\\D*){11}$", message = "Phone number must be exactly 11 digits.")
     private String phoneNumber;
     private Position position;
+    private String department;
     private BigDecimal yearlySalary;
     private Long managerId;
 
@@ -126,6 +127,14 @@ public class EmployeeRequestDto {
 
     public void setPosition(Position position) {
         this.position = position;
+    }
+
+    public String getDepartment() {
+        return department;
+    }
+
+    public void setDepartment(String department) {
+        this.department = department;
     }
 
     public BigDecimal getYearlySalary() {

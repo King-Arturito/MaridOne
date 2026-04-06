@@ -78,6 +78,7 @@ public class EmployeeService {
         employee.setEmploymentDateEnd(employeeRequestDto.getEmploymentDateEnd());
         employee.setExemptionStatus(Optional.ofNullable(employeeRequestDto.getExemptionStatus()).orElse(resolveExemptionStatus(employee.getPosition())));
         employee.setYearlySalary(Optional.ofNullable(employee.getYearlySalary()).orElse(BigDecimal.ZERO));
+        applyDepartmentAssignment(employee, employeeRequestDto);
         employee.setManager(resolveManager(employeeRequestDto.getManagerId(), null));
         employeeRepository.save(employee);
         seedDefaultLeaveBalances(employee);
@@ -163,6 +164,8 @@ public class EmployeeService {
                 .filter(v -> !v.equals(emp.getPosition()))
                 .ifPresent(emp::setPosition);
 
+        applyDepartmentAssignment(emp, updated);
+
         Optional.ofNullable(updated.getExemptionStatus())
                 .filter(v -> !v.equals(emp.getExemptionStatus()))
                 .ifPresent(emp::setExemptionStatus);
@@ -235,7 +238,9 @@ public class EmployeeService {
         return new EmployeeOptionDto(
                 employee.getEmployeeId(),
                 formatEmployeeName(employee),
-                employee.getEmploymentStatus()
+                employee.getEmploymentStatus(),
+                employee.getPosition(),
+                resolveDepartment(employee)
         );
     }
 
@@ -346,6 +351,7 @@ public class EmployeeService {
                         || updated.getEmploymentDateStart() != null
                         || updated.getEmploymentDateEnd() != null
                         || updated.getPosition() != null
+                        || updated.getDepartment() != null
                         || updated.getYearlySalary() != null
                         || updated.getManagerId() != null;
 
@@ -371,6 +377,26 @@ public class EmployeeService {
             current = current.getManager();
         }
         return null;
+    }
+
+    private void applyDepartmentAssignment(Employee employee, EmployeeRequestDto request) {
+        Position effectivePosition = Optional.ofNullable(request.getPosition()).orElse(employee.getPosition());
+
+        if (effectivePosition == Position.MANAGER) {
+            if (request.getDepartment() != null && !request.getDepartment().isBlank()) {
+                employee.setEmpTitle(ManagerTitle.fromDepartmentLabel(request.getDepartment()));
+                return;
+            }
+
+            if (employee.getEmpTitle() == null) {
+                throw new IllegalArgumentException("Department is required when position is MANAGER.");
+            }
+            return;
+        }
+
+        if (request.getPosition() != null) {
+            employee.setEmpTitle(null);
+        }
     }
 
     private Employee resolveManager(Long managerId, Long employeeId) {

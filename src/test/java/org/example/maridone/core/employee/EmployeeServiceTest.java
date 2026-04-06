@@ -200,6 +200,36 @@ class EmployeeServiceTest {
     }
 
     @Test
+    void createEmployee_ShouldAssignManagerDepartment_WhenPositionIsManager() {
+        stubScheduleDependencies();
+        EmployeeRequestDto requestDto = new EmployeeRequestDto();
+        requestDto.setDepartment("People Operations Department");
+
+        Employee employee = new Employee();
+        ReflectionTestUtils.setField(employee, "employeeId", 18L);
+        employee.setFirstName("Cecilia");
+        employee.setLastName("Reyes");
+        employee.setEmail("cecilia@example.com");
+        employee.setPhoneNumber("09171234567");
+        employee.setBirthDate(java.time.LocalDate.of(1990, 6, 18));
+        employee.setPosition(Position.MANAGER);
+
+        EmployeeResponseDto responseDto = new EmployeeResponseDto();
+        responseDto.setId(18L);
+
+        when(coreMapper.toEmployee(any(EmployeeRequestDto.class))).thenReturn(employee);
+        when(employeeRepository.save(any(Employee.class))).thenReturn(employee);
+        when(coreMapper.toEmployeeResponse(any(Employee.class))).thenReturn(responseDto);
+        when(userAccountRepository.findUsernameByEmployeeEmployeeId(anyLong())).thenReturn(Optional.empty());
+        when(payrollConfig.getSickLeaveHours()).thenReturn(java.math.BigDecimal.valueOf(120));
+        when(payrollConfig.getVacationLeaveHours()).thenReturn(java.math.BigDecimal.valueOf(120));
+
+        employeeService.createEmployee(requestDto);
+
+        Assertions.assertEquals(ManagerTitle.HEAD_OF_PEOPLE_OPERATIONS, employee.getEmpTitle());
+    }
+
+    @Test
     void getTeamEmployees_ShouldReturnHandledEmployeesExcludingTerminated() {
         stubScheduleDependencies();
         Employee teamMember = new Employee();
@@ -277,6 +307,27 @@ class EmployeeServiceTest {
         Assertions.assertEquals("09171234567", employee.getPhoneNumber());
         Assertions.assertEquals("Pasig", employee.getAddress().getCity());
         Assertions.assertFalse(employee.getIsVerified());
+    }
+
+    @Test
+    void updateEmployee_ShouldClearManagerDepartment_WhenPositionChangesAwayFromManager() {
+        stubScheduleDependencies();
+        Employee employee = new Employee();
+        ReflectionTestUtils.setField(employee, "employeeId", 30L);
+        employee.setPosition(Position.MANAGER);
+        employee.setEmpTitle(ManagerTitle.PRODUCTION_SUPERVISOR);
+
+        EmployeeRequestDto requestDto = new EmployeeRequestDto();
+        requestDto.setPosition(Position.EMPLOYEE);
+
+        when(employeeRepository.findById(30L)).thenReturn(Optional.of(employee));
+        when(employeeRepository.save(any(Employee.class))).thenReturn(employee);
+        when(coreMapper.toEmployeeResponse(any(Employee.class))).thenReturn(new EmployeeResponseDto());
+        when(userAccountRepository.findUsernameByEmployeeEmployeeId(anyLong())).thenReturn(Optional.empty());
+
+        employeeService.updateEmployee(30L, requestDto);
+
+        Assertions.assertNull(employee.getEmpTitle());
     }
 
     @Test
