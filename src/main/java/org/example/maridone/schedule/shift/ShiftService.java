@@ -213,6 +213,7 @@ public class ShiftService {
 
         //store employee ids based on the specs
         List<Long> empIds = employeeRepository.findAll(specs).stream()
+                .filter(employee -> isEmployedOn(employee, today))
                 .map(Employee::getEmployeeId)
                 .toList();
 
@@ -385,6 +386,18 @@ public class ShiftService {
         if (startTime.equals(endTime)) {
             throw new InvalidActionException("Start time and end time cannot be the same unless the date is marked as day off.");
         }
+    }
+
+    private boolean isEmployedOn(Employee employee, LocalDate targetDate) {
+        if (employee == null || targetDate == null || employee.getEmploymentDateStart() == null) {
+            return false;
+        }
+
+        if (targetDate.isBefore(employee.getEmploymentDateStart())) {
+            return false;
+        }
+
+        return employee.getEmploymentDateEnd() == null || !targetDate.isAfter(employee.getEmploymentDateEnd());
     }
 
     private void notifyTemplateShiftChange(Employee employee, DayOfWeek dayOfWeek, LocalTime startTime, LocalTime endTime, String action) {

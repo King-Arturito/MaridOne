@@ -8,6 +8,7 @@ import java.time.LocalTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 import org.example.maridone.config.DefaultConfig;
 import org.example.maridone.config.PayrollConfig;
@@ -38,6 +39,7 @@ import org.example.maridone.payroll.item.PayrollItemService;
 import org.example.maridone.payroll.item.component.EarningsLine;
 import org.example.maridone.schedule.shift.DailyShiftRepository;
 import org.example.maridone.schedule.shift.DailyShiftSchedule;
+import org.example.maridone.schedule.shift.TemplateShiftRepository;
 import org.example.maridone.schedule.shift.TemplateShiftSchedule;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
@@ -65,6 +67,7 @@ class PayrollServiceTest {
     @Mock private EmployeeRepository employeeRepository;
     @Mock private AttendanceLogRepository attendanceLogRepository;
     @Mock private DailyShiftRepository dailyShiftRepository;
+    @Mock private TemplateShiftRepository templateShiftRepository;
     @Mock private OvertimeRequestRepository overtimeRequestRepository;
     @Mock private LeaveRequestRepository leaveRequestRepository;
     @Mock private HolidayService holidayService;
@@ -89,6 +92,7 @@ class PayrollServiceTest {
                 employeeRepository,
                 attendanceLogRepository,
                 dailyShiftRepository,
+                templateShiftRepository,
                 overtimeRequestRepository,
                 leaveRequestRepository,
                 holidayService,
@@ -118,7 +122,7 @@ class PayrollServiceTest {
                 .thenReturn(HolidayLookup.empty());
 
         List<PayrollItem> items = new ArrayList<>();
-        payrollService.processPayrollNonExempt(run, items, List.of(employee));
+        payrollService.processPayrollNonExempt(run, items, List.of(employee), Map.of());
 
         Assertions.assertEquals(1, items.size());
         Assertions.assertTrue(items.get(0).getDeductions().stream()
@@ -154,7 +158,7 @@ class PayrollServiceTest {
                 .thenReturn(HolidayLookup.empty());
 
         List<PayrollItem> items = new ArrayList<>();
-        payrollService.processPayrollNonExempt(run, items, List.of(employee));
+        payrollService.processPayrollNonExempt(run, items, List.of(employee), Map.of());
 
         Assertions.assertEquals(1, items.size());
         Assertions.assertTrue(items.get(0).getDeductions().stream()
@@ -179,7 +183,7 @@ class PayrollServiceTest {
         when(holidayService.getHolidayLookup(any(LocalDate.class), any(LocalDate.class)))
                 .thenReturn(HolidayLookup.empty());
 
-        List<PayrollItem> items = payrollService.processPayrollExempt(run, List.of(employee));
+        List<PayrollItem> items = payrollService.processPayrollExempt(run, List.of(employee), Map.of());
 
         Assertions.assertEquals(1, items.size());
         Assertions.assertTrue(items.get(0).getDeductions().stream()
@@ -206,7 +210,7 @@ class PayrollServiceTest {
         when(holidayService.getHolidayLookup(any(LocalDate.class), any(LocalDate.class)))
                 .thenReturn(HolidayLookup.empty());
 
-        List<PayrollItem> items = payrollService.processPayrollExempt(run, List.of(employee));
+        List<PayrollItem> items = payrollService.processPayrollExempt(run, List.of(employee), Map.of());
 
         Assertions.assertEquals(1, items.size());
         Assertions.assertTrue(items.get(0).getDeductions().stream()
@@ -231,7 +235,7 @@ class PayrollServiceTest {
         when(holidayService.getHolidayLookup(any(LocalDate.class), any(LocalDate.class)))
                 .thenReturn(HolidayLookup.empty());
 
-        List<PayrollItem> items = payrollService.processPayrollExempt(run, List.of(employee));
+        List<PayrollItem> items = payrollService.processPayrollExempt(run, List.of(employee), Map.of());
 
         Assertions.assertEquals(1, items.size());
         Assertions.assertTrue(items.get(0).getDeductions().stream()
@@ -256,7 +260,7 @@ class PayrollServiceTest {
         when(holidayService.getHolidayLookup(any(LocalDate.class), any(LocalDate.class)))
                 .thenReturn(HolidayLookup.empty());
 
-        List<PayrollItem> items = payrollService.processPayrollExempt(run, List.of(employee));
+        List<PayrollItem> items = payrollService.processPayrollExempt(run, List.of(employee), Map.of());
 
         Assertions.assertEquals(1, items.size());
         Assertions.assertTrue(items.get(0).getDeductions().stream()
@@ -293,7 +297,7 @@ class PayrollServiceTest {
                 .thenReturn(HolidayLookup.empty());
 
         List<PayrollItem> items = new ArrayList<>();
-        payrollService.processPayrollNonExempt(run, items, List.of(employee));
+        payrollService.processPayrollNonExempt(run, items, List.of(employee), Map.of());
 
         Assertions.assertEquals(1, items.size());
         PayrollItem item = items.get(0);
@@ -322,11 +326,65 @@ class PayrollServiceTest {
                 .thenReturn(HolidayLookup.empty());
 
         List<PayrollItem> items = new ArrayList<>();
-        payrollService.processPayrollNonExempt(run, items, List.of(employee));
+        payrollService.processPayrollNonExempt(run, items, List.of(employee), Map.of());
 
         Assertions.assertEquals(1, items.size());
         Assertions.assertTrue(items.get(0).getDeductions().stream()
                 .anyMatch(line -> line.getDeductionType() == DeductionType.ABSENT_DEDUCTION));
+    }
+
+    @Test
+    void processPayrollNonExempt_MidPeriodHireShouldProrateBasicPay() {
+        LocalDate periodStart = LocalDate.of(2026, 4, 1);
+        LocalDate periodEnd = LocalDate.of(2026, 4, 15);
+        PayrollRun run = new PayrollRun();
+        run.setPeriodStart(periodStart);
+        run.setPeriodEnd(periodEnd);
+
+        Employee employee = buildEmployee(17L, ExemptionStatus.NON_EXEMPT, "624000.00");
+        employee.setEmploymentDateStart(LocalDate.of(2026, 4, 10));
+
+        when(defaultConfig.getTimeZone()).thenReturn(ZONE);
+        when(attendanceLogRepository.findByEmployeeIdInAndTimestampBetween(anyList(), any(Instant.class), any(Instant.class), any()))
+                .thenReturn(List.of());
+        when(overtimeRequestRepository.findAll(any(Specification.class))).thenReturn(List.of());
+        when(dailyShiftRepository.findAllByEmployeeIdsAndPeriod(anyList(), any(LocalDateTime.class), any(LocalDateTime.class)))
+                .thenReturn(List.of());
+        when(leaveRequestRepository.findApprovedLeavesForPeriod(anyList(), any(LocalDateTime.class), any(LocalDateTime.class)))
+                .thenReturn(List.of());
+        when(holidayService.getHolidayLookup(periodStart, periodEnd)).thenReturn(HolidayLookup.empty());
+
+        List<PayrollItem> items = new ArrayList<>();
+        payrollService.processPayrollNonExempt(run, items, List.of(employee), buildTemplateScheduleMap(employee));
+
+        Assertions.assertEquals(1, items.size());
+        assertBigDecimalEquals("10400.00", items.get(0).getGrossPay());
+    }
+
+    @Test
+    void processPayrollExempt_MidPeriodTerminationShouldProrateBasicPay() {
+        LocalDate periodStart = LocalDate.of(2026, 4, 1);
+        LocalDate periodEnd = LocalDate.of(2026, 4, 15);
+        PayrollRun run = new PayrollRun();
+        run.setPeriodStart(periodStart);
+        run.setPeriodEnd(periodEnd);
+
+        Employee employee = buildEmployee(18L, ExemptionStatus.EXEMPT, "624000.00");
+        employee.setEmploymentDateEnd(LocalDate.of(2026, 4, 5));
+
+        when(defaultConfig.getTimeZone()).thenReturn(ZONE);
+        when(attendanceLogRepository.findByEmployeeIdInAndTimestampBetween(anyList(), any(Instant.class), any(Instant.class), any()))
+                .thenReturn(List.of());
+        when(dailyShiftRepository.findAllByEmployeeIdsAndPeriod(anyList(), any(LocalDateTime.class), any(LocalDateTime.class)))
+                .thenReturn(List.of());
+        when(leaveRequestRepository.findApprovedLeavesForPeriod(anyList(), any(LocalDateTime.class), any(LocalDateTime.class)))
+                .thenReturn(List.of());
+        when(holidayService.getHolidayLookup(periodStart, periodEnd)).thenReturn(HolidayLookup.empty());
+
+        List<PayrollItem> items = payrollService.processPayrollExempt(run, List.of(employee), buildTemplateScheduleMap(employee));
+
+        Assertions.assertEquals(1, items.size());
+        assertBigDecimalEquals("8666.66", items.get(0).getGrossPay());
     }
 
     @Test
@@ -359,7 +417,7 @@ class PayrollServiceTest {
                 .thenReturn(HolidayLookup.empty());
 
         List<PayrollItem> items = new ArrayList<>();
-        payrollService.processPayrollNonExempt(run, items, List.of(employee));
+        payrollService.processPayrollNonExempt(run, items, List.of(employee), Map.of());
 
         Assertions.assertEquals(1, items.size());
         PayrollItem item = items.get(0);
@@ -412,7 +470,7 @@ class PayrollServiceTest {
                 .thenReturn(HolidayLookup.empty());
 
         List<PayrollItem> items = new ArrayList<>();
-        payrollService.processPayrollNonExempt(run, items, List.of(employee));
+        payrollService.processPayrollNonExempt(run, items, List.of(employee), Map.of());
 
         Assertions.assertEquals(1, items.size());
         PayrollItem item = items.get(0);
@@ -742,6 +800,7 @@ class PayrollServiceTest {
         ReflectionTestUtils.setField(employee, "employeeId", employeeId);
         employee.setExemptionStatus(exemptionStatus);
         employee.setYearlySalary(new BigDecimal(yearlySalary));
+        employee.setEmploymentDateStart(LocalDate.of(2026, 1, 1));
         return employee;
     }
 
@@ -816,6 +875,24 @@ class PayrollServiceTest {
         attendanceLog.setTimestamp(workDate.atTime(time).atZone(ZONE).toInstant());
         attendanceLog.setDirection(direction);
         return attendanceLog;
+    }
+
+    private Map<Long, Map<java.time.DayOfWeek, List<TemplateShiftSchedule>>> buildTemplateScheduleMap(Employee employee) {
+        Map<java.time.DayOfWeek, List<TemplateShiftSchedule>> schedulesByDay = java.util.Arrays.stream(java.time.DayOfWeek.values())
+                .collect(java.util.stream.Collectors.toMap(
+                        dayOfWeek -> dayOfWeek,
+                        dayOfWeek -> List.of(buildTemplateShift(employee, dayOfWeek))
+                ));
+        return Map.of(employee.getEmployeeId(), schedulesByDay);
+    }
+
+    private TemplateShiftSchedule buildTemplateShift(Employee employee, java.time.DayOfWeek dayOfWeek) {
+        TemplateShiftSchedule templateShiftSchedule = new TemplateShiftSchedule();
+        templateShiftSchedule.setEmployee(employee);
+        templateShiftSchedule.setDayOfWeek(dayOfWeek);
+        templateShiftSchedule.setStartTime(LocalTime.of(8, 0));
+        templateShiftSchedule.setEndTime(LocalTime.of(17, 0));
+        return templateShiftSchedule;
     }
 
     private void assertBigDecimalEquals(String expected, BigDecimal actual) {

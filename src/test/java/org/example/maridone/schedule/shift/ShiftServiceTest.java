@@ -12,6 +12,7 @@ import java.util.Optional;
 import org.example.maridone.config.DefaultConfig;
 import org.example.maridone.core.employee.Employee;
 import org.example.maridone.core.employee.EmployeeRepository;
+import org.example.maridone.enums.EmploymentStatus;
 import org.example.maridone.exception.unauthorized.InvalidActionException;
 import org.example.maridone.leave.request.LeaveRequestRepository;
 import org.example.maridone.notification.NotificationService;
@@ -260,6 +261,54 @@ class ShiftServiceTest {
                 "Your recurring Tuesday shift was updated to 10:00 AM - 9:00 PM.",
                 "HIGH"
         );
+    }
+
+    @Test
+    void setDailyShifts_ShouldSkipEmployeesOutsideEmploymentWindow() {
+        LocalDate today = LocalDate.now(MANILA);
+
+        Employee futureEmployee = new Employee();
+        ReflectionTestUtils.setField(futureEmployee, "employeeId", 1L);
+        futureEmployee.setEmploymentStatus(EmploymentStatus.REGULAR);
+        futureEmployee.setEmploymentDateStart(today.plusDays(1));
+
+        Employee endedEmployee = new Employee();
+        ReflectionTestUtils.setField(endedEmployee, "employeeId", 2L);
+        endedEmployee.setEmploymentStatus(EmploymentStatus.TERMINATED);
+        endedEmployee.setEmploymentDateStart(today.minusDays(10));
+        endedEmployee.setEmploymentDateEnd(today.minusDays(1));
+
+        Employee activeEmployee = new Employee();
+        ReflectionTestUtils.setField(activeEmployee, "employeeId", 3L);
+        activeEmployee.setEmploymentStatus(EmploymentStatus.REGULAR);
+        activeEmployee.setEmploymentDateStart(today.minusDays(10));
+
+        TemplateShiftSchedule activeTemplate = new TemplateShiftSchedule();
+        activeTemplate.setEmployee(activeEmployee);
+        activeTemplate.setDayOfWeek(today.getDayOfWeek());
+        activeTemplate.setStartTime(LocalTime.of(8, 0));
+        activeTemplate.setEndTime(LocalTime.of(17, 0));
+
+        when(defaultConfig.getTimeZone()).thenReturn(MANILA);
+        when(employeeRepository.findAll(org.mockito.ArgumentMatchers.<org.springframework.data.jpa.domain.Specification<Employee>>any()))
+                .thenReturn(List.of(futureEmployee, endedEmployee, activeEmployee));
+        when(dailyShiftRepository.findAllByEmployeeIdsAndPeriod(
+                List.of(3L),
+                today.atStartOfDay(),
+                today.plusDays(1).atStartOfDay()
+        )).thenReturn(List.of());
+        when(templateShiftRepository.findAllByEmployeeIdInAndDayOfWeek(List.of(3L), today.getDayOfWeek()))
+                .thenReturn(List.of(activeTemplate));
+        when(leaveRequestRepository.findApprovedLeavesForDay(today.atStartOfDay(), today.plusDays(1).atStartOfDay()))
+                .thenReturn(List.of());
+
+        shiftService.setDailyShifts();
+
+        ArgumentCaptor<List<DailyShiftSchedule>> dailyShiftsCaptor = ArgumentCaptor.forClass(List.class);
+        verify(dailyShiftRepository).saveAll(dailyShiftsCaptor.capture());
+        List<DailyShiftSchedule> savedDailyShifts = dailyShiftsCaptor.getValue();
+        Assertions.assertEquals(1, savedDailyShifts.size());
+        Assertions.assertEquals(3L, savedDailyShifts.get(0).getEmployeeId());
     }
 
     @Test

@@ -555,6 +555,27 @@ public class PayrollCalculator {
         return yearly.divide(BigDecimal.valueOf(24), 2, RoundingMode.HALF_UP);
     }
 
+    public BigDecimal computeProratedSemiMonthlyBasicPay(
+            BigDecimal yearlyCompensation,
+            long coveredUnits,
+            long totalUnits
+    ) {
+        BigDecimal fullPeriodPay = computeSemiMonthlyBasicPay(yearlyCompensation);
+        if (fullPeriodPay.compareTo(BigDecimal.ZERO) <= 0) {
+            return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+        }
+
+        if (totalUnits <= 0) {
+            return fullPeriodPay;
+        }
+
+        long normalizedCoveredUnits = Math.max(0L, Math.min(coveredUnits, totalUnits));
+        BigDecimal ratio = BigDecimal.valueOf(normalizedCoveredUnits)
+                .divide(BigDecimal.valueOf(totalUnits), 6, RoundingMode.HALF_UP);
+
+        return fullPeriodPay.multiply(ratio).setScale(2, RoundingMode.HALF_UP);
+    }
+
     public BigDecimal computeDailyRate(BigDecimal yearlyCompensation) {
         BigDecimal monthly = computeMonthlyBasicPay(yearlyCompensation);
         if (monthly.compareTo(BigDecimal.ZERO) <= 0) {

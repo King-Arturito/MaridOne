@@ -40,9 +40,12 @@ public interface EmployeeRepository extends JpaRepository<Employee, Long>, JpaSp
     @Query("""
         SELECT e
         FROM Employee e
-        WHERE e.employmentStatus <> :excludedStatus
-          AND e.employmentDateStart <= :periodEnd
+        WHERE e.employmentDateStart <= :periodEnd
           AND (e.employmentDateEnd IS NULL OR e.employmentDateEnd >= :periodStart)
+          AND (
+                e.employmentStatus <> :excludedStatus
+                OR e.employmentDateEnd IS NOT NULL
+          )
     """)
     List<Employee> findPayrollEligibleEmployees(
             @Param("periodStart") LocalDate periodStart,
