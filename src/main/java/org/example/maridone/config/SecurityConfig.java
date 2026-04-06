@@ -2,6 +2,7 @@ package org.example.maridone.config;
 
 import org.example.maridone.auth.JwtFilter;
 import org.example.maridone.auth.JwtService;
+import org.example.maridone.core.user.UserAccountRepository;
 import org.example.maridone.core.user.UserLoginService;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -29,11 +30,18 @@ public class SecurityConfig {
     private final DefaultConfig defaultConfig;
     private final JwtService jwtService;
     private final UserLoginService userLoginService;
+    private final UserAccountRepository userAccountRepository;
 
-    public SecurityConfig(DefaultConfig defaultConfig, JwtService jwtService, UserLoginService userLoginService) {
+    public SecurityConfig(
+            DefaultConfig defaultConfig,
+            JwtService jwtService,
+            UserLoginService userLoginService,
+            UserAccountRepository userAccountRepository
+    ) {
         this.defaultConfig = defaultConfig;
         this.jwtService = jwtService;
         this.userLoginService = userLoginService;
+        this.userAccountRepository = userAccountRepository;
     }
 
     @Bean
@@ -59,7 +67,7 @@ public class SecurityConfig {
     }
 
     @Bean JwtFilter jwtFilter() {
-        return new JwtFilter(jwtService, userLoginService);
+        return new JwtFilter(jwtService, userLoginService, userAccountRepository);
     }
     @Bean
     AuthenticationManager authenticationManager(AuthenticationConfiguration authenticationConfiguration) throws Exception {
