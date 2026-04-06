@@ -15,6 +15,7 @@ import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -90,8 +91,13 @@ public class EmployeeController {
     @AuditLog
     public ResponseEntity<EmployeeResponseDto> updateEmployee(
             @PathVariable Long id,
+            Authentication authentication,
             @Validated @RequestBody EmployeeRequestDto employeeRequestDto) {
-        EmployeeResponseDto response =  employeeService.updateEmployee(id, employeeRequestDto);
+        boolean isHr = authentication.getAuthorities().stream()
+                .anyMatch(authority -> "ROLE_HR".equals(authority.getAuthority()));
+        EmployeeResponseDto response = isHr
+                ? employeeService.updateEmployee(id, employeeRequestDto)
+                : employeeService.updateSelfEmployeeProfile(id, employeeRequestDto);
         return ResponseEntity.ok(response);
     }
 

@@ -123,7 +123,7 @@ class DisputeServiceTest {
         disputeRequest.setPayrollItem(payrollItem);
         disputeRequest.setStatus(Status.PENDING);
 
-        when(disputeRepository.findById(9L)).thenReturn(Optional.of(disputeRequest));
+        when(disputeRepository.findByIdWithEmployeeForUpdate(9L)).thenReturn(Optional.of(disputeRequest));
         when(disputeRepository.save(any(DisputeRequest.class))).thenReturn(disputeRequest);
         when(employeeRepository.findEmployeeIdsByPosition(Position.HR, EmploymentStatus.TERMINATED)).thenReturn(java.util.List.of(5L));
         when(employeeRepository.getReferenceById(5L)).thenReturn(hr);

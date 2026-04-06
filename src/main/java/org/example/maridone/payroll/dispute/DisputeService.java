@@ -117,10 +117,10 @@ public class DisputeService {
             targetEmployee = "#result.employeeId",
             importance = "HIGH")
     public DisputeResponseDto updateDisputeStatus(Long disputeId, DisputeActionDto payload, String approverUsername) {
-        DisputeRequest disputeRequest = disputeRepository.findByIdWithEmployee(disputeId)
+        DisputeRequest disputeRequest = disputeRepository.findByIdWithEmployeeForUpdate(disputeId)
                 .orElseThrow(() -> new RequestNotFoundException("Dispute Request",disputeId));
-        if (disputeRequest.getStatus().equals(Status.APPROVED)) {
-            throw new InvalidActionException("Dispute ID: " + disputeId + " has been approved already.");
+        if (disputeRequest.getStatus() != Status.PENDING) {
+            throw new InvalidActionException("Dispute ID: " + disputeId + " has been processed already.");
         }
         UserAccount approver = userAccountRepository.findByUsername(approverUsername)
                 .orElseThrow(() -> new AccountNotFoundException(approverUsername));
@@ -195,7 +195,8 @@ public class DisputeService {
     @ExecutionTime
     @Transactional
     public void cancelRequest(Long disputeId) {
-        DisputeRequest disputeRequest = disputeRepository.findById(disputeId).orElseThrow(() -> new RequestNotFoundException("Dispute Request",disputeId));
+        DisputeRequest disputeRequest = disputeRepository.findByIdWithEmployeeForUpdate(disputeId)
+                .orElseThrow(() -> new RequestNotFoundException("Dispute Request",disputeId));
         if (disputeRequest.getStatus().equals(Status.APPROVED)) {
             throw new IllegalStateException("Cannot cancel. Dispute Request has been approved already.");
         }

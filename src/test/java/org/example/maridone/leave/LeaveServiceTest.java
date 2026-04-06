@@ -266,7 +266,7 @@ class LeaveServiceTest {
         request.setStartDateTime(LocalDateTime.of(2026, 4, 7, 8, 0));
         request.setEndDateTime(LocalDateTime.of(2026, 4, 8, 17, 0));
 
-        when(leaveRequestRepository.findById(12L)).thenReturn(Optional.of(request));
+        when(leaveRequestRepository.findByIdForUpdate(12L)).thenReturn(Optional.of(request));
         when(leaveRequestRepository.save(any(LeaveRequest.class))).thenReturn(request);
         when(employeeRepository.findEmployeeIdsByPosition(Position.HR, EmploymentStatus.TERMINATED)).thenReturn(List.of(5L));
         when(employeeRepository.getReferenceById(5L)).thenReturn(hr);
@@ -344,7 +344,7 @@ class LeaveServiceTest {
 
         when(userAccountRepository.findByUsername("manager1")).thenReturn(Optional.of(managerAccount));
         when(userAccountRepository.findEmployeeIdByUsername("manager1")).thenReturn(2L);
-        when(leaveRequestRepository.findById(9L)).thenReturn(Optional.of(request));
+        when(leaveRequestRepository.findByIdForUpdate(9L)).thenReturn(Optional.of(request));
         when(leaveRequestRepository.findEmployeeIdByRequestId(9L)).thenReturn(Optional.of(3L));
         ReflectionTestUtils.setField(managerEmployee, "employeeId", 2L);
         when(employeeRepository.findHandledEmployeeIds(2L)).thenReturn(List.of(3L));
@@ -389,7 +389,7 @@ class LeaveServiceTest {
 
         when(userAccountRepository.findByUsername("manager1")).thenReturn(Optional.of(managerAccount));
         when(userAccountRepository.findEmployeeIdByUsername("manager1")).thenReturn(2L);
-        when(leaveRequestRepository.findById(10L)).thenReturn(Optional.of(request));
+        when(leaveRequestRepository.findByIdForUpdate(10L)).thenReturn(Optional.of(request));
         when(leaveRequestRepository.findEmployeeIdByRequestId(10L)).thenReturn(Optional.of(7L));
         when(employeeRepository.findHandledEmployeeIds(2L)).thenReturn(List.of(3L, 4L));
 

@@ -173,7 +173,7 @@ class OvertimeServiceTest {
         request.setRequestStatus(Status.PENDING);
         request.setWorkDate(LocalDate.of(2026, 4, 7));
 
-        when(overtimeRequestRepository.findById(14L)).thenReturn(Optional.of(request));
+        when(overtimeRequestRepository.findByIdForUpdate(14L)).thenReturn(Optional.of(request));
         when(overtimeRequestRepository.save(any(OvertimeRequest.class))).thenReturn(request);
         when(employeeRepository.findEmployeeIdsByPosition(Position.HR, EmploymentStatus.TERMINATED)).thenReturn(java.util.List.of(5L));
         when(employeeRepository.getReferenceById(5L)).thenReturn(hr);
@@ -213,7 +213,7 @@ class OvertimeServiceTest {
         approverAccount.setUsername(approver);
         approverAccount.setEmployee(admin);
 
-        when(overtimeRequestRepository.findById(otId)).thenReturn(Optional.of(request));
+        when(overtimeRequestRepository.findByIdForUpdate(otId)).thenReturn(Optional.of(request));
         when(userAccountRepository.findByUsername(approver)).thenReturn(Optional.of(approverAccount));
         when(overtimeRequestRepository.save(any(OvertimeRequest.class))).thenReturn(request);
         
@@ -267,7 +267,7 @@ class OvertimeServiceTest {
         updateDto.setUpdateStatus(Status.APPROVED);
         updateDto.setApproveReason("Approved for the team deadline.");
 
-        when(overtimeRequestRepository.findById(7L)).thenReturn(Optional.of(request));
+        when(overtimeRequestRepository.findByIdForUpdate(7L)).thenReturn(Optional.of(request));
         when(userAccountRepository.findByUsername("manager1")).thenReturn(Optional.of(managerAccount));
         when(userAccountRepository.findEmployeeIdByUsername("manager1")).thenReturn(2L);
         when(employeeRepository.findHandledEmployeeIds(2L)).thenReturn(java.util.List.of(3L));
@@ -303,7 +303,7 @@ class OvertimeServiceTest {
         updateDto.setUpdateStatus(Status.REJECTED);
         updateDto.setApproveReason("Not handled by this manager.");
 
-        when(overtimeRequestRepository.findById(8L)).thenReturn(Optional.of(request));
+        when(overtimeRequestRepository.findByIdForUpdate(8L)).thenReturn(Optional.of(request));
         when(userAccountRepository.findByUsername("manager1")).thenReturn(Optional.of(managerAccount));
         when(userAccountRepository.findEmployeeIdByUsername("manager1")).thenReturn(2L);
         when(employeeRepository.findHandledEmployeeIds(2L)).thenReturn(java.util.List.of(3L, 4L));

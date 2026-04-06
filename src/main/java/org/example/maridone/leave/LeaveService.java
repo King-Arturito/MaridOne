@@ -142,7 +142,8 @@ public class LeaveService {
     @Transactional
     @AuditLog
     public void cancelRequest(Long requestId) {
-        LeaveRequest request = leaveRequestRepository.findById(requestId).orElseThrow(() -> new RequestNotFoundException("Leave Request", requestId));
+        LeaveRequest request = leaveRequestRepository.findByIdForUpdate(requestId)
+                .orElseThrow(() -> new RequestNotFoundException("Leave Request", requestId));
         if (request.getRequestStatus().equals(Status.APPROVED)) {
             throw new IllegalStateException("Cannot cancel. Dispute Request has been approved already.");
         }
@@ -313,7 +314,7 @@ public class LeaveService {
         UserAccount user = userAccountRepository.findByUsername(authentication.getName()).orElseThrow(
                 () -> new AccountNotFoundException(authentication.getName()));
 
-        LeaveRequest request = leaveRequestRepository.findById(requestId).orElseThrow(
+        LeaveRequest request = leaveRequestRepository.findByIdForUpdate(requestId).orElseThrow(
                 () -> new LeaveNotFoundException("Leave Request of Id: " + requestId + " is not found."));
 
         Long requestEmpId  = leaveRequestRepository.findEmployeeIdByRequestId(requestId).orElse(null);
