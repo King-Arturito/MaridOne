@@ -34,6 +34,7 @@ public class OvertimeController {
     //request overtime for all
     @PostMapping("/create")
     @PreAuthorize("isAuthenticated()")
+    @AuditLog
     public ResponseEntity<OvertimeRequest> createOvertimeRequest(
             @RequestBody @Valid OvertimeRequestDto requestDto,
             Authentication authentication) {

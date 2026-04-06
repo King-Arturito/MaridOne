@@ -54,6 +54,7 @@ public class DisputeController {
 
     @PostMapping("/create/{itemId}")
     @PreAuthorize("@itemOwnerCheck.isSelf(#itemId, authentication.getName())")
+    @AuditLog
     public DisputeRequest createDisputeRequest
             (@PathVariable Long itemId,
              @RequestBody @Valid DisputeRequestDto payload,
