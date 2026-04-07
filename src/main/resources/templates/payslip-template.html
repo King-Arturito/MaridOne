@@ -56,6 +56,30 @@
             padding: 0;
         }
 
+        .company-brand {
+            width: auto;
+        }
+
+        .company-brand td {
+            padding: 0;
+            vertical-align: top;
+        }
+
+        .company-logo-cell {
+            width: 68px;
+            padding-right: 10px;
+        }
+
+        .company-logo {
+            width: 54px;
+            height: auto;
+            display: block;
+        }
+
+        .company-copy {
+            display: block;
+        }
+
         .company-name {
             margin: 0;
             font-size: 16px;
@@ -317,9 +341,18 @@
                 <table class="header-table">
                     <tr>
                         <td>
-                            <p class="company-name">Marid Industries Corporation</p>
-                            <p class="company-meta">Address</p>
-                            <p class="company-meta">marid@marid.com</p>
+                            <table class="company-brand">
+                                <tr>
+                                    <td class="company-logo-cell">
+                                        <img th:if="${logoUrl != null and !#strings.isEmpty(logoUrl)}" th:src="${logoUrl}" class="company-logo" alt="Marid logo"/>
+                                    </td>
+                                    <td class="company-copy">
+                                        <p class="company-name">Marid Industries Corporation</p>
+                                        <p class="company-meta">Address</p>
+                                        <p class="company-meta">marid@marid.com</p>
+                                    </td>
+                                </tr>
+                            </table>
                         </td>
                         <td class="title-cell">
                             <p class="title">PAYSLIP</p>
