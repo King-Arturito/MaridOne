@@ -121,6 +121,7 @@ public class PayrollService {
         run.setPayrollStatus(PayrollStatus.IN_PROGRESS);
         run.setPeriodEnd(payload.getPeriodEnd());
         run.setPeriodStart(payload.getPeriodStart());
+        run.setPaymentDate(payload.getPaymentDate() != null ? payload.getPaymentDate() : payload.getPeriodEnd());
         payrollRunRepository.save(run);
         return run;
     }

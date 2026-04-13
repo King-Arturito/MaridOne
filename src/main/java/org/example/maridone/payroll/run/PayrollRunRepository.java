@@ -24,6 +24,7 @@ public interface PayrollRunRepository extends JpaRepository<PayrollRun, Long> {
             pr.payId,
             pr.periodStart,
             pr.periodEnd,
+            pr.paymentDate,
             pr.periodDescription,
             pr.payrollStatus,
             pr.runType,
@@ -31,8 +32,8 @@ public interface PayrollRunRepository extends JpaRepository<PayrollRun, Long> {
         )
         FROM PayrollRun pr
         LEFT JOIN pr.items pi
-        GROUP BY pr.payId, pr.periodStart, pr.periodEnd, pr.periodDescription, pr.payrollStatus, pr.runType
-        ORDER BY pr.payId DESC
+        GROUP BY pr.payId, pr.periodStart, pr.periodEnd, pr.paymentDate, pr.periodDescription, pr.payrollStatus, pr.runType
+        ORDER BY pr.paymentDate DESC, pr.payId DESC
     """)
     List<PayrollRunViewDto> findAllRunViews();
 
@@ -41,6 +42,7 @@ public interface PayrollRunRepository extends JpaRepository<PayrollRun, Long> {
             pr.payId,
             pr.periodStart,
             pr.periodEnd,
+            pr.paymentDate,
             pr.periodDescription,
             pr.payrollStatus,
             pr.runType,
@@ -49,7 +51,7 @@ public interface PayrollRunRepository extends JpaRepository<PayrollRun, Long> {
         FROM PayrollRun pr
         LEFT JOIN pr.items pi
         WHERE pr.payId = :payId
-        GROUP BY pr.payId, pr.periodStart, pr.periodEnd, pr.periodDescription, pr.payrollStatus, pr.runType
+        GROUP BY pr.payId, pr.periodStart, pr.periodEnd, pr.paymentDate, pr.periodDescription, pr.payrollStatus, pr.runType
     """)
     Optional<PayrollRunViewDto> findRunViewByPayId(@Param("payId") Long payId);
 

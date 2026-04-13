@@ -46,4 +46,17 @@ public interface EarningsRepository extends JpaRepository<EarningsLine, Long> {
         END
 """, nativeQuery = true)
     List<PayTypeSummaryProjection> getSummarizedEarnings(@Param("payId") Long payId);
+    @Query("""
+        SELECT el.earningsType AS type, SUM(el.amount) AS totalAmount
+        FROM EarningsLine el
+        JOIN el.payrollItem pi
+        WHERE pi.payrollRun.payrollStatus = 'POSTED'
+          AND pi.payrollRun.paymentDate >= :startDate
+          AND pi.payrollRun.paymentDate <= :endDate
+        GROUP BY el.earningsType
+    """)
+    List<PayTypeSummaryProjection> getSummarizedEarningsByDateRange(
+            @Param("startDate") java.time.LocalDate startDate,
+            @Param("endDate") java.time.LocalDate endDate
+    );
 }

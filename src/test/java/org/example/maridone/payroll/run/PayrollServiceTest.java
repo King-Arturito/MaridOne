@@ -538,6 +538,7 @@ class PayrollServiceTest {
                 77L,
                 workDate,
                 workDate,
+                workDate,
                 "Test run",
                 PayrollStatus.IN_PROGRESS,
                 RunType.REGULAR,
@@ -571,6 +572,7 @@ class PayrollServiceTest {
         PayrollRunViewDto viewDto = new PayrollRunViewDto(
                 78L,
                 periodStart,
+                periodEnd,
                 periodEnd,
                 "Test run",
                 PayrollStatus.IN_PROGRESS,
@@ -642,6 +644,7 @@ class PayrollServiceTest {
                 79L,
                 periodStart,
                 periodEnd,
+                periodEnd,
                 "Test run",
                 PayrollStatus.IN_PROGRESS,
                 RunType.REGULAR,
@@ -688,6 +691,7 @@ class PayrollServiceTest {
         PayrollRunViewDto viewDto = new PayrollRunViewDto(
                 80L,
                 periodStart,
+                periodEnd,
                 periodEnd,
                 "Test run",
                 PayrollStatus.IN_PROGRESS,
@@ -797,6 +801,7 @@ class PayrollServiceTest {
         PayrollRunViewDto viewDto = new PayrollRunViewDto(
                 89L,
                 run.getPeriodStart(),
+                run.getPeriodEnd(),
                 run.getPeriodEnd(),
                 "Adjustment run",
                 PayrollStatus.POSTED,

@@ -9,6 +9,7 @@ public class PayrollRunViewDto {
     private Long payId;
     private LocalDate periodStart;
     private LocalDate periodEnd;
+    private LocalDate paymentDate;
     private String periodDescription;
     private PayrollStatus payrollStatus;
     private RunType runType;
@@ -21,6 +22,7 @@ public class PayrollRunViewDto {
             Long payId,
             LocalDate periodStart,
             LocalDate periodEnd,
+            LocalDate paymentDate,
             String periodDescription,
             PayrollStatus payrollStatus,
             RunType runType,
@@ -29,6 +31,7 @@ public class PayrollRunViewDto {
         this.payId = payId;
         this.periodStart = periodStart;
         this.periodEnd = periodEnd;
+        this.paymentDate = paymentDate;
         this.periodDescription = periodDescription;
         this.payrollStatus = payrollStatus;
         this.runType = runType;
@@ -57,6 +60,14 @@ public class PayrollRunViewDto {
 
     public void setPeriodEnd(LocalDate periodEnd) {
         this.periodEnd = periodEnd;
+    }
+
+    public LocalDate getPaymentDate() {
+        return paymentDate;
+    }
+
+    public void setPaymentDate(LocalDate paymentDate) {
+        this.paymentDate = paymentDate;
     }
 
     public String getPeriodDescription() {

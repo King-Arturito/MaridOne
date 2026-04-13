@@ -190,6 +190,40 @@ public class PayrollItemService {
         return summaryDtos;
     }
 
+    @Transactional(readOnly = true)
+    @ExecutionTime
+    public Page<ItemViewDto> getReportItemsByDateRange(
+            java.time.LocalDate startDate,
+            java.time.LocalDate endDate,
+            ItemFilter filter,
+            Pageable pageable
+    ) {
+        Page<ItemViewDto> items = payrollItemRepository.findSpecificDetailsByDateRange(startDate, endDate, filter, pageable);
+        List<ItemViewDto> displayedItems = items.getContent().stream()
+                .map(this::toDisplayedItemView)
+                .toList();
+        return new PageImpl<>(displayedItems, pageable, items.getTotalElements());
+    }
+
+    @Transactional(readOnly = true)
+    @ExecutionTime
+    public List<PayTypeSummaryDto> getSummarizedReportItemsByDateRange(
+            java.time.LocalDate startDate,
+            java.time.LocalDate endDate
+    ) {
+        List<PayTypeSummaryDto> summaryDtos = new ArrayList<>();
+
+        deductionsRepository.getSummarizedDeductionsByDateRange(startDate, endDate).forEach(p ->
+                summaryDtos.add(new PayTypeSummaryDto(AdjustmentKind.DEDUCTION, p.getType(), p.getTotalAmount()))
+        );
+
+        earningsRepository.getSummarizedEarningsByDateRange(startDate, endDate).forEach(p ->
+                summaryDtos.add(new PayTypeSummaryDto(AdjustmentKind.EARNING, p.getType(), p.getTotalAmount()))
+        );
+
+        return summaryDtos;
+    }
+
     private PayrollRun getEditableAdjustmentRun(Long payId) {
         PayrollRun run = payrollRunRepository.findById(payId).orElseThrow(
                 () -> new RunNotFoundException("Payroll Run ID:" + payId + " not found.")

@@ -62,6 +62,29 @@ public class PayrollController {
         return payrollItemService.getSummarizedRunItems(payId);
     }
 
+    @GetMapping("/report/items")
+    @PreAuthorize("hasAnyRole('HR', 'MANAGEMENT', 'ACCOUNTING')")
+    @AuditLog
+    public Page<ItemViewDto> getReportItemsByDateRange(
+            ItemFilter filter,
+            @RequestParam("from") java.time.LocalDate from,
+            @RequestParam("to") java.time.LocalDate to,
+            Authentication authentication,
+            Pageable pageable
+    ) {
+        assertCanViewPayrollReports(authentication);
+        return payrollItemService.getReportItemsByDateRange(from, to, filter, pageable);
+    }
+
+    @GetMapping("/report/summary")
+    @PreAuthorize("hasAnyRole('HR', 'MANAGEMENT', 'ACCOUNTING')")
+    public List<PayTypeSummaryDto> getSummarizedReportItemsByDateRange(
+            @RequestParam("from") java.time.LocalDate from,
+            @RequestParam("to") java.time.LocalDate to
+    ) {
+        return payrollItemService.getSummarizedReportItemsByDateRange(from, to);
+    }
+
     @GetMapping("/run")
     @PreAuthorize("hasAnyRole('HR', 'MANAGEMENT', 'ACCOUNTING')")
     public List<PayrollRunViewDto> getRuns() {

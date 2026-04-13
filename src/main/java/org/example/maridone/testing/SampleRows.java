@@ -52,13 +52,12 @@ import jakarta.annotation.PostConstruct;
 public class SampleRows {
 
     private static final ZoneId SEED_TIME_ZONE = ZoneId.of("Asia/Manila");
+    private static final LocalDate SEED_START_DATE = LocalDate.of(2025, 1, 1);
+    private static final LocalDate SEED_END_DATE = LocalDate.of(2026, 4, 11);
     private static final LocalTime SHIFT_START = LocalTime.of(8, 0);
     private static final LocalTime SHIFT_END = LocalTime.of(17, 0);
     private static final LocalTime NIGHT_SHIFT_START = LocalTime.of(22, 0);
     private static final LocalTime NIGHT_SHIFT_END = LocalTime.of(6, 0);
-    private static final LocalDate JANUARY_SHIFT_START_DATE = LocalDate.of(2026, 1, 1);
-    private static final LocalDate ATTENDANCE_START_DATE = LocalDate.of(2026, 2, 1);
-    private static final LocalDate ATTENDANCE_END_DATE = LocalDate.of(2026, 4, 4);
     private static final List<DayOfWeek> STANDARD_WORK_DAYS = List.of(
             DayOfWeek.MONDAY,
             DayOfWeek.TUESDAY,
@@ -69,13 +68,20 @@ public class SampleRows {
     );
     private static final List<Integer> SEEDED_LATE_MONTHS = List.of(2, 3);
     private static final int SEEDED_LATE_DAYS_PER_MONTH = 2;
-    private static final LocalDate TARGETED_LATE_DATE_ONE = LocalDate.of(2026, 4, 3);
-    private static final LocalDate TARGETED_LATE_DATE_TWO = LocalDate.of(2026, 4, 4);
-    private static final LocalDate TARGETED_LATE_EARLY_OUT_DATE = LocalDate.of(2026, 4, 2);
+    private static final LocalDate TARGETED_LATE_DATE_ONE = LocalDate.of(2026, 3, 30);
+    private static final LocalDate TARGETED_LATE_DATE_TWO = LocalDate.of(2026, 3, 31);
+    private static final LocalDate TARGETED_LATE_EARLY_OUT_DATE = LocalDate.of(2026, 3, 28);
+    private static final LocalDate TARGETED_ABSENT_DATE_ONE = LocalDate.of(2025, 4, 24);
+    private static final LocalDate TARGETED_ABSENT_DATE_TWO = LocalDate.of(2025, 10, 14);
+    private static final LocalDate TARGETED_ABSENT_DATE_THREE = LocalDate.of(2026, 2, 18);
+    private static final LocalDate TARGETED_INCOMPLETE_MISSING_OUT_DATE_ONE = LocalDate.of(2025, 6, 17);
+    private static final LocalDate TARGETED_INCOMPLETE_MISSING_OUT_DATE_TWO = LocalDate.of(2026, 1, 13);
+    private static final LocalDate TARGETED_INCOMPLETE_MISSING_IN_DATE_ONE = LocalDate.of(2025, 9, 9);
+    private static final LocalDate TARGETED_INCOMPLETE_MISSING_IN_DATE_TWO = LocalDate.of(2026, 4, 7);
     private static final int MIN_LATE_OFFSET_MINUTES = 18;
     private static final int LATE_OFFSET_VARIATION_MINUTES = 15;
     private static final String NIGHT_SHIFT_TEST_EMAIL = "nina.soriano@maridone.test";
-    private static final String ZERO_SALARY_NO_ATTENDANCE_TEST_EMAIL = "omar.delosreyes@maridone.test";
+    private static final String ZERO_SALARY_TEST_EMAIL = "omar.delosreyes@maridone.test";
     private static final String LATE_EARLY_OUT_TEST_EMAIL = "richard.moore@maridone.test";
 
     @Autowired
@@ -140,7 +146,7 @@ public class SampleRows {
         employee.setMiddleName(seed.middleName());
         employee.setLastName(seed.lastName());
         employee.setBirthDate(seed.birthDate());
-        employee.setEmploymentDateStart(seed.employmentDateStart());
+        employee.setEmploymentDateStart(resolveSeedEmploymentStart(seed));
         employee.setEmploymentDateEnd(seed.employmentDateEnd());
         employee.setYearlySalary(seed.yearlySalary());
         employee.setEmail(seed.email());
@@ -152,6 +158,14 @@ public class SampleRows {
         employee.setEmpTitle(seed.empTitle());
         employee.setAddress(toAddress(seed));
         return employee;
+    }
+
+    private LocalDate resolveSeedEmploymentStart(EmployeeSeed seed) {
+        LocalDate seededStart = seed.employmentDateStart();
+        if (seededStart == null || seededStart.isAfter(SEED_START_DATE)) {
+            return SEED_START_DATE;
+        }
+        return seededStart;
     }
 
     private Address toAddress(EmployeeSeed seed) {
@@ -257,11 +271,9 @@ public class SampleRows {
     }
 
     private void createAndSaveSeededDailyShifts(List<TemplateShiftSchedule> templateSchedules) {
-        // Seed daily shifts across the whole seeded payroll window.
-        // January still has no attendance logs for absence testing, while February onward aligns with seeded attendance.
         List<DailyShiftSchedule> dailyShifts = new ArrayList<>();
 
-        for (LocalDate workDate = JANUARY_SHIFT_START_DATE; !workDate.isAfter(ATTENDANCE_END_DATE); workDate = workDate.plusDays(1)) {
+        for (LocalDate workDate = SEED_START_DATE; !workDate.isAfter(SEED_END_DATE); workDate = workDate.plusDays(1)) {
             DayOfWeek workDay = workDate.getDayOfWeek();
             for (TemplateShiftSchedule template : templateSchedules) {
                 Employee employee = template.getEmployee();
@@ -283,6 +295,7 @@ public class SampleRows {
                                 template.getEndTime().isBefore(template.getStartTime()) ? 1 : 0
                         )
                 );
+                dailyShift.setDayOff(false);
                 dailyShifts.add(dailyShift);
             }
         }
@@ -341,16 +354,9 @@ public class SampleRows {
 
     private void createAndSaveAttendanceLogs(List<Employee> employees) {
         List<AttendanceLog> attendanceLogs = new ArrayList<>();
-        List<LocalDate> allWorkDates = buildWorkDates(ATTENDANCE_START_DATE, ATTENDANCE_END_DATE);
+        List<LocalDate> allWorkDates = buildWorkDates(SEED_START_DATE, SEED_END_DATE);
 
         for (Employee employee : employees) {
-            if (employee.getEmploymentStatus() == EmploymentStatus.SUSPENDED) {
-                continue;
-            }
-            if (isZeroSalaryNoAttendanceTestEmployee(employee)) {
-                continue;
-            }
-
             List<LocalDate> employeeWorkDates = allWorkDates.stream()
                     .filter(date -> !date.isBefore(employee.getEmploymentDateStart()))
                     .filter(date -> employee.getEmploymentDateEnd() == null || !date.isAfter(employee.getEmploymentDateEnd()))
@@ -360,11 +366,22 @@ public class SampleRows {
                 continue;
             }
 
-            Set<LocalDate> lateDates = buildLateDates(employee, employeeWorkDates);
+            AttendanceAnomalyPlan anomalyPlan = buildAttendanceAnomalyPlan(employee, employeeWorkDates);
             for (LocalDate workDate : employeeWorkDates) {
-                AttendanceVariance variance = resolveAttendanceVariance(employee, workDate, lateDates);
-                attendanceLogs.add(createAttendanceLog(employee, workDate, "IN", variance));
-                attendanceLogs.add(createAttendanceLog(employee, workDate, "OUT", variance));
+                AttendanceVariance variance = resolveAttendanceVariance(employee, workDate, anomalyPlan);
+                switch (variance) {
+                    case ABSENT -> {
+                        // Skip both logs so attendance reports can surface a true absence.
+                    }
+                    case INCOMPLETE_MISSING_OUT ->
+                            attendanceLogs.add(createAttendanceLog(employee, workDate, "IN", AttendanceVariance.ON_TIME));
+                    case INCOMPLETE_MISSING_IN ->
+                            attendanceLogs.add(createAttendanceLog(employee, workDate, "OUT", AttendanceVariance.ON_TIME));
+                    default -> {
+                        attendanceLogs.add(createAttendanceLog(employee, workDate, "IN", variance));
+                        attendanceLogs.add(createAttendanceLog(employee, workDate, "OUT", variance));
+                    }
+                }
             }
         }
 
@@ -381,6 +398,26 @@ public class SampleRows {
         return workDates;
     }
 
+    private AttendanceAnomalyPlan buildAttendanceAnomalyPlan(Employee employee, List<LocalDate> workDates) {
+        Set<LocalDate> lateDates = buildLateDates(employee, workDates);
+        Set<LocalDate> absentDates = buildAbsentDates(employee, workDates);
+        Set<LocalDate> incompleteMissingOutDates = buildIncompleteMissingOutDates(employee, workDates);
+        Set<LocalDate> incompleteMissingInDates = buildIncompleteMissingInDates(employee, workDates);
+
+        incompleteMissingOutDates.removeAll(absentDates);
+        incompleteMissingInDates.removeAll(absentDates);
+        lateDates.removeAll(absentDates);
+        lateDates.removeAll(incompleteMissingOutDates);
+        lateDates.removeAll(incompleteMissingInDates);
+
+        return new AttendanceAnomalyPlan(
+                lateDates,
+                absentDates,
+                incompleteMissingOutDates,
+                incompleteMissingInDates
+        );
+    }
+
     private Set<LocalDate> buildLateDates(Employee employee, List<LocalDate> workDates) {
         Set<LocalDate> lateDates = new LinkedHashSet<>();
         for (int month : SEEDED_LATE_MONTHS) {
@@ -391,18 +428,42 @@ public class SampleRows {
                     .limit(SEEDED_LATE_DAYS_PER_MONTH)
                     .forEach(lateDates::add);
         }
-        addTargetedLateDate(employee, workDates, lateDates, TARGETED_LATE_DATE_ONE, Math.floorMod(employee.getEmployeeId().intValue(), 4) == 1);
-        addTargetedLateDate(employee, workDates, lateDates, TARGETED_LATE_DATE_TWO, Math.floorMod(employee.getEmployeeId().intValue(), 4) == 2);
+        addTargetedWorkDate(workDates, lateDates, TARGETED_LATE_DATE_ONE, Math.floorMod(employee.getEmployeeId().intValue(), 4) == 1);
+        addTargetedWorkDate(workDates, lateDates, TARGETED_LATE_DATE_TWO, Math.floorMod(employee.getEmployeeId().intValue(), 4) == 2);
         return lateDates;
     }
 
-    private void addTargetedLateDate(Employee employee,
-                                     List<LocalDate> workDates,
-                                     Set<LocalDate> lateDates,
+    private Set<LocalDate> buildAbsentDates(Employee employee, List<LocalDate> workDates) {
+        Set<LocalDate> absentDates = new LinkedHashSet<>();
+        int anomalyBucket = Math.floorMod(employee.getEmployeeId().intValue(), 6);
+        addTargetedWorkDate(workDates, absentDates, TARGETED_ABSENT_DATE_ONE, anomalyBucket == 0);
+        addTargetedWorkDate(workDates, absentDates, TARGETED_ABSENT_DATE_TWO, anomalyBucket == 1);
+        addTargetedWorkDate(workDates, absentDates, TARGETED_ABSENT_DATE_THREE, anomalyBucket == 2);
+        return absentDates;
+    }
+
+    private Set<LocalDate> buildIncompleteMissingOutDates(Employee employee, List<LocalDate> workDates) {
+        Set<LocalDate> incompleteDates = new LinkedHashSet<>();
+        int anomalyBucket = Math.floorMod(employee.getEmployeeId().intValue(), 6);
+        addTargetedWorkDate(workDates, incompleteDates, TARGETED_INCOMPLETE_MISSING_OUT_DATE_ONE, anomalyBucket == 3);
+        addTargetedWorkDate(workDates, incompleteDates, TARGETED_INCOMPLETE_MISSING_OUT_DATE_TWO, anomalyBucket == 4);
+        return incompleteDates;
+    }
+
+    private Set<LocalDate> buildIncompleteMissingInDates(Employee employee, List<LocalDate> workDates) {
+        Set<LocalDate> incompleteDates = new LinkedHashSet<>();
+        int anomalyBucket = Math.floorMod(employee.getEmployeeId().intValue(), 6);
+        addTargetedWorkDate(workDates, incompleteDates, TARGETED_INCOMPLETE_MISSING_IN_DATE_ONE, anomalyBucket == 5);
+        addTargetedWorkDate(workDates, incompleteDates, TARGETED_INCOMPLETE_MISSING_IN_DATE_TWO, anomalyBucket == 0);
+        return incompleteDates;
+    }
+
+    private void addTargetedWorkDate(List<LocalDate> workDates,
+                                     Set<LocalDate> targetDates,
                                      LocalDate targetDate,
-                                     boolean shouldBeLate) {
-        if (shouldBeLate && workDates.contains(targetDate)) {
-            lateDates.add(targetDate);
+                                     boolean shouldInclude) {
+        if (shouldInclude && workDates.contains(targetDate)) {
+            targetDates.add(targetDate);
         }
     }
 
@@ -417,6 +478,7 @@ public class SampleRows {
             case LATE_IN_AND_EARLY_OUT -> "IN".equals(direction)
                     ? lateOffsetMinutes(employee, workDate)
                     : -earlyOutOffsetMinutes(employee, workDate);
+            case ABSENT, INCOMPLETE_MISSING_OUT, INCOMPLETE_MISSING_IN -> 0;
         };
         LocalDate logDate = workDate;
         if ("OUT".equals(direction) && shiftEnd.isBefore(shiftStart)) {
@@ -435,11 +497,22 @@ public class SampleRows {
         return attendanceLog;
     }
 
-    private AttendanceVariance resolveAttendanceVariance(Employee employee, LocalDate workDate, Set<LocalDate> lateDates) {
+    private AttendanceVariance resolveAttendanceVariance(Employee employee,
+                                                         LocalDate workDate,
+                                                         AttendanceAnomalyPlan anomalyPlan) {
+        if (anomalyPlan.absentDates().contains(workDate)) {
+            return AttendanceVariance.ABSENT;
+        }
+        if (anomalyPlan.incompleteMissingOutDates().contains(workDate)) {
+            return AttendanceVariance.INCOMPLETE_MISSING_OUT;
+        }
+        if (anomalyPlan.incompleteMissingInDates().contains(workDate)) {
+            return AttendanceVariance.INCOMPLETE_MISSING_IN;
+        }
         if (isLateAndEarlyOutTestEmployee(employee) && TARGETED_LATE_EARLY_OUT_DATE.equals(workDate)) {
             return AttendanceVariance.LATE_IN_AND_EARLY_OUT;
         }
-        if (lateDates.contains(workDate)) {
+        if (anomalyPlan.lateDates().contains(workDate)) {
             return AttendanceVariance.LATE_IN;
         }
         return AttendanceVariance.ON_TIME;
@@ -469,10 +542,6 @@ public class SampleRows {
 
     private boolean isNightShiftTestEmployee(Employee employee) {
         return employee != null && NIGHT_SHIFT_TEST_EMAIL.equalsIgnoreCase(employee.getEmail());
-    }
-
-    private boolean isZeroSalaryNoAttendanceTestEmployee(Employee employee) {
-        return employee != null && ZERO_SALARY_NO_ATTENDANCE_TEST_EMAIL.equalsIgnoreCase(employee.getEmail());
     }
 
     private boolean isLateAndEarlyOutTestEmployee(Employee employee) {
@@ -578,7 +647,7 @@ public class SampleRows {
                         EmploymentStatus.REGULAR, ExemptionStatus.NON_EXEMPT, Position.EMPLOYEE, null,
                         "401 Night Shift Ave", null, "Taguig", "Metro Manila", "Philippines", "1631"),
                 new EmployeeSeed("Omar", null, "Delos Reyes", LocalDate.of(1997, 10, 12), LocalDate.of(2025, 12, 8), null,
-                        BigDecimal.ZERO, ZERO_SALARY_NO_ATTENDANCE_TEST_EMAIL, true, "09170000024",
+                        BigDecimal.ZERO, ZERO_SALARY_TEST_EMAIL, true, "09170000024",
                         EmploymentStatus.REGULAR, ExemptionStatus.NON_EXEMPT, Position.EMPLOYEE, null,
                         "402 Test Case Ave", null, "Pasig", "Metro Manila", "Philippines", "1604")
         );
@@ -683,10 +752,21 @@ public class SampleRows {
     ) {
     }
 
+    private record AttendanceAnomalyPlan(
+            Set<LocalDate> lateDates,
+            Set<LocalDate> absentDates,
+            Set<LocalDate> incompleteMissingOutDates,
+            Set<LocalDate> incompleteMissingInDates
+    ) {
+    }
+
     private enum AttendanceVariance {
         ON_TIME,
         LATE_IN,
         EARLY_OUT,
-        LATE_IN_AND_EARLY_OUT
+        LATE_IN_AND_EARLY_OUT,
+        ABSENT,
+        INCOMPLETE_MISSING_OUT,
+        INCOMPLETE_MISSING_IN
     }
 }

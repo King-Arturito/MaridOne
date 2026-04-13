@@ -11,6 +11,7 @@ public class RunCreateDto {
     private LocalDate periodStart;
     @NotNull
     private LocalDate periodEnd;
+    private LocalDate paymentDate;
     @NotNull
     private String periodDescription;
     @NotNull
@@ -32,6 +33,14 @@ public class RunCreateDto {
 
     public void setPeriodEnd(LocalDate periodEnd) {
         this.periodEnd = periodEnd;
+    }
+
+    public LocalDate getPaymentDate() {
+        return paymentDate;
+    }
+
+    public void setPaymentDate(LocalDate paymentDate) {
+        this.paymentDate = paymentDate;
     }
 
     public String getPeriodDescription() {
