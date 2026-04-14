@@ -10,6 +10,7 @@ public class RunResponseDto {
     private Long id;
     private LocalDate periodStart;
     private LocalDate periodEnd;
+    private LocalDate paymentDate;
     private PayrollStatus payrollStatus;
     private RunType runType;
 
@@ -35,6 +36,14 @@ public class RunResponseDto {
 
     public void setPeriodEnd(LocalDate periodEnd) {
         this.periodEnd = periodEnd;
+    }
+
+    public LocalDate getPaymentDate() {
+        return paymentDate;
+    }
+
+    public void setPaymentDate(LocalDate paymentDate) {
+        this.paymentDate = paymentDate;
     }
 
     public PayrollStatus getPayrollStatus() {

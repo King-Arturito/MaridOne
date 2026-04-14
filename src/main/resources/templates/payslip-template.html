@@ -387,11 +387,8 @@
                         <td>
                             <table class="info-table">
                                 <tr>
-                                    <td class="info-label">Pay Period</td>
-                                    <td class="info-value"
-                                        th:text="${#temporals.format(details.periodStart, 'MMMM d, yyyy') + ' to ' + #temporals.format(details.periodEnd, 'MMMM d, yyyy')}">
-                                        August 1, 2026 to August 30, 2026
-                                    </td>
+                                    <td class="info-label">Payment Date</td>
+                                    <td class="info-value" th:text="${details.paymentDate != null ? #temporals.format(details.paymentDate, 'MMMM d, yyyy') : '-'}">August 30, 2026</td>
                                 </tr>
                                 <tr>
                                     <td class="info-label">Start Date</td>

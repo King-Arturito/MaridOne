@@ -161,6 +161,7 @@ public class PayslipService {
                     logsMap.getOrDefault(employee.getEmployeeId(), Collections.emptyList()),
                     payslipProjection.getPayPeriodStart(),
                     payslipProjection.getPayPeriodEnd(),
+                    payslipProjection.getPaymentDate(),
                     Optional.ofNullable(userAccountMap.get(employee)).map(UserAccount::getUsername).orElse("")
             );
             detailBlocks.add(details);
@@ -177,6 +178,7 @@ public class PayslipService {
             String payPeriod,
             LocalDate periodStart,
             LocalDate periodEnd,
+            LocalDate paymentDate,
             Integer workedDays,
             List<PayBreakdown> earningsList,
             List<PayBreakdown> deductionsBreakdownList,
@@ -252,6 +254,7 @@ public class PayslipService {
                 employeeLogs,
                 item.getPayrollRun().getPeriodStart(),
                 item.getPayrollRun().getPeriodEnd(),
+                item.getPayrollRun().getPaymentDate(),
                 employee.getUserAccount() != null ? employee.getUserAccount().getUsername() : ""
         );
     }
@@ -265,6 +268,7 @@ public class PayslipService {
             List<AttendanceLog> employeeLogs,
             LocalDate periodStart,
             LocalDate periodEnd,
+            LocalDate paymentDate,
             String userAccountName
     ) {
         String department = Optional.ofNullable(targetForTitle.getEmpTitle())
@@ -288,6 +292,7 @@ public class PayslipService {
                 payPeriod,
                 periodStart,
                 periodEnd,
+                paymentDate,
                 workedDays,
                 earnings,
                 deductions,
@@ -389,4 +394,3 @@ public class PayslipService {
         return deductions;
     }
 }
-
