@@ -26,6 +26,7 @@ import org.example.maridone.leave.request.LeaveRequestRepository;
 import org.example.maridone.leave.spec.LeaveSpecs;
 import org.example.maridone.notification.NotificationMessageFormatter;
 import org.example.maridone.notification.NotificationService;
+import org.example.maridone.notification.WorkflowEmailService;
 import org.example.maridone.overtime.OvertimeRequestRepository;
 import org.example.maridone.schedule.shift.TemplateShiftRepository;
 import org.example.maridone.schedule.shift.TemplateShiftSchedule;
@@ -69,6 +70,7 @@ public class LeaveService {
     private final PayrollConfig payrollConfig;
     private final NotificationService notificationService;
     private final OvertimeRequestRepository overtimeRequestRepository;
+    private final WorkflowEmailService workflowEmailService;
     private Clock clock = Clock.systemDefaultZone();
 
     public LeaveService(
@@ -82,7 +84,8 @@ public class LeaveService {
             DocumentService documentService,
             PayrollConfig payrollConfig,
             NotificationService notificationService,
-            OvertimeRequestRepository overtimeRequestRepository) {
+            OvertimeRequestRepository overtimeRequestRepository,
+            WorkflowEmailService workflowEmailService) {
         this.leaveBalanceRepository = leaveBalanceRepository;
         this.leaveRequestRepository = leaveRequestRepository;
         this.employeeRepository = employeeRepository;
@@ -94,6 +97,7 @@ public class LeaveService {
         this.payrollConfig = payrollConfig;
         this.notificationService = notificationService;
         this.overtimeRequestRepository = overtimeRequestRepository;
+        this.workflowEmailService = workflowEmailService;
     }
 
     @Transactional
@@ -304,6 +308,7 @@ public class LeaveService {
                 "New team leave request from " + emp.getFirstName() + " " + emp.getLastName()
                         + " (" + payload.getStartDateTime().toLocalDate() + " to " + payload.getEndDateTime().toLocalDate() + ")"
         );
+        workflowEmailService.sendLeaveSubmittedToManager(emp, payload);
         return requests;
     }
 
@@ -599,6 +604,8 @@ public class LeaveService {
                     request.getEmployee(),
                     "Your leave request (" + leaveDates + ") was endorsed by your manager and is now waiting for HR review."
             );
+            workflowEmailService.sendLeaveForwardedToHr(request);
+            workflowEmailService.sendLeaveForwardedToEmployee(request);
             return request;
         }
 
@@ -614,6 +621,7 @@ public class LeaveService {
                         request.getEndDateTime().toLocalDate()
                 ) + ") was denied by your manager."
         );
+        workflowEmailService.sendLeaveManagerDecisionToEmployee(request);
         return request;
     }
 
@@ -674,11 +682,13 @@ public class LeaveService {
                     request.getEmployee(),
                     "Your leave request (" + leaveDates + ") was approved by HR as " + payLabel + " leave."
             );
+            workflowEmailService.sendLeaveDecisionToEmployee(request);
         } else {
             notifyEmployee(
                     request.getEmployee(),
                     "Your leave request (" + leaveDates + ") was denied by HR."
             );
+            workflowEmailService.sendLeaveDecisionToEmployee(request);
         }
         return request;
     }

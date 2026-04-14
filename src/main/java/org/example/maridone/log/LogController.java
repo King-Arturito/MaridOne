@@ -8,6 +8,7 @@ import org.example.maridone.log.filter.AttendanceLogFilter;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.http.HttpHeaders;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -23,13 +24,16 @@ public class LogController {
     private final ActivityLogService activityLogService;
     private final AttendanceLogService attendanceLogService;
     private final AttendanceImportService attendanceImportService;
+    private final AttendanceReportService attendanceReportService;
 
     public LogController(ActivityLogService activityLogService,
                          AttendanceLogService attendanceLogService,
-                         AttendanceImportService attendanceImportService) {
+                         AttendanceImportService attendanceImportService,
+                         AttendanceReportService attendanceReportService) {
         this.activityLogService = activityLogService;
         this.attendanceLogService = attendanceLogService;
         this.attendanceImportService = attendanceImportService;
+        this.attendanceReportService = attendanceReportService;
     }
 
 
@@ -72,6 +76,35 @@ public class LogController {
             @PageableDefault(size = 25, sort = "timestamp", direction = Sort.Direction.DESC) Pageable pageable) {
 
         return attendanceLogService.getAttendanceTeam(filter, authentication.getName(), pageable);
+    }
+
+    @GetMapping(value = "/attendance/report/export", produces = "text/csv")
+    @PreAuthorize("hasAnyRole('HR', 'MANAGEMENT')")
+    public ResponseEntity<byte[]> exportAttendanceReport(
+            @RequestParam("from") java.time.LocalDate from,
+            @RequestParam("to") java.time.LocalDate to,
+            @RequestParam(required = false) Long empId) {
+        byte[] csv = attendanceReportService.exportAttendanceReport(from, to, empId);
+        String filename = "attendance-report-" + from + "-to-" + to + ".csv";
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"")
+                .contentType(MediaType.parseMediaType("text/csv"))
+                .body(csv);
+    }
+
+    @GetMapping(value = "/attendance/team/report/export", produces = "text/csv")
+    @PreAuthorize("hasRole('MANAGER')")
+    public ResponseEntity<byte[]> exportTeamAttendanceReport(
+            Authentication authentication,
+            @RequestParam("from") java.time.LocalDate from,
+            @RequestParam("to") java.time.LocalDate to,
+            @RequestParam(required = false) Long empId) {
+        byte[] csv = attendanceReportService.exportTeamAttendanceReport(from, to, empId, authentication.getName());
+        String filename = "attendance-team-report-" + from + "-to-" + to + ".csv";
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"")
+                .contentType(MediaType.parseMediaType("text/csv"))
+                .body(csv);
     }
 
     @GetMapping("/attendance/self/{empId}")

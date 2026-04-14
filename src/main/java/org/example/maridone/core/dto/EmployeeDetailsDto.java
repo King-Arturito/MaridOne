@@ -27,6 +27,8 @@ public class EmployeeDetailsDto {
     private String department;
     private String userAccountName;
     private Long managerId;
+    private String managerName;
+    private String managerHeadLabel;
     private Address address;
 
     private String sssNumber;
@@ -148,6 +150,22 @@ public class EmployeeDetailsDto {
 
     public void setManagerId(Long managerId) {
         this.managerId = managerId;
+    }
+
+    public String getManagerName() {
+        return managerName;
+    }
+
+    public void setManagerName(String managerName) {
+        this.managerName = managerName;
+    }
+
+    public String getManagerHeadLabel() {
+        return managerHeadLabel;
+    }
+
+    public void setManagerHeadLabel(String managerHeadLabel) {
+        this.managerHeadLabel = managerHeadLabel;
     }
 
     public Address getAddress() {

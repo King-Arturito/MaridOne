@@ -30,6 +30,7 @@ import org.example.maridone.payroll.dto.DisputeResponseDto;
 import org.example.maridone.payroll.mapper.PayrollMapper;
 import org.example.maridone.notification.NotificationMessageFormatter;
 import org.example.maridone.notification.NotificationService;
+import org.example.maridone.notification.WorkflowEmailService;
 import org.example.maridone.payroll.run.PayrollItemRepository;
 import org.example.maridone.payroll.spec.DisputeSpecs;
 import org.springframework.data.domain.Page;
@@ -54,6 +55,7 @@ public class DisputeService {
     private final DocumentService documentService;
     private final PayrollMapper payrollMapper;
     private final NotificationService notificationService;
+    private final WorkflowEmailService workflowEmailService;
     public DisputeService
             (DisputeRequestRepository disputeRepository,
              PayrollItemRepository payrollItemRepository,
@@ -62,7 +64,8 @@ public class DisputeService {
              DocumentPathRepository documentPathRepository,
              DocumentService documentService,
              PayrollMapper payrollMapper,
-             NotificationService notificationService) {
+             NotificationService notificationService,
+             WorkflowEmailService workflowEmailService) {
         this.disputeRepository = disputeRepository;
         this.payrollItemRepository = payrollItemRepository;
         this.employeeRepository = employeeRepository;
@@ -71,6 +74,7 @@ public class DisputeService {
         this.documentService = documentService;
         this.payrollMapper = payrollMapper;
         this.notificationService = notificationService;
+        this.workflowEmailService = workflowEmailService;
     }
 
 
@@ -107,7 +111,9 @@ public class DisputeService {
             }
             documentService.upload(file, item.getEmployee().getUserAccount().getUsername(), Directories.DISPUTE.getDisplayName());
         }
-        return disputeRepository.save(disputeRequest);
+        DisputeRequest savedRequest = disputeRepository.save(disputeRequest);
+        workflowEmailService.sendDisputeSubmittedToHr(savedRequest);
+        return savedRequest;
     }
 
     @Transactional
@@ -142,6 +148,7 @@ public class DisputeService {
         }
         disputeRequest.setUpdatedAt(Instant.now());
         disputeRepository.save(disputeRequest);
+        workflowEmailService.sendDisputeDecisionToEmployee(disputeRequest);
         return payrollMapper.toResponseDto(disputeRequest);
     }
 

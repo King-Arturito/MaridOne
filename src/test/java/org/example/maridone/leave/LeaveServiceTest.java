@@ -31,6 +31,7 @@ import org.example.maridone.leave.dto.LeaveRequestDto;
 import org.example.maridone.leave.request.LeaveRequest;
 import org.example.maridone.leave.request.LeaveRequestRepository;
 import org.example.maridone.notification.NotificationService;
+import org.example.maridone.notification.WorkflowEmailService;
 import org.example.maridone.overtime.OvertimeRequestRepository;
 import org.example.maridone.schedule.shift.TemplateShiftRepository;
 import org.example.maridone.schedule.shift.TemplateShiftSchedule;
@@ -65,6 +66,7 @@ class LeaveServiceTest {
     @Mock private PayrollConfig payrollConfig;
     @Mock private NotificationService notificationService;
     @Mock private OvertimeRequestRepository overtimeRequestRepository;
+    @Mock private WorkflowEmailService workflowEmailService;
 
     @InjectMocks
     private LeaveService leaveService;

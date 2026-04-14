@@ -51,7 +51,7 @@ public class EmailService {
         );
     }
 
-    private void sendPlainTextEmail(String email, String subject, String body) {
+    public void sendPlainTextEmail(String email, String subject, String body) {
         SimpleMailMessage message = new SimpleMailMessage();
         message.setTo(email);
         message.setSubject(subject);

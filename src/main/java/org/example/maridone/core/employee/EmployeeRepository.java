@@ -30,6 +30,11 @@ public interface EmployeeRepository extends JpaRepository<Employee, Long>, JpaSp
 
     List<Employee> findByEmploymentStatusNotOrderByLastNameAscFirstNameAsc(EmploymentStatus employmentStatus);
 
+    List<Employee> findByPositionAndEmploymentStatusNotOrderByLastNameAscFirstNameAsc(
+            Position position,
+            EmploymentStatus employmentStatus
+    );
+
     List<Employee> findByManager_EmployeeIdAndEmploymentStatusNotOrderByLastNameAscFirstNameAsc(
             Long managerId,
             EmploymentStatus employmentStatus

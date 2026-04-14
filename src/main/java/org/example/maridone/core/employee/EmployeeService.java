@@ -270,6 +270,8 @@ public class EmployeeService {
     private EmployeeResponseDto toEmployeeResponse(Employee employee, Map<Long, List<ShiftResponseDto>> schedulesByEmployeeId) {
         EmployeeResponseDto response = coreMapper.toEmployeeResponse(employee);
         response.setDepartment(resolveDepartment(employee));
+        response.setManagerName(resolveManagerName(employee));
+        response.setManagerHeadLabel(resolveManagerHeadLabel(employee));
         response.setUserAccountName(findUsername(employee.getEmployeeId()));
         response.setShiftSchedules(resolveShiftSchedules(employee.getEmployeeId(), schedulesByEmployeeId));
         return response;
@@ -298,6 +300,8 @@ public class EmployeeService {
     private EmployeeDetailsDto toEmployeeDetails(Employee employee) {
         EmployeeDetailsDto response = coreMapper.toEmployeeDetailsDto(employee);
         response.setDepartment(resolveDepartment(employee));
+        response.setManagerName(resolveManagerName(employee));
+        response.setManagerHeadLabel(resolveManagerHeadLabel(employee));
         response.setUserAccountName(findUsername(employee.getEmployeeId()));
         return response;
     }
@@ -395,6 +399,47 @@ public class EmployeeService {
             current = current.getManager();
         }
         return null;
+    }
+
+    private String resolveManagerName(Employee employee) {
+        Employee manager = employee == null ? null : employee.getManager();
+        if (manager == null) {
+            return null;
+        }
+        return formatEmployeeName(manager);
+    }
+
+    private String resolveManagerHeadLabel(Employee employee) {
+        Employee manager = employee == null ? null : employee.getManager();
+        if (manager == null) {
+            return null;
+        }
+
+        if (manager.getEmpTitle() != null) {
+            return formatManagerHeadLabel(manager.getEmpTitle());
+        }
+
+        Position position = manager.getPosition();
+        if (position == null) {
+            return null;
+        }
+
+        return formatEnumLabel(position.name());
+    }
+
+    private String formatManagerHeadLabel(ManagerTitle managerTitle) {
+        return managerTitle == null ? null : formatEnumLabel(managerTitle.name());
+    }
+
+    private String formatEnumLabel(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+
+        return Stream.of(raw.trim().split("_+"))
+                .filter(part -> !part.isBlank())
+                .map(part -> part.substring(0, 1) + part.substring(1).toLowerCase())
+                .collect(Collectors.joining(" "));
     }
 
     private void applyDepartmentAssignment(Employee employee, EmployeeRequestDto request) {

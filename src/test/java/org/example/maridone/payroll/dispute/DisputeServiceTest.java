@@ -12,6 +12,7 @@ import org.example.maridone.enums.Position;
 import org.example.maridone.enums.Status;
 import org.example.maridone.exception.notfound.ItemNotFoundException;
 import org.example.maridone.notification.NotificationService;
+import org.example.maridone.notification.WorkflowEmailService;
 import org.example.maridone.payroll.dto.DisputeResponseDto;
 import org.example.maridone.payroll.item.PayrollItem;
 import org.example.maridone.payroll.dto.DisputeRequestDto;
@@ -43,6 +44,7 @@ class DisputeServiceTest {
     @Mock private DocumentService documentService;
     @Mock private PayrollMapper payrollMapper;
     @Mock private NotificationService notificationService;
+    @Mock private WorkflowEmailService workflowEmailService;
 
     @InjectMocks
     private DisputeService disputeService;

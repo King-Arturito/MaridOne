@@ -18,6 +18,7 @@ import org.example.maridone.exception.unauthorized.OvertimeException;
 import org.example.maridone.leave.request.LeaveRequestRepository;
 import org.example.maridone.notification.NotificationMessageFormatter;
 import org.example.maridone.notification.NotificationService;
+import org.example.maridone.notification.WorkflowEmailService;
 import org.example.maridone.overtime.dto.OvertimeRequestDto;
 import org.example.maridone.overtime.dto.OvertimeResponseDto;
 import org.example.maridone.overtime.dto.OvertimeUpdateDto;
@@ -48,6 +49,7 @@ public class OvertimeService {
     private final DefaultConfig defaultConfig;
     private final NotificationService notificationService;
     private final LeaveRequestRepository leaveRequestRepository;
+    private final WorkflowEmailService workflowEmailService;
 
     public OvertimeService(OvertimeRequestRepository overtimeRequestRepository,
                            OvertimeMapper overtimeMapper,
@@ -56,7 +58,8 @@ public class OvertimeService {
                            TemplateShiftRepository templateShiftRepository,
                            DefaultConfig defaultConfig,
                            NotificationService notificationService,
-                           LeaveRequestRepository leaveRequestRepository) {
+                           LeaveRequestRepository leaveRequestRepository,
+                           WorkflowEmailService workflowEmailService) {
         this.overtimeRequestRepository = overtimeRequestRepository;
         this.overtimeMapper = overtimeMapper;
         this.employeeRepository = employeeRepository;
@@ -65,6 +68,7 @@ public class OvertimeService {
         this.defaultConfig = defaultConfig;
         this.notificationService = notificationService;
         this.leaveRequestRepository = leaveRequestRepository;
+        this.workflowEmailService = workflowEmailService;
     }
 
     @Transactional
@@ -99,6 +103,7 @@ public class OvertimeService {
                 "New team overtime request from " + emp.getFirstName() + " " + emp.getLastName()
                         + " for " + requestDto.getWorkDate()
         );
+        workflowEmailService.sendOvertimeSubmittedToManager(savedRequest);
         return savedRequest;
     }
 
@@ -254,6 +259,8 @@ public class OvertimeService {
                     request.getEmployee(),
                     "Your overtime request for " + workDate + " was endorsed by your manager and is now waiting for HR review."
             );
+            workflowEmailService.sendOvertimeForwardedToHr(request);
+            workflowEmailService.sendOvertimeForwardedToEmployee(request);
         } else {
             request.setRequestStatus(Status.REJECTED);
             request.setApprover(approverName);
@@ -264,6 +271,7 @@ public class OvertimeService {
                     request.getEmployee(),
                     "Your overtime request for " + NotificationMessageFormatter.formatDate(request.getWorkDate()) + " was denied by your manager."
             );
+            workflowEmailService.sendOvertimeManagerDecisionToEmployee(request);
         }
 
         OvertimeResponseDto response = overtimeMapper.toOvertimeResponseDto(request);
@@ -309,11 +317,13 @@ public class OvertimeService {
                     request.getEmployee(),
                     "Your overtime request for " + workDate + " was approved by HR as " + payLabel + " overtime."
             );
+            workflowEmailService.sendOvertimeDecisionToEmployee(request);
         } else {
             notifyEmployee(
                     request.getEmployee(),
                     "Your overtime request for " + workDate + " was denied by HR."
             );
+            workflowEmailService.sendOvertimeDecisionToEmployee(request);
         }
 
         OvertimeResponseDto response = overtimeMapper.toOvertimeResponseDto(request);

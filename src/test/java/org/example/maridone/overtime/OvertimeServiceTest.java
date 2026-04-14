@@ -19,6 +19,7 @@ import org.example.maridone.exception.unauthorized.InvalidActionException;
 import org.example.maridone.exception.unauthorized.OvertimeException;
 import org.example.maridone.leave.request.LeaveRequestRepository;
 import org.example.maridone.notification.NotificationService;
+import org.example.maridone.notification.WorkflowEmailService;
 import org.example.maridone.overtime.dto.OvertimeRequestDto;
 import org.example.maridone.overtime.dto.OvertimeResponseDto;
 import org.example.maridone.overtime.dto.OvertimeUpdateDto;
@@ -51,6 +52,7 @@ class OvertimeServiceTest {
     @Mock private DefaultConfig defaultConfig;
     @Mock private NotificationService notificationService;
     @Mock private LeaveRequestRepository leaveRequestRepository;
+    @Mock private WorkflowEmailService workflowEmailService;
 
     @InjectMocks
     private OvertimeService overtimeService;

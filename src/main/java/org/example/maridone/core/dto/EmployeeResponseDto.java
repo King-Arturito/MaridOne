@@ -20,6 +20,8 @@ public class EmployeeResponseDto {
     private String phoneNumber;
     private Position position;
     private String department;
+    private String managerName;
+    private String managerHeadLabel;
     private String userAccountName;
     private List<ShiftResponseDto> shiftSchedules = List.of();
 
@@ -118,6 +120,22 @@ public class EmployeeResponseDto {
 
     public void setDepartment(String department) {
         this.department = department;
+    }
+
+    public String getManagerName() {
+        return managerName;
+    }
+
+    public void setManagerName(String managerName) {
+        this.managerName = managerName;
+    }
+
+    public String getManagerHeadLabel() {
+        return managerHeadLabel;
+    }
+
+    public void setManagerHeadLabel(String managerHeadLabel) {
+        this.managerHeadLabel = managerHeadLabel;
     }
 
     public String getUserAccountName() {
