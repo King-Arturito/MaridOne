@@ -14,7 +14,7 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 
 public class OvertimeRequestDto {
-    private final Status requestStatus = Status.PENDING;
+    private final Status requestStatus = Status.PENDING_MANAGER;
     private final Instant requestAt =  Instant.now();
     @FutureOrPresent
     private LocalDate workDate;

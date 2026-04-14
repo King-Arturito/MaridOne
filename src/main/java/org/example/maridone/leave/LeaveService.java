@@ -231,11 +231,6 @@ public class LeaveService {
 
     @Transactional
     @ExecutionTime
-    @NotifyRole(
-            message = "New leave request from #{#result[0].employee.firstName} #{#result[0].employee.lastName} "
-                    + "(#{#result[0].startDateTime.toLocalDate()} to #{#result[0].endDateTime.toLocalDate()})",
-            targetRole = Position.HR,
-            importance = "HIGH")
     public List<LeaveRequest> createLeaveRequest(LeaveRequestDto payload, Long empId, MultipartFile file) {
         Employee emp =  employeeRepository.findById(empId).orElseThrow(() -> new EmployeeNotFoundException(empId));
         validateAdvanceNotice(payload);
@@ -333,10 +328,6 @@ public class LeaveService {
 
     @Transactional
     @ExecutionTime
-    @Notify(
-            message = "Your leave request for #{#result.startDateTime.toLocalDate()} was #{#result.requestStatus}",
-            importance = "HIGH",
-            targetEmployee = "#result.employee")
     public LeaveRequest updateLeaveRequest(LeaveRequestDto payload, Long requestId) {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         UserAccount user = userAccountRepository.findByUsername(authentication.getName()).orElseThrow(
@@ -357,31 +348,11 @@ public class LeaveService {
 
         validateApproverAccess(user, requestEmpId);
 
-        if (request.getRequestStatus() != Status.PENDING)  {
-            throw new IllegalStateException("This Request has been processed already.");
-        }
-
-        //update leave balance:
-        if (request.getPaid() && payload.getRequestStatus().equals(Status.APPROVED)) {
-            LeaveType leaveType = Optional.ofNullable(request.getLeaveType()).orElse(payload.getLeaveType());
-            if (leaveType == null) {
-                throw new IllegalStateException("Leave type is required before approving this request.");
-            }
-            updateLeaveBalance(requestEmpId,
-                    new UpdateBalanceDto(
-                            calculateRequestHours(request.getStartDateTime(),
-                                    request.getEndDateTime(),
-                                    requestEmpId),
-                            leaveType,
-                            "subtract"));
-        }
-
-        request.setApproverReason(payload.getApproverReason());
-        request.setRequestStatus(payload.getRequestStatus());
-        request.setApprover(user.getEmployee().getLastName() + ", " + user.getEmployee().getFirstName());
-        request.setApprovedAt(Instant.now());
-        leaveRequestRepository.save(request);
-        return request;
+        return switch (resolveApproverPosition(user)) {
+            case MANAGER -> handleManagerLeaveReview(request, payload, user);
+            case HR -> handleHrLeaveReview(request, payload, user, requestEmpId);
+            default -> throw new InvalidActionException("Only managers and HR can review leave requests.");
+        };
     }
 
     private Long verifyOwnEmployeeId(String name) {
@@ -421,13 +392,14 @@ public class LeaveService {
             boolean isPaid
     ) {
         LeaveRequest request = new LeaveRequest();
-        request.setRequestStatus(Status.PENDING);
+        request.setRequestStatus(Status.PENDING_MANAGER);
         request.setStartDateTime(startDateTime);
         request.setEndDateTime(endDateTime);
         request.setEmployee(emp);
         request.setLeaveType(leaveType);
         request.setReason(reason);
         request.setPaid(isPaid);
+        request.setSuggestedPaid(isPaid);
         return request;
     }
 
@@ -567,8 +539,12 @@ public class LeaveService {
                 .map(Employee::getPosition)
                 .orElse(Position.UNKNOWN);
 
-        if (position != Position.MANAGER) {
+        if (position == Position.HR) {
             return;
+        }
+
+        if (position != Position.MANAGER) {
+            throw new InvalidActionException("Only managers and HR can review leave requests.");
         }
 
         List<Long> handledEmployeeIds = resolveHandledEmployeeIds(user.getUsername());
@@ -590,6 +566,173 @@ public class LeaveService {
         for (Long employeeId : hrEmployeeIds) {
             notificationService.createNotification(employeeRepository.getReferenceById(employeeId), message, "HIGH");
         }
+    }
+
+    private LeaveRequest handleManagerLeaveReview(LeaveRequest request, LeaveRequestDto payload, UserAccount user) {
+        if (request.getRequestStatus() != Status.PENDING_MANAGER && request.getRequestStatus() != Status.PENDING) {
+            throw new IllegalStateException("This leave request is no longer waiting for manager review.");
+        }
+
+        Status decision = validateReviewDecision(payload.getRequestStatus());
+        String reason = validateDecisionReason(payload.getApproverReason(), "Please enter at least 5 characters for the manager review.");
+        String approverName = formatApproverName(user);
+        Instant decisionTime = Instant.now();
+
+        request.setManagerApprover(approverName);
+        request.setManagerApproverReason(reason);
+        request.setManagerApprovedAt(decisionTime);
+
+        if (decision == Status.APPROVED) {
+            request.setRequestStatus(Status.PENDING_HR);
+            request.setApprover(null);
+            request.setApproverReason(null);
+            request.setApprovedAt(null);
+            leaveRequestRepository.save(request);
+
+            String employeeName = NotificationMessageFormatter.formatEmployeeName(request.getEmployee());
+            String leaveDates = NotificationMessageFormatter.formatDateRange(
+                    request.getStartDateTime().toLocalDate(),
+                    request.getEndDateTime().toLocalDate()
+            );
+            notifyHr("Leave request from " + employeeName + " (" + leaveDates + ") is ready for HR review.");
+            notifyEmployee(
+                    request.getEmployee(),
+                    "Your leave request (" + leaveDates + ") was endorsed by your manager and is now waiting for HR review."
+            );
+            return request;
+        }
+
+        request.setRequestStatus(Status.REJECTED);
+        request.setApprover(approverName);
+        request.setApproverReason(reason);
+        request.setApprovedAt(decisionTime);
+        leaveRequestRepository.save(request);
+        notifyEmployee(
+                request.getEmployee(),
+                "Your leave request (" + NotificationMessageFormatter.formatDateRange(
+                        request.getStartDateTime().toLocalDate(),
+                        request.getEndDateTime().toLocalDate()
+                ) + ") was denied by your manager."
+        );
+        return request;
+    }
+
+    private LeaveRequest handleHrLeaveReview(
+            LeaveRequest request,
+            LeaveRequestDto payload,
+            UserAccount user,
+            Long requestEmpId
+    ) {
+        if (request.getRequestStatus() != Status.PENDING_HR) {
+            throw new IllegalStateException("This leave request is no longer waiting for HR review.");
+        }
+
+        Status decision = validateReviewDecision(payload.getRequestStatus());
+        String reason = validateDecisionReason(payload.getApproverReason(), "Please enter at least 5 characters for the HR decision.");
+        String approverName = formatApproverName(user);
+        Instant decisionTime = Instant.now();
+
+        if (decision == Status.APPROVED) {
+            boolean finalPaid = resolveFinalPaidValue(payload.getPaid(), request.getPaid());
+            boolean paidOverrideApplied = !Boolean.valueOf(finalPaid).equals(request.getSuggestedPaid());
+            String paidOverrideReason = validatePaidOverrideReason(
+                    paidOverrideApplied,
+                    payload.getPaidOverrideReason()
+            );
+
+            if (Boolean.TRUE.equals(request.getSuggestedPaid()) && finalPaid) {
+                LeaveType leaveType = Optional.ofNullable(request.getLeaveType()).orElse(payload.getLeaveType());
+                if (leaveType == null) {
+                    throw new IllegalStateException("Leave type is required before approving this request.");
+                }
+                updateLeaveBalance(requestEmpId,
+                        new UpdateBalanceDto(
+                                calculateRequestHours(request.getStartDateTime(),
+                                        request.getEndDateTime(),
+                                        requestEmpId),
+                                leaveType,
+                                "subtract"));
+            }
+
+            request.setPaid(finalPaid);
+            request.setPaidOverrideReason(paidOverrideReason);
+        }
+
+        request.setApproverReason(reason);
+        request.setRequestStatus(decision);
+        request.setApprover(approverName);
+        request.setApprovedAt(decisionTime);
+        leaveRequestRepository.save(request);
+
+        String leaveDates = NotificationMessageFormatter.formatDateRange(
+                request.getStartDateTime().toLocalDate(),
+                request.getEndDateTime().toLocalDate()
+        );
+        if (decision == Status.APPROVED) {
+            String payLabel = Boolean.TRUE.equals(request.getPaid()) ? "paid" : "unpaid";
+            notifyEmployee(
+                    request.getEmployee(),
+                    "Your leave request (" + leaveDates + ") was approved by HR as " + payLabel + " leave."
+            );
+        } else {
+            notifyEmployee(
+                    request.getEmployee(),
+                    "Your leave request (" + leaveDates + ") was denied by HR."
+            );
+        }
+        return request;
+    }
+
+    private Position resolveApproverPosition(UserAccount user) {
+        return Optional.ofNullable(user.getEmployee())
+                .map(Employee::getPosition)
+                .orElse(Position.UNKNOWN);
+    }
+
+    private Status validateReviewDecision(Status decision) {
+        if (decision != Status.APPROVED && decision != Status.REJECTED) {
+            throw new InvalidActionException("Only approve or reject decisions are allowed here.");
+        }
+        return decision;
+    }
+
+    private String validateDecisionReason(String reason, String message) {
+        String trimmed = reason == null ? "" : reason.trim();
+        if (trimmed.length() < 5) {
+            throw new InvalidActionException(message);
+        }
+        return trimmed;
+    }
+
+    private String validatePaidOverrideReason(boolean overrideApplied, String reason) {
+        if (!overrideApplied) {
+            return null;
+        }
+        String trimmed = reason == null ? "" : reason.trim();
+        if (trimmed.length() < 5) {
+            throw new InvalidActionException("Please explain why HR is overriding the paid or unpaid leave treatment.");
+        }
+        return trimmed;
+    }
+
+    private boolean resolveFinalPaidValue(Boolean payloadPaid, Boolean currentPaid) {
+        if (payloadPaid != null) {
+            return payloadPaid;
+        }
+        return Boolean.TRUE.equals(currentPaid);
+    }
+
+    private String formatApproverName(UserAccount user) {
+        Employee employee = Optional.ofNullable(user.getEmployee())
+                .orElseThrow(() -> new AccountNotFoundException(user.getUsername()));
+        return employee.getLastName() + ", " + employee.getFirstName();
+    }
+
+    private void notifyEmployee(Employee employee, String message) {
+        if (employee == null) {
+            return;
+        }
+        notificationService.createNotification(employee, message, "HIGH");
     }
 
 

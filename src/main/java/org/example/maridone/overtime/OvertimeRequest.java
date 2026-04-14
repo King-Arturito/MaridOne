@@ -62,6 +62,24 @@ public class OvertimeRequest {
     @Column(name = "approve_reason", nullable = true)
     private String approveReason;
 
+    @Column(name = "manager_approver", nullable = true)
+    private String managerApprover;
+
+    @Column(name = "manager_approve_reason", nullable = true)
+    private String managerApproveReason;
+
+    @Column(name = "manager_approved_at", nullable = true)
+    private Instant managerApprovedAt;
+
+    @Column(name = "is_paid", nullable = false)
+    private Boolean isPaid = true;
+
+    @Column(name = "suggested_paid", nullable = false)
+    private Boolean suggestedPaid = true;
+
+    @Column(name = "paid_override_reason", nullable = true)
+    private String paidOverrideReason;
+
     public Long getOvertimeId() {
         return overtimeId;
     }
@@ -156,6 +174,54 @@ public class OvertimeRequest {
 
     public void setApproveReason(String approveReason) {
         this.approveReason = approveReason;
+    }
+
+    public String getManagerApprover() {
+        return managerApprover;
+    }
+
+    public void setManagerApprover(String managerApprover) {
+        this.managerApprover = managerApprover;
+    }
+
+    public String getManagerApproveReason() {
+        return managerApproveReason;
+    }
+
+    public void setManagerApproveReason(String managerApproveReason) {
+        this.managerApproveReason = managerApproveReason;
+    }
+
+    public Instant getManagerApprovedAt() {
+        return managerApprovedAt;
+    }
+
+    public void setManagerApprovedAt(Instant managerApprovedAt) {
+        this.managerApprovedAt = managerApprovedAt;
+    }
+
+    public Boolean getPaid() {
+        return isPaid;
+    }
+
+    public void setPaid(Boolean paid) {
+        isPaid = paid;
+    }
+
+    public Boolean getSuggestedPaid() {
+        return suggestedPaid;
+    }
+
+    public void setSuggestedPaid(Boolean suggestedPaid) {
+        this.suggestedPaid = suggestedPaid;
+    }
+
+    public String getPaidOverrideReason() {
+        return paidOverrideReason;
+    }
+
+    public void setPaidOverrideReason(String paidOverrideReason) {
+        this.paidOverrideReason = paidOverrideReason;
     }
 
     public EarningsLine getEarningsLine() {

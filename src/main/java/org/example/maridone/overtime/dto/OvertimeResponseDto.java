@@ -21,6 +21,12 @@ public class OvertimeResponseDto {
     private String approver;
     private Instant approvedAt;
     private String approveReason;
+    private Boolean isPaid;
+    private Boolean suggestedPaid;
+    private String paidOverrideReason;
+    private String managerApprover;
+    private Instant managerApprovedAt;
+    private String managerApproveReason;
 
     public String getFirstName() {
 
@@ -133,5 +139,53 @@ public class OvertimeResponseDto {
 
     public void setApproveReason(String approveReason) {
         this.approveReason = approveReason;
+    }
+
+    public Boolean getPaid() {
+        return isPaid;
+    }
+
+    public void setPaid(Boolean paid) {
+        isPaid = paid;
+    }
+
+    public Boolean getSuggestedPaid() {
+        return suggestedPaid;
+    }
+
+    public void setSuggestedPaid(Boolean suggestedPaid) {
+        this.suggestedPaid = suggestedPaid;
+    }
+
+    public String getPaidOverrideReason() {
+        return paidOverrideReason;
+    }
+
+    public void setPaidOverrideReason(String paidOverrideReason) {
+        this.paidOverrideReason = paidOverrideReason;
+    }
+
+    public String getManagerApprover() {
+        return managerApprover;
+    }
+
+    public void setManagerApprover(String managerApprover) {
+        this.managerApprover = managerApprover;
+    }
+
+    public Instant getManagerApprovedAt() {
+        return managerApprovedAt;
+    }
+
+    public void setManagerApprovedAt(Instant managerApprovedAt) {
+        this.managerApprovedAt = managerApprovedAt;
+    }
+
+    public String getManagerApproveReason() {
+        return managerApproveReason;
+    }
+
+    public void setManagerApproveReason(String managerApproveReason) {
+        this.managerApproveReason = managerApproveReason;
     }
 }

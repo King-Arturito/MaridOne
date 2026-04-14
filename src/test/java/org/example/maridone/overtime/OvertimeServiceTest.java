@@ -229,10 +229,11 @@ class OvertimeServiceTest {
         OvertimeUpdateDto updateDto = new OvertimeUpdateDto();
         updateDto.setOvertimeId(otId);
         updateDto.setUpdateStatus(Status.APPROVED);
+        updateDto.setApproveReason("HR approved the overtime.");
 
         OvertimeRequest request = new OvertimeRequest();
         ReflectionTestUtils.setField(request, "overtimeId", otId); 
-        request.setRequestStatus(Status.PENDING); 
+        request.setRequestStatus(Status.PENDING_HR);
 
         Employee admin = new Employee();
         ReflectionTestUtils.setField(admin, "employeeId", 1L);
@@ -278,7 +279,7 @@ class OvertimeServiceTest {
     void updateOvertimeRequest_ShouldAllowManagerForHandledEmployee() {
         OvertimeRequest request = new OvertimeRequest();
         ReflectionTestUtils.setField(request, "overtimeId", 7L);
-        request.setRequestStatus(Status.PENDING);
+        request.setRequestStatus(Status.PENDING_MANAGER);
         Employee targetEmployee = new Employee();
         ReflectionTestUtils.setField(targetEmployee, "employeeId", 3L);
         request.setEmployee(targetEmployee);
@@ -308,15 +309,15 @@ class OvertimeServiceTest {
         OvertimeResponseDto result = overtimeService.updateOvertimeRequest(updateDto, "manager1");
 
         Assertions.assertNotNull(result);
-        Assertions.assertEquals(Status.APPROVED, request.getRequestStatus());
-        Assertions.assertEquals("Flores, Adrian", request.getApprover());
+        Assertions.assertEquals(Status.PENDING_HR, request.getRequestStatus());
+        Assertions.assertEquals("Flores, Adrian", request.getManagerApprover());
     }
 
     @Test
     void updateOvertimeRequest_ShouldRejectManagerForUnhandledEmployee() {
         OvertimeRequest request = new OvertimeRequest();
         ReflectionTestUtils.setField(request, "overtimeId", 8L);
-        request.setRequestStatus(Status.PENDING);
+        request.setRequestStatus(Status.PENDING_MANAGER);
         Employee targetEmployee = new Employee();
         ReflectionTestUtils.setField(targetEmployee, "employeeId", 9L);
         request.setEmployee(targetEmployee);

@@ -6,6 +6,8 @@ public class OvertimeUpdateDto {
     private Long overtimeId;
     private Status updateStatus;
     private String approveReason;
+    private Boolean paid;
+    private String paidOverrideReason;
 
     public Long getOvertimeId() {
         return overtimeId;
@@ -28,5 +30,21 @@ public class OvertimeUpdateDto {
     }
     public void setApproveReason(String approveReason) {
         this.approveReason = approveReason;
+    }
+
+    public Boolean getPaid() {
+        return paid;
+    }
+
+    public void setPaid(Boolean paid) {
+        this.paid = paid;
+    }
+
+    public String getPaidOverrideReason() {
+        return paidOverrideReason;
+    }
+
+    public void setPaidOverrideReason(String paidOverrideReason) {
+        this.paidOverrideReason = paidOverrideReason;
     }
 }

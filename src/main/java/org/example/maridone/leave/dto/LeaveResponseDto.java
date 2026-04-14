@@ -20,6 +20,11 @@ public class LeaveResponseDto {
     private String approverReason;
     private Instant approvedAt;
     private Boolean isPaid;
+    private Boolean suggestedPaid;
+    private String paidOverrideReason;
+    private String managerApprover;
+    private String managerApproverReason;
+    private Instant managerApprovedAt;
 
     public String getFirstName() {
         return firstName;
@@ -123,5 +128,45 @@ public class LeaveResponseDto {
 
     public void setPaid(Boolean paid) {
         isPaid = paid;
+    }
+
+    public Boolean getSuggestedPaid() {
+        return suggestedPaid;
+    }
+
+    public void setSuggestedPaid(Boolean suggestedPaid) {
+        this.suggestedPaid = suggestedPaid;
+    }
+
+    public String getPaidOverrideReason() {
+        return paidOverrideReason;
+    }
+
+    public void setPaidOverrideReason(String paidOverrideReason) {
+        this.paidOverrideReason = paidOverrideReason;
+    }
+
+    public String getManagerApprover() {
+        return managerApprover;
+    }
+
+    public void setManagerApprover(String managerApprover) {
+        this.managerApprover = managerApprover;
+    }
+
+    public String getManagerApproverReason() {
+        return managerApproverReason;
+    }
+
+    public void setManagerApproverReason(String managerApproverReason) {
+        this.managerApproverReason = managerApproverReason;
+    }
+
+    public Instant getManagerApprovedAt() {
+        return managerApprovedAt;
+    }
+
+    public void setManagerApprovedAt(Instant managerApprovedAt) {
+        this.managerApprovedAt = managerApprovedAt;
     }
 }

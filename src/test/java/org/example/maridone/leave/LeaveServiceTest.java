@@ -104,7 +104,7 @@ class LeaveServiceTest {
     }
 
     @Test
-    void createLeaveRequest_ShouldSetStatusPending() {
+    void createLeaveRequest_ShouldSetStatusPendingManager() {
         Long empId = 1L;
         LeaveRequestDto dto = new LeaveRequestDto();
         dto.setStartDateTime(LocalDate.of(2026, 3, 23).atTime(8, 0));
@@ -129,7 +129,7 @@ class LeaveServiceTest {
         List<LeaveRequest> results = leaveService.createLeaveRequest(dto, empId, null);
         Assertions.assertNotNull(results);
         results.forEach(result -> {
-            Assertions.assertEquals(Status.PENDING, result.getRequestStatus());
+            Assertions.assertEquals(Status.PENDING_MANAGER, result.getRequestStatus());
             Assertions.assertEquals(emp, result.getEmployee());
             Assertions.assertEquals("Vacation", result.getReason());
         });
@@ -406,8 +406,10 @@ class LeaveServiceTest {
     @Test
     void updateLeaveRequest_ShouldAllowManagerForHandledEmployee() {
         LeaveRequest request = new LeaveRequest();
-        request.setRequestStatus(Status.PENDING);
+        request.setRequestStatus(Status.PENDING_MANAGER);
         request.setPaid(false);
+        request.setStartDateTime(LocalDateTime.of(2026, 4, 10, 8, 0));
+        request.setEndDateTime(LocalDateTime.of(2026, 4, 10, 17, 0));
 
         Employee employee = new Employee();
         ReflectionTestUtils.setField(employee, "employeeId", 3L);
@@ -444,16 +446,18 @@ class LeaveServiceTest {
 
         LeaveRequest result = leaveService.updateLeaveRequest(payload, 9L);
 
-        Assertions.assertEquals(Status.APPROVED, result.getRequestStatus());
-        Assertions.assertEquals("Flores, Adrian", result.getApprover());
+        Assertions.assertEquals(Status.PENDING_HR, result.getRequestStatus());
+        Assertions.assertEquals("Flores, Adrian", result.getManagerApprover());
         SecurityContextHolder.clearContext();
     }
 
     @Test
     void updateLeaveRequest_ShouldRejectManagerForUnhandledEmployee() {
         LeaveRequest request = new LeaveRequest();
-        request.setRequestStatus(Status.PENDING);
+        request.setRequestStatus(Status.PENDING_MANAGER);
         request.setPaid(false);
+        request.setStartDateTime(LocalDateTime.of(2026, 4, 10, 8, 0));
+        request.setEndDateTime(LocalDateTime.of(2026, 4, 10, 17, 0));
 
         Employee employee = new Employee();
         ReflectionTestUtils.setField(employee, "employeeId", 7L);

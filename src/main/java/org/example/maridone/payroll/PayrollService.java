@@ -337,6 +337,7 @@ public class PayrollService {
         // only approved overtime inside the payroll window contributes extra pay.
         Specification<OvertimeRequest> overtimeSpecs = Specification.allOf(
                 OvertimeSpecs.hasStatus(Status.APPROVED),
+                CommonSpecs.fieldEquals("isPaid", true),
                 OvertimeSpecs.hasEmployeeIds(employeeIds),
                 CommonSpecs.fieldIsBetween(
                         "workDate",
