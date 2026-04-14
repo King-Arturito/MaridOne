@@ -286,7 +286,7 @@ public class PayslipService {
 
         return new DetailBlocks(
                 employee.getFirstName() + " " + employee.getLastName(),
-                "-",
+                employee.getTinNumber() != null && !employee.getTinNumber().isBlank() ? employee.getTinNumber() : "-",
                 department,
                 employee.getPosition() != null ? employee.getPosition().toString() : "_",
                 payPeriod,

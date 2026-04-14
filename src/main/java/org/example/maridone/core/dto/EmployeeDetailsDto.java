@@ -29,6 +29,15 @@ public class EmployeeDetailsDto {
     private Long managerId;
     private Address address;
 
+    private String sssNumber;
+    private String philhealthNumber;
+    private String pagibigNumber;
+    private String tinNumber;
+
+    private String emergencyContactName;
+    private String emergencyContactRelationship;
+    private String emergencyContactNumber;
+
     public Long getId() {
         return id;
     }
@@ -171,5 +180,61 @@ public class EmployeeDetailsDto {
 
     public void setUserAccountName(String userAccountName) {
         this.userAccountName = userAccountName;
+    }
+
+    public String getSssNumber() {
+        return sssNumber;
+    }
+
+    public void setSssNumber(String sssNumber) {
+        this.sssNumber = sssNumber;
+    }
+
+    public String getPhilhealthNumber() {
+        return philhealthNumber;
+    }
+
+    public void setPhilhealthNumber(String philhealthNumber) {
+        this.philhealthNumber = philhealthNumber;
+    }
+
+    public String getPagibigNumber() {
+        return pagibigNumber;
+    }
+
+    public void setPagibigNumber(String pagibigNumber) {
+        this.pagibigNumber = pagibigNumber;
+    }
+
+    public String getTinNumber() {
+        return tinNumber;
+    }
+
+    public void setTinNumber(String tinNumber) {
+        this.tinNumber = tinNumber;
+    }
+
+    public String getEmergencyContactName() {
+        return emergencyContactName;
+    }
+
+    public void setEmergencyContactName(String emergencyContactName) {
+        this.emergencyContactName = emergencyContactName;
+    }
+
+    public String getEmergencyContactRelationship() {
+        return emergencyContactRelationship;
+    }
+
+    public void setEmergencyContactRelationship(String emergencyContactRelationship) {
+        this.emergencyContactRelationship = emergencyContactRelationship;
+    }
+
+    public String getEmergencyContactNumber() {
+        return emergencyContactNumber;
+    }
+
+    public void setEmergencyContactNumber(String emergencyContactNumber) {
+        this.emergencyContactNumber = emergencyContactNumber;
     }
 }

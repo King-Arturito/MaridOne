@@ -193,6 +193,15 @@ public class EmployeeService {
 
         Optional.ofNullable(updated.getAddress()).ifPresent(newAddr -> updateAddress(emp, newAddr));
 
+        Optional.ofNullable(updated.getSssNumber()).ifPresent(emp::setSssNumber);
+        Optional.ofNullable(updated.getPhilhealthNumber()).ifPresent(emp::setPhilhealthNumber);
+        Optional.ofNullable(updated.getPagibigNumber()).ifPresent(emp::setPagibigNumber);
+        Optional.ofNullable(updated.getTinNumber()).ifPresent(emp::setTinNumber);
+
+        Optional.ofNullable(updated.getEmergencyContactName()).ifPresent(emp::setEmergencyContactName);
+        Optional.ofNullable(updated.getEmergencyContactRelationship()).ifPresent(emp::setEmergencyContactRelationship);
+        Optional.ofNullable(updated.getEmergencyContactNumber()).ifPresent(emp::setEmergencyContactNumber);
+
         employeeRepository.save(emp);
 
         return toEmployeeResponse(emp);
@@ -213,6 +222,15 @@ public class EmployeeService {
                 .ifPresent(phone -> updatePhoneNumber(emp, phone));
 
         Optional.ofNullable(updated.getAddress()).ifPresent(newAddr -> updateAddress(emp, newAddr));
+
+        Optional.ofNullable(updated.getSssNumber()).ifPresent(emp::setSssNumber);
+        Optional.ofNullable(updated.getPhilhealthNumber()).ifPresent(emp::setPhilhealthNumber);
+        Optional.ofNullable(updated.getPagibigNumber()).ifPresent(emp::setPagibigNumber);
+        Optional.ofNullable(updated.getTinNumber()).ifPresent(emp::setTinNumber);
+
+        Optional.ofNullable(updated.getEmergencyContactName()).ifPresent(emp::setEmergencyContactName);
+        Optional.ofNullable(updated.getEmergencyContactRelationship()).ifPresent(emp::setEmergencyContactRelationship);
+        Optional.ofNullable(updated.getEmergencyContactNumber()).ifPresent(emp::setEmergencyContactNumber);
 
         employeeRepository.save(emp);
         return toEmployeeResponse(emp);
