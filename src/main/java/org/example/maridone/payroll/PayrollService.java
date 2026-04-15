@@ -488,7 +488,9 @@ public class PayrollService {
                         // leave this day alone if the generated schedules carry no payable hours.
                     } else if (!hasCompleteAttendancePair) {
                         // missing the whole scheduled day counts as ordinary absence.
-                        absentDeductAmount = absentDeductAmount.add(expectedHours.multiply(hourlyRate));
+                        if (todaysLeave == null) {
+                            absentDeductAmount = absentDeductAmount.add(expectedHours.multiply(hourlyRate));
+                        }
                     } else {
                         // only count overlap inside the scheduled segments so split-leave days stay accurate.
                         BigDecimal actualHours = payrollCalculator.deductUnpaidLunchHour(

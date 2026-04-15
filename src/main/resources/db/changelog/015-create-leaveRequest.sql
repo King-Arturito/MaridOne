@@ -25,7 +25,8 @@ CREATE TABLE leave_request (
             'PATERNITY_LEAVE',
             'SOLO_PARENT_LEAVE',
             'MAGNA_CARTA',
-            'RA9262'
+            'RA9262',
+            'EMERGENCY_LEAVE'
         )
     ),
     CONSTRAINT leave_request_request_status_check CHECK (request_status IN ('PENDING', 'PENDING_MANAGER', 'PENDING_HR', 'APPROVED', 'REJECTED', 'CANCELLED')),

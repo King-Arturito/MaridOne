@@ -239,60 +239,66 @@ public class LeaveService {
         Employee emp =  employeeRepository.findById(empId).orElseThrow(() -> new EmployeeNotFoundException(empId));
         validateAdvanceNotice(payload);
         validateNoOvertimeConflict(empId, payload.getStartDateTime(), payload.getEndDateTime());
-        List<LeaveRequest> requests = new ArrayList<>();
-
-        BigDecimal remainingHours = leaveBalanceRepository
-                .findByLeaveTypeAndEmployee_EmployeeId(payload.getLeaveType(), empId)
-                .orElseThrow(() -> new BalanceNotFoundException("Balance of Type:  " + payload.getLeaveType() +  " for Employee ID: " + empId + " not found."))
-                .getBalanceHours();
 
         //throw error if there is a pending/approved leave for your new specified leave request,
         //REGARDLESS of leave type
         Specification<LeaveRequest> spec = Specification.allOf(
-          CommonSpecs.fieldGreaterThanOrEqual("endDateTime", payload.getStartDateTime()),
-          CommonSpecs.fieldLessThanOrEqual("startDateTime", payload.getEndDateTime()),
-          CommonSpecs.fieldEquals("employee", emp),
-          CommonSpecs.fieldNotEquals("requestStatus", Status.CANCELLED),
-          CommonSpecs.fieldNotEquals("requestStatus", Status.REJECTED)
+                CommonSpecs.fieldGreaterThanOrEqual("endDateTime", payload.getStartDateTime()),
+                CommonSpecs.fieldLessThanOrEqual("startDateTime", payload.getEndDateTime()),
+                CommonSpecs.fieldEquals("employee", emp),
+                CommonSpecs.fieldNotEquals("requestStatus", Status.CANCELLED),
+                CommonSpecs.fieldNotEquals("requestStatus", Status.REJECTED)
 
         );
         if (leaveRequestRepository.exists(spec)) {
             throw new OverlappingDatesException("unable to process your request. There is an overlapping pending/approved request");
         }
 
-        List<LeaveWindow> leaveWindows = resolveLeaveWindows(payload, empId);
-        BigDecimal requestHoursTotal = calculateRequestHours(leaveWindows);
+        List<LeaveRequest> requests = new ArrayList<>();
 
-        boolean hasEnoughBalance = requestHoursTotal.compareTo(remainingHours) <= 0;
-        if (hasEnoughBalance) {
-            LeaveRequest request = createLeave(payload, emp, hasEnoughBalance);
+        if (payload.getLeaveType() == LeaveType.EMERGENCY_LEAVE) {
+            LeaveRequest request = createLeave(payload, emp, false);
             requests.add(request);
         } else {
-            LocalDateTime splitPoint = resolvePaidCoverageEnd(payload, leaveWindows, remainingHours);
+            BigDecimal remainingHours = leaveBalanceRepository
+                    .findByLeaveTypeAndEmployee_EmployeeId(payload.getLeaveType(), empId)
+                    .orElseThrow(() -> new BalanceNotFoundException("Balance of Type:  " + payload.getLeaveType() + " for Employee ID: " + empId + " not found."))
+                    .getBalanceHours();
 
-            if (payload.getStartDateTime().isBefore(splitPoint)) {
-                LeaveRequest paidRequest = createLeave(
-                        payload.getStartDateTime(),
-                        splitPoint,
-                        emp,
-                        payload.getLeaveType(),
-                        payload.getReason(),
-                        true
-                );
-                requests.add(paidRequest);
-            }
+            List<LeaveWindow> leaveWindows = resolveLeaveWindows(payload, empId);
+            BigDecimal requestHoursTotal = calculateRequestHours(leaveWindows);
 
-            LocalDateTime unpaidStart = resolveUnpaidCoverageStart(splitPoint, leaveWindows, payload.getEndDateTime());
-            if (unpaidStart.isBefore(payload.getEndDateTime())) {
-                LeaveRequest unpaidRequest = createLeave(
-                        unpaidStart,
-                        payload.getEndDateTime(),
-                        emp,
-                        payload.getLeaveType(),
-                        payload.getReason(),
-                        false
-                );
-                requests.add(unpaidRequest);
+            boolean hasEnoughBalance = requestHoursTotal.compareTo(remainingHours) <= 0;
+            if (hasEnoughBalance) {
+                LeaveRequest request = createLeave(payload, emp, hasEnoughBalance);
+                requests.add(request);
+            } else {
+                LocalDateTime splitPoint = resolvePaidCoverageEnd(payload, leaveWindows, remainingHours);
+
+                if (payload.getStartDateTime().isBefore(splitPoint)) {
+                    LeaveRequest paidRequest = createLeave(
+                            payload.getStartDateTime(),
+                            splitPoint,
+                            emp,
+                            payload.getLeaveType(),
+                            payload.getReason(),
+                            true
+                    );
+                    requests.add(paidRequest);
+                }
+
+                LocalDateTime unpaidStart = resolveUnpaidCoverageStart(splitPoint, leaveWindows, payload.getEndDateTime());
+                if (unpaidStart.isBefore(payload.getEndDateTime())) {
+                    LeaveRequest unpaidRequest = createLeave(
+                            unpaidStart,
+                            payload.getEndDateTime(),
+                            emp,
+                            payload.getLeaveType(),
+                            payload.getReason(),
+                            false
+                    );
+                    requests.add(unpaidRequest);
+                }
             }
         }
         if (file != null) {
@@ -409,7 +415,7 @@ public class LeaveService {
     }
 
     private void validateAdvanceNotice(LeaveRequestDto payload) {
-        if (payload.getLeaveType() == null || payload.getLeaveType() == LeaveType.SICK_LEAVE || payload.getStartDateTime() == null) {
+        if (payload.getLeaveType() == null || payload.getLeaveType() == LeaveType.SICK_LEAVE || payload.getLeaveType() == LeaveType.EMERGENCY_LEAVE || payload.getStartDateTime() == null) {
             return;
         }
 
@@ -648,7 +654,7 @@ public class LeaveService {
                     payload.getPaidOverrideReason()
             );
 
-            if (Boolean.TRUE.equals(request.getSuggestedPaid()) && finalPaid) {
+            if (Boolean.TRUE.equals(request.getSuggestedPaid()) && finalPaid && request.getLeaveType() != LeaveType.EMERGENCY_LEAVE) {
                 LeaveType leaveType = Optional.ofNullable(request.getLeaveType()).orElse(payload.getLeaveType());
                 if (leaveType == null) {
                     throw new IllegalStateException("Leave type is required before approving this request.");
