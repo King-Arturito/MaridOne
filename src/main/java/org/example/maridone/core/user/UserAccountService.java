@@ -3,6 +3,7 @@ package org.example.maridone.core.user;
 import org.example.maridone.annotation.ExecutionTime;
 import org.example.maridone.auth.PasswordPolicy;
 import org.example.maridone.auth.token.RefreshTokenRepository;
+import org.example.maridone.config.DefaultConfig;
 import org.example.maridone.core.dto.ChangePasswordDto;
 import org.example.maridone.core.dto.CreateUserAccountDto;
 import org.example.maridone.core.employee.Employee;
@@ -28,16 +29,17 @@ import java.util.List;
 
 @Service
 public class UserAccountService {
-    private static final ZoneId APP_TIME_ZONE = ZoneId.of("Asia/Manila");
-    private static final DateTimeFormatter PASSWORD_CHANGE_AVAILABLE_FORMAT =
-            DateTimeFormatter.ofPattern("MMMM d, yyyy 'at' h:mm a").withZone(APP_TIME_ZONE);
-
     private final UserAccountRepository userAccountRepository;
     private final PasswordEncoder passwordEncoder;
     private final EmployeeRepository employeeRepository;
     private final DocumentPathRepository documentPathRepository;
     private final DocumentMapper documentMapper;
     private final RefreshTokenRepository refreshTokenRepository;
+    private final DefaultConfig defaultConfig;
+
+    private final ZoneId APP_TIME_ZONE;
+    private final DateTimeFormatter PASSWORD_CHANGE_AVAILABLE_FORMAT;
+
 
     public UserAccountService
             (UserAccountRepository userAccountRepository,
@@ -45,13 +47,18 @@ public class UserAccountService {
              EmployeeRepository employeeRepository,
              DocumentPathRepository documentPathRepository,
              DocumentMapper documentMapper,
-             RefreshTokenRepository refreshTokenRepository) {
+             RefreshTokenRepository refreshTokenRepository,
+             DefaultConfig defaultConfig) {
         this.userAccountRepository = userAccountRepository;
         this.passwordEncoder = passwordEncoder;
         this.employeeRepository = employeeRepository;
         this.documentPathRepository = documentPathRepository;
         this.documentMapper = documentMapper;
         this.refreshTokenRepository = refreshTokenRepository;
+        this.defaultConfig =  defaultConfig;
+        this.APP_TIME_ZONE = defaultConfig.getTimeZone();
+        this.PASSWORD_CHANGE_AVAILABLE_FORMAT = DateTimeFormatter.ofPattern("MMMM d, yyyy 'at' h:mm a")
+                .withZone(APP_TIME_ZONE);
     }
 
     @ExecutionTime
