@@ -309,12 +309,23 @@ public class LeaveService {
             documentService.upload(file, emp.getUserAccount().getUsername(), Directories.LEAVE_REQUEST.getDisplayName());
         }
         leaveRequestRepository.saveAll(requests);
-        notifyManager(
-                emp,
-                "New team leave request from " + emp.getFirstName() + " " + emp.getLastName()
-                        + " (" + payload.getStartDateTime().toLocalDate() + " to " + payload.getEndDateTime().toLocalDate() + ")"
-        );
-        workflowEmailService.sendLeaveSubmittedToManager(emp, payload);
+
+        if (emp.getManager() != null) {
+            notifyManager(
+                    emp,
+                    "New team leave request from " + emp.getFirstName() + " " + emp.getLastName()
+                            + " (" + payload.getStartDateTime().toLocalDate() + " to " + payload.getEndDateTime().toLocalDate() + ")"
+            );
+            workflowEmailService.sendLeaveSubmittedToManager(emp, payload);
+        } else {
+            notifyHr("New leave request from " + emp.getFirstName() + " " + emp.getLastName()
+                    + " (" + payload.getStartDateTime().toLocalDate() + " to " + payload.getEndDateTime().toLocalDate() + ") is waiting for HR review.");
+            
+            // Send email to HR for manager-less request
+            if (!requests.isEmpty()) {
+                workflowEmailService.sendLeaveForwardedToHr(requests.get(0));
+            }
+        }
         return requests;
     }
 
@@ -403,7 +414,7 @@ public class LeaveService {
             boolean isPaid
     ) {
         LeaveRequest request = new LeaveRequest();
-        request.setRequestStatus(Status.PENDING_MANAGER);
+        request.setRequestStatus(emp.getManager() == null ? Status.PENDING_HR : Status.PENDING_MANAGER);
         request.setStartDateTime(startDateTime);
         request.setEndDateTime(endDateTime);
         request.setEmployee(emp);

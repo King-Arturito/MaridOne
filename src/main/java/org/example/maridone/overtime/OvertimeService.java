@@ -93,17 +93,25 @@ public class OvertimeService {
         }
         OvertimeRequest request = overtimeMapper.toOvertimeRequest(requestDto);
         request.setEmployee(emp);
-        request.setRequestStatus(Status.PENDING_MANAGER);
+        request.setRequestStatus(emp.getManager() == null ? Status.PENDING_HR : Status.PENDING_MANAGER);
         request.setSuggestedPaid(true);
         request.setPaid(true);
 
         OvertimeRequest savedRequest = overtimeRequestRepository.save(request);
-        notifyManager(
-                emp,
-                "New team overtime request from " + emp.getFirstName() + " " + emp.getLastName()
-                        + " for " + requestDto.getWorkDate()
-        );
-        workflowEmailService.sendOvertimeSubmittedToManager(savedRequest);
+        if (emp.getManager() != null) {
+            notifyManager(
+                    emp,
+                    "New team overtime request from " + emp.getFirstName() + " " + emp.getLastName()
+                            + " for " + requestDto.getWorkDate()
+            );
+            workflowEmailService.sendOvertimeSubmittedToManager(savedRequest);
+        } else {
+            notifyHr("New overtime request from " + emp.getFirstName() + " " + emp.getLastName()
+                    + " for " + requestDto.getWorkDate() + " is waiting for HR review.");
+            
+            // Send email to HR for manager-less request
+            workflowEmailService.sendOvertimeForwardedToHr(savedRequest);
+        }
         return savedRequest;
     }
 
