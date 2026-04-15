@@ -1,28 +1,28 @@
 package org.example.maridone.config;
 
+import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.List;
+
 import org.example.maridone.enums.DeductionType;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.stereotype.Component;
 import org.springframework.validation.annotation.Validated;
 
-import java.math.BigDecimal;
-import java.time.Duration;
-import java.time.temporal.ChronoUnit;
-import java.util.ArrayList;
-import java.util.List;
-
 @Component
 @ConfigurationProperties("payroll")
 @Validated
 public class PayrollConfig {
-    private Duration gracePeriod = Duration.of(15, ChronoUnit.MINUTES);
     private BigDecimal overtimeMultiplier = BigDecimal.valueOf(1.25);
+    private BigDecimal doubleOvertimeMultiplier = BigDecimal.valueOf(2.00);
+    private BigDecimal tripleOvertimeMultiplier = BigDecimal.valueOf(3.00);
     private BigDecimal nightDifferentialMultiplier = BigDecimal.valueOf(0.10);
     private BigDecimal restDayWorkMultiplier = BigDecimal.valueOf(0.30);
     private BigDecimal specialHolidayWorkMultiplier = BigDecimal.valueOf(0.30);
     private BigDecimal regularHolidayWorkMultiplier = BigDecimal.valueOf(1.00);
-    private BigDecimal vacationLeaveHours = BigDecimal.valueOf(120);
-    private BigDecimal sickLeaveHours =  BigDecimal.valueOf(120);
+    private BigDecimal vacationLeaveHours = BigDecimal.valueOf(40);
+    private BigDecimal sickLeaveHours =  BigDecimal.valueOf(40);
+    private BigDecimal taxFreeBonusAnnualCap = BigDecimal.valueOf(90_000);
     private BigDecimal sssEmployeeRate = BigDecimal.valueOf(0.05);
     private BigDecimal sssMinimumMsc = BigDecimal.valueOf(5_000);
     private BigDecimal sssMaximumMsc = BigDecimal.valueOf(35_000);
@@ -43,20 +43,28 @@ public class PayrollConfig {
 
     private List<WithholdingTaxBracket> withholdingTaxBrackets = defaultWithholdingTaxBrackets();
 
-    public Duration getGracePeriod() {
-        return gracePeriod;
-    }
-
-    public void setGracePeriod(Duration gracePeriod) {
-        this.gracePeriod = gracePeriod;
-    }
-
     public BigDecimal getOvertimeMultiplier() {
         return overtimeMultiplier;
     }
 
     public void setOvertimeMultiplier(BigDecimal overtimeMultiplier) {
         this.overtimeMultiplier = overtimeMultiplier;
+    }
+
+    public BigDecimal getDoubleOvertimeMultiplier() {
+        return doubleOvertimeMultiplier;
+    }
+
+    public void setDoubleOvertimeMultiplier(BigDecimal doubleOvertimeMultiplier) {
+        this.doubleOvertimeMultiplier = doubleOvertimeMultiplier;
+    }
+
+    public BigDecimal getTripleOvertimeMultiplier() {
+        return tripleOvertimeMultiplier;
+    }
+
+    public void setTripleOvertimeMultiplier(BigDecimal tripleOvertimeMultiplier) {
+        this.tripleOvertimeMultiplier = tripleOvertimeMultiplier;
     }
 
     public BigDecimal getNightDifferentialMultiplier() {
@@ -113,6 +121,14 @@ public class PayrollConfig {
 
     public void setSickLeaveHours(BigDecimal sickLeaveHours) {
         this.sickLeaveHours = sickLeaveHours;
+    }
+
+    public BigDecimal getTaxFreeBonusAnnualCap() {
+        return taxFreeBonusAnnualCap;
+    }
+
+    public void setTaxFreeBonusAnnualCap(BigDecimal taxFreeBonusAnnualCap) {
+        this.taxFreeBonusAnnualCap = taxFreeBonusAnnualCap;
     }
 
     public BigDecimal getSssEmployeeRate() {

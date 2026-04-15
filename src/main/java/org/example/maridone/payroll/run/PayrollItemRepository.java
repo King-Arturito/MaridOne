@@ -74,4 +74,41 @@ public interface PayrollItemRepository extends JpaRepository<PayrollItem, Long>,
     List<Long> findEmployeeIdsByPayrollRun(@Param("payId") Long payId);
 
     List<PayrollItem> findByPayrollRun_PayId(Long payId);
+
+    @Query("""
+        SELECT new org.example.maridone.payroll.dto.ItemViewDto(
+            e.employeeId, 
+            e.firstName, 
+            e.lastName, 
+            pi.itemId, 
+            pi.grossPay, 
+            pi.netPay
+        )
+        FROM PayrollItem pi
+        JOIN pi.employee e
+        WHERE pi.payrollRun.payrollStatus = 'POSTED'
+          AND pi.payrollRun.paymentDate >= :startDate
+          AND pi.payrollRun.paymentDate <= :endDate
+          AND (:#{#filter.empId} IS NULL OR e.employeeId = :#{#filter.empId})
+          AND (:#{#filter.itemId} IS NULL OR pi.itemId = :#{#filter.itemId})
+          AND (:#{#filter.firstName} IS NULL OR LOWER(e.firstName) LIKE LOWER(CONCAT('%', :#{#filter.firstName}, '%')))
+          AND (:#{#filter.lastName} IS NULL OR LOWER(e.lastName) LIKE LOWER(CONCAT('%', :#{#filter.lastName}, '%')))
+    """)
+    Page<ItemViewDto> findSpecificDetailsByDateRange(
+            @Param("startDate") java.time.LocalDate startDate,
+            @Param("endDate") java.time.LocalDate endDate,
+            @Param("filter") ItemFilter filter,
+            Pageable pageable
+    );
+
+    @Query("""
+        SELECT pi.employee.employeeId from PayrollItem pi
+        WHERE pi.payrollRun.payrollStatus = 'POSTED'
+          AND pi.payrollRun.paymentDate >= :startDate
+          AND pi.payrollRun.paymentDate <= :endDate
+    """)
+    List<Long> findEmployeeIdsByDateRange(
+            @Param("startDate") java.time.LocalDate startDate,
+            @Param("endDate") java.time.LocalDate endDate
+    );
 }

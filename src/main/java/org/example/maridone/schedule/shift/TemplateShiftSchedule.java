@@ -46,10 +46,14 @@ public class TemplateShiftSchedule {
 
     public void setEmployee(Employee employee) {
         this.employee = employee;
+        this.employeeId = employee == null ? null : employee.getEmployeeId();
     }
 
     public Long getEmployeeId() {
-        return employeeId;
+        if (employeeId != null) {
+            return employeeId;
+        }
+        return employee == null ? null : employee.getEmployeeId();
     }
 
 

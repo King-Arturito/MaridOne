@@ -3,7 +3,6 @@ package org.example.maridone.auth;
 import org.example.maridone.auth.twofactor.TwoFactorService;
 import org.example.maridone.auth.twofactor.TwoFactorSetupResponse;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
@@ -27,6 +26,18 @@ public class AuthController {
     @PostMapping("/auth/refresh")
     public ResponseEntity<AuthResponse> refresh(@RequestBody RefreshRequest request) {
         return ResponseEntity.ok(authService.refreshToken(request));
+    }
+
+    @PostMapping("/auth/forgot-password/request")
+    public ResponseEntity<String> requestPasswordReset(@RequestBody ForgotPasswordRequest request) {
+        authService.requestPasswordReset(request);
+        return ResponseEntity.ok("If the account exists, a reset code has been sent to the email on file.");
+    }
+
+    @PostMapping("/auth/forgot-password/reset")
+    public ResponseEntity<String> resetForgottenPassword(@RequestBody ForgotPasswordResetRequest request) {
+        authService.resetForgottenPassword(request);
+        return ResponseEntity.ok("Password reset successfully.");
     }
 
     @PostMapping("/auth/logout")
@@ -55,6 +66,10 @@ public class AuthController {
         return ResponseEntity.ok(authService.sendEmailVerification(authentication.getName()));
     }
 
+    @PostMapping("/auth/2fa/send-login-code")
+    public ResponseEntity<?> sendTwoFactorLoginCode(@RequestHeader("Authorization") String authHeader) {
+        return ResponseEntity.ok(authService.sendTwoFactorLoginCode(authHeader));
+    }
     @PostMapping("/settings/2fa/disable")
     public ResponseEntity<Void> disable2fa(Authentication authentication) {
         return ResponseEntity.ok(twoFactorService.disable2fa(authentication.getName()));

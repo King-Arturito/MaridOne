@@ -2,18 +2,18 @@ package org.example.maridone.log;
 
 import org.example.maridone.annotation.ExecutionTime;
 import org.example.maridone.common.CommonSpecs;
+import org.example.maridone.core.employee.Employee;
 import org.example.maridone.core.employee.EmployeeRepository;
 import org.example.maridone.core.user.UserAccountRepository;
+import org.example.maridone.enums.EmploymentStatus;
+import org.example.maridone.exception.badrequest.UnauthorizedAccessException;
 import org.example.maridone.exception.notfound.EmployeeNotFoundException;
-import org.example.maridone.log.activity.ActivityLog;
 import org.example.maridone.log.attendance.AttendanceLog;
-import org.example.maridone.log.dto.ActivityRequestDto;
 import org.example.maridone.log.filter.AttendanceLogFilter;
 import org.example.maridone.log.spec.AttendanceLogSpecs;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
-import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -21,33 +21,33 @@ import java.time.Instant;
 import java.util.List;
 
 @Service
-public class LogService {
+public class AttendanceLogService {
 
-    private final ActivityLogRepository activityLogRepository;
     private final AttendanceLogRepository attendanceLogRepository;
     private final EmployeeRepository employeeRepository;
     private final UserAccountRepository userAccountRepository;
 
-    public LogService(ActivityLogRepository activityLogRepository,
-                      AttendanceLogRepository attendanceLogRepository,
-                      EmployeeRepository employeeRepository,
-                      UserAccountRepository userAccountRepository)
-    {
-        this.activityLogRepository = activityLogRepository;
+    public AttendanceLogService(AttendanceLogRepository attendanceLogRepository,
+                                EmployeeRepository employeeRepository,
+                                UserAccountRepository userAccountRepository) {
         this.attendanceLogRepository = attendanceLogRepository;
         this.employeeRepository = employeeRepository;
         this.userAccountRepository = userAccountRepository;
     }
 
-
     @Transactional
     public void attendance(Long empId) {
-        if (!employeeRepository.existsById(empId)) {
-            throw new EmployeeNotFoundException(empId);
+        Employee employee = employeeRepository.findById(empId)
+                .orElseThrow(() -> new EmployeeNotFoundException(empId));
+        if (employee.getEmploymentStatus() == EmploymentStatus.SUSPENDED) {
+            throw new UnauthorizedAccessException("You are currently suspended and cannot log attendance.");
+        }
+        if (employee.getEmploymentStatus() == EmploymentStatus.TERMINATED) {
+            throw new UnauthorizedAccessException("You may not log attendance. Your account has been terminated.");
         }
         AttendanceLog attendanceLog = new AttendanceLog();
-        AttendanceLog recent = attendanceLogRepository.findTopByEmployeeIdOrderByAttendanceIdDesc(empId);
-        if (recent == null || recent.getDirection().equals("OUT")) {
+        AttendanceLog recent = attendanceLogRepository.findTopByEmployeeIdOrderByTimestampDescAttendanceIdDesc(empId);
+        if (recent == null || "OUT".equals(recent.getDirection())) {
             attendanceLog.setDirection("IN");
         } else {
             attendanceLog.setDirection("OUT");
@@ -57,28 +57,17 @@ public class LogService {
         attendanceLogRepository.save(attendanceLog);
     }
 
-    @Transactional
-    @Async
-    public void activity(ActivityRequestDto payload) {
-        ActivityLog activityLog = new ActivityLog();
-        activityLog.setUsername(payload.getUsername());
-        activityLog.setMessage(payload.getMessage());
-        activityLog.setActivityType(payload.getActivityType());
-        activityLog.setTimestamp(Instant.now());
-        activityLogRepository.save(activityLog);
-    }
-
     @ExecutionTime
-    public Page<AttendanceLog> getAttendance(Long empId, Pageable pageable) {
+    public Page<AttendanceLog> getAttendance(Long empId, AttendanceLogFilter filter, Pageable pageable) {
         Specification<AttendanceLog> spec = Specification.allOf(
-                CommonSpecs.fieldEquals("employeeId", empId)
+                CommonSpecs.fieldEquals("employeeId", empId),
+                filter == null ? null : AttendanceLogSpecs.filtered(filter)
         );
         return attendanceLogRepository.findAll(spec, pageable);
     }
 
     @ExecutionTime
     public Page<AttendanceLog> getAttendanceTeam(AttendanceLogFilter filter, String username, Pageable pageable) {
-        //get all handledIds by username(who was logged in)
         List<Long> handledIds = employeeRepository.findHandledEmployeeIds(userAccountRepository.findEmployeeIdByUsername(username));
         Specification<AttendanceLog> spec = Specification.allOf(
                 AttendanceLogSpecs.filtered(filter)
@@ -88,14 +77,5 @@ public class LogService {
         }
 
         return attendanceLogRepository.findAll(spec, pageable);
-    }
-
-    @ExecutionTime
-    public Page<ActivityLog> getActivity(Long empId, Pageable pageable) {
-        Specification<ActivityLog> spec = Specification.allOf(
-                CommonSpecs.fieldEquals("employeeId", empId)
-        );
-
-        return activityLogRepository.findAll(spec, pageable);
     }
 }

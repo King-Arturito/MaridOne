@@ -34,6 +34,7 @@ public class OvertimeController {
     //request overtime for all
     @PostMapping("/create")
     @PreAuthorize("isAuthenticated()")
+    @AuditLog
     public ResponseEntity<OvertimeRequest> createOvertimeRequest(
             @RequestBody @Valid OvertimeRequestDto requestDto,
             Authentication authentication) {
@@ -48,7 +49,7 @@ public class OvertimeController {
 
     //update Overtime Request status for HR
     @PatchMapping("/update")
-    @PreAuthorize("hasRole('HR')")
+    @PreAuthorize("hasAnyRole('HR', 'MANAGER')")
     @AuditLog
     public ResponseEntity<OvertimeResponseDto> updateOvertimeRequest(
             @RequestBody @Valid OvertimeUpdateDto updateDto,

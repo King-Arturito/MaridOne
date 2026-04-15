@@ -5,4 +5,5 @@ import java.time.LocalDate;
 public interface PayslipProjection {
     LocalDate getPayPeriodStart();
     LocalDate getPayPeriodEnd();
+    LocalDate getPaymentDate();
 }

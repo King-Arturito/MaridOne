@@ -6,7 +6,7 @@ CREATE TABLE leave_balance (
 
     CONSTRAINT leave_balance_leave_type_check CHECK (leave_type IN (
         'VACATION_LEAVE', 'SICK_LEAVE', 'MATERNITY_LEAVE',
-        'PATERNITY_LEAVE', 'SOLO_PARENT_LEAVE', 'MAGNA_CARTA', 'RA9262'
+        'PATERNITY_LEAVE', 'SOLO_PARENT_LEAVE', 'MAGNA_CARTA', 'RA9262', 'EMERGENCY_LEAVE'
     )),
     CONSTRAINT fk_leave_balance_employee FOREIGN KEY (emp_id) REFERENCES employee (emp_id)
 );

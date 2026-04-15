@@ -40,6 +40,9 @@ public class DisputeRequest {
     @Column(name = "status_reason")
     private String statusReason;
 
+    @Column(name = "approver")
+    private String approver;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "item_id", nullable = false)
     @JsonIgnore
@@ -95,6 +98,14 @@ public class DisputeRequest {
 
     public void setStatusReason(String statusReason) {
         this.statusReason = statusReason;
+    }
+
+    public String getApprover() {
+        return approver;
+    }
+
+    public void setApprover(String approver) {
+        this.approver = approver;
     }
 
     public PayrollItem getPayrollItem() {

@@ -1,14 +1,19 @@
 package org.example.maridone.payroll.dto;
 
+import org.example.maridone.enums.EarningsType;
+
 import java.math.BigDecimal;
 import java.time.Instant;
 
 public class EarningsDto {
     private Long earningsId;
     private String description;
+    private EarningsType earningsType;
     private BigDecimal hours;
     private BigDecimal rate;
     private BigDecimal amount;
+    private BigDecimal taxableAmount;
+    private BigDecimal nonTaxableAmount;
     private BigDecimal originalAmount;
     private String adjustedBy;
     private Instant adjustedAt;
@@ -29,6 +34,14 @@ public class EarningsDto {
 
     public void setDescription(String description) {
         this.description = description;
+    }
+
+    public EarningsType getEarningsType() {
+        return earningsType;
+    }
+
+    public void setEarningsType(EarningsType earningsType) {
+        this.earningsType = earningsType;
     }
 
     public BigDecimal getHours() {
@@ -53,6 +66,22 @@ public class EarningsDto {
 
     public void setAmount(BigDecimal amount) {
         this.amount = amount;
+    }
+
+    public BigDecimal getTaxableAmount() {
+        return taxableAmount;
+    }
+
+    public void setTaxableAmount(BigDecimal taxableAmount) {
+        this.taxableAmount = taxableAmount;
+    }
+
+    public BigDecimal getNonTaxableAmount() {
+        return nonTaxableAmount;
+    }
+
+    public void setNonTaxableAmount(BigDecimal nonTaxableAmount) {
+        this.nonTaxableAmount = nonTaxableAmount;
     }
 
     public BigDecimal getOriginalAmount() {

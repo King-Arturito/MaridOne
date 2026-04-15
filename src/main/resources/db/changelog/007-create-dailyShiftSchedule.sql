@@ -3,6 +3,7 @@ CREATE TABLE daily_shift_schedule (
     start_date_time TIMESTAMP   NOT NULL,
     end_date_time   TIMESTAMP   NOT NULL,
     shift_id        BIGINT,
+    is_day_off      BOOLEAN     NOT NULL DEFAULT FALSE,
 
     CONSTRAINT fk_daily_shift_schedule_template FOREIGN KEY (shift_id) REFERENCES template_shift_schedule (shift_id)
 );

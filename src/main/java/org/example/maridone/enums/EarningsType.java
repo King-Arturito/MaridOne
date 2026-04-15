@@ -1,14 +1,9 @@
 package org.example.maridone.enums;
 
-//for OvertimeRequest
+// Shared payroll earning classifications. OT request rates are resolved in payroll calculation.
 public enum EarningsType {
-    /*
-        multipliers:
-            BASIC: 1
-            OVERTIME: 1.25
-
-     */
     BASIC,
+    BONUS,
     OVERTIME,
     DOUBLE_OVERTIME,
     TRIPLE_OVERTIME,

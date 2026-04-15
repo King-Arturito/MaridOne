@@ -2,10 +2,12 @@ package org.example.maridone.core.user;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.*;
+import org.example.maridone.auth.PasswordPolicy;
 import org.example.maridone.document.path.DocumentPath;
 import org.example.maridone.core.employee.Employee;
 import org.example.maridone.enums.AccountStatus;
 
+import java.time.Instant;
 import java.util.List;
 
 @Entity
@@ -17,6 +19,7 @@ public class UserAccount {
     @Size(min = 4, max = 30)
     private String username;
 
+    @JsonIgnore
     @Column(name = "password_hash",  nullable = false)
     private String passwordHash;
 
@@ -32,8 +35,23 @@ public class UserAccount {
     @Column(name = "two_factor_enabled", nullable = false)
     private Boolean twoFactorEnabled = false;
 
+    @JsonIgnore
     @Column(name = "two_factor_secret", nullable = true)
     private String twoFactorSecret;
+
+    @Column(name = "password_change_required", nullable = false)
+    private Boolean passwordChangeRequired = false;
+
+    @JsonIgnore
+    @Column(name = "password_reset_secret", nullable = true)
+    private String passwordResetSecret;
+
+    @JsonIgnore
+    @Column(name = "password_reset_expires_at", nullable = true)
+    private Instant passwordResetExpiresAt;
+
+    @Column(name = "last_password_changed_at", nullable = true)
+    private Instant lastPasswordChangedAt;
 
     @Column(name = "emp_id", insertable = false, updatable = false)
     private Long employeeId;
@@ -92,6 +110,52 @@ public class UserAccount {
 
     public void setTwoFactorSecret(String twoFactorSecret) {
         this.twoFactorSecret = twoFactorSecret;
+    }
+
+    public Boolean getPasswordChangeRequired() {
+        return passwordChangeRequired;
+    }
+
+    public void setPasswordChangeRequired(Boolean passwordChangeRequired) {
+        this.passwordChangeRequired = passwordChangeRequired;
+    }
+
+    public String getPasswordResetSecret() {
+        return passwordResetSecret;
+    }
+
+    public void setPasswordResetSecret(String passwordResetSecret) {
+        this.passwordResetSecret = passwordResetSecret;
+    }
+
+    public Instant getPasswordResetExpiresAt() {
+        return passwordResetExpiresAt;
+    }
+
+    public void setPasswordResetExpiresAt(Instant passwordResetExpiresAt) {
+        this.passwordResetExpiresAt = passwordResetExpiresAt;
+    }
+
+    public Instant getLastPasswordChangedAt() {
+        return lastPasswordChangedAt;
+    }
+
+    public void setLastPasswordChangedAt(Instant lastPasswordChangedAt) {
+        this.lastPasswordChangedAt = lastPasswordChangedAt;
+    }
+
+    @Transient
+    public Instant getPasswordChangeAvailableAt() {
+        return PasswordPolicy.getSelfServicePasswordChangeAvailableAt(lastPasswordChangedAt);
+    }
+
+    @Transient
+    public Boolean getCanChangePasswordNow() {
+        return PasswordPolicy.canSelfServicePasswordBeChanged(
+                Boolean.TRUE.equals(passwordChangeRequired),
+                lastPasswordChangedAt,
+                Instant.now()
+        );
     }
 
     public List<DocumentPath> getDocumentPaths() {

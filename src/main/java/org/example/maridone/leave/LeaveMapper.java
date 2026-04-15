@@ -21,6 +21,7 @@ public interface LeaveMapper {
     @Mapping(target = "empId", source  = "employee.employeeId")
     @Mapping(target = "firstName", source = "employee.firstName")
     @Mapping(target = "lastName", source = "employee.lastName")
+    @Mapping(target = "approver", source = "approver")
     LeaveResponseDto toLeaveResponseDto(LeaveRequest leaveRequest);
 
     List<LeaveResponseDto> toLeaveResponseDtos(List<LeaveRequest> leaveRequests);

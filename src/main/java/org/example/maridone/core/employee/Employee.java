@@ -78,6 +78,27 @@ public class Employee {
     @Embedded
     private Address address;
 
+    @Column(name = "sss_number")
+    private String sssNumber;
+
+    @Column(name = "philhealth_number")
+    private String philhealthNumber;
+
+    @Column(name = "pagibig_number")
+    private String pagibigNumber;
+
+    @Column(name = "tin_number")
+    private String tinNumber;
+
+    @Column(name = "emergency_contact_name")
+    private String emergencyContactName;
+
+    @Column(name = "emergency_contact_relationship")
+    private String emergencyContactRelationship;
+
+    @Column(name = "emergency_contact_number")
+    private String emergencyContactNumber;
+
     @OneToOne(mappedBy = "employee", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     private UserAccount userAccount;
 
@@ -253,5 +274,61 @@ public class Employee {
 
     public void setEmpTitle(ManagerTitle empTitle) {
         this.empTitle = empTitle;
+    }
+
+    public String getSssNumber() {
+        return sssNumber;
+    }
+
+    public void setSssNumber(String sssNumber) {
+        this.sssNumber = sssNumber;
+    }
+
+    public String getPhilhealthNumber() {
+        return philhealthNumber;
+    }
+
+    public void setPhilhealthNumber(String philhealthNumber) {
+        this.philhealthNumber = philhealthNumber;
+    }
+
+    public String getPagibigNumber() {
+        return pagibigNumber;
+    }
+
+    public void setPagibigNumber(String pagibigNumber) {
+        this.pagibigNumber = pagibigNumber;
+    }
+
+    public String getTinNumber() {
+        return tinNumber;
+    }
+
+    public void setTinNumber(String tinNumber) {
+        this.tinNumber = tinNumber;
+    }
+
+    public String getEmergencyContactName() {
+        return emergencyContactName;
+    }
+
+    public void setEmergencyContactName(String emergencyContactName) {
+        this.emergencyContactName = emergencyContactName;
+    }
+
+    public String getEmergencyContactRelationship() {
+        return emergencyContactRelationship;
+    }
+
+    public void setEmergencyContactRelationship(String emergencyContactRelationship) {
+        this.emergencyContactRelationship = emergencyContactRelationship;
+    }
+
+    public String getEmergencyContactNumber() {
+        return emergencyContactNumber;
+    }
+
+    public void setEmergencyContactNumber(String emergencyContactNumber) {
+        this.emergencyContactNumber = emergencyContactNumber;
     }
 }

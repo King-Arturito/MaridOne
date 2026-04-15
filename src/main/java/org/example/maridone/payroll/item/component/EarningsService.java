@@ -3,6 +3,7 @@ package org.example.maridone.payroll.item.component;
 import org.example.maridone.common.CommonCalculator;
 import org.example.maridone.config.PayrollConfig;
 import org.example.maridone.core.employee.Employee;
+import org.example.maridone.enums.EarningsType;
 import org.example.maridone.enums.PayrollStatus;
 import org.example.maridone.holiday.HolidayLookup;
 import org.example.maridone.holiday.HolidayService;
@@ -33,6 +34,8 @@ public class EarningsService {
     private static final BigDecimal RATE_TOLERANCE = new BigDecimal("0.02");
     private static final String BASIC_PAY = "Basic Pay";
     private static final String APPROVED_OVERTIME = "Approved Overtime";
+    private static final String APPROVED_DOUBLE_OVERTIME = "Approved Double Overtime";
+    private static final String APPROVED_TRIPLE_OVERTIME = "Approved Triple Overtime";
     private static final String REGULAR_HOLIDAY_PREMIUM = "Regular Holiday Premium";
     private static final String SPECIAL_HOLIDAY_PREMIUM = "Special Holiday Premium";
     private static final String REST_DAY_PREMIUM = "Rest Day Premium";
@@ -41,32 +44,32 @@ public class EarningsService {
     private static final String PREMIUM_PAY = "Premium Pay";
 
     private final EarningsRepository earningsRepository;
-    private final DeductionsRepository deductionsRepository;
     private final PayrollItemRepository payrollItemRepository;
     private final PayrollMapper payrollMapper;
     private final HolidayService holidayService;
     private final DailyShiftRepository dailyShiftRepository;
     private final PayrollCalculator payrollCalculator;
     private final PayrollConfig payrollConfig;
+    private final PayrollItemTotalsService payrollItemTotalsService;
 
     public EarningsService(
             EarningsRepository earningsRepository,
-            DeductionsRepository deductionsRepository,
             PayrollItemRepository payrollItemRepository,
             PayrollMapper payrollMapper,
             HolidayService holidayService,
             DailyShiftRepository dailyShiftRepository,
             PayrollCalculator payrollCalculator,
-            PayrollConfig payrollConfig
+            PayrollConfig payrollConfig,
+            PayrollItemTotalsService payrollItemTotalsService
     ) {
         this.earningsRepository = earningsRepository;
-        this.deductionsRepository = deductionsRepository;
         this.payrollItemRepository = payrollItemRepository;
         this.payrollMapper = payrollMapper;
         this.holidayService = holidayService;
         this.dailyShiftRepository = dailyShiftRepository;
         this.payrollCalculator = payrollCalculator;
         this.payrollConfig = payrollConfig;
+        this.payrollItemTotalsService = payrollItemTotalsService;
     }
 
     @Transactional(readOnly = true)
@@ -104,9 +107,65 @@ public class EarningsService {
         }
 
         line.setAmount(updatedAmount);
+        if (line.getEarningsType() == null) {
+            line.setEarningsType(EarningsType.FIXED);
+        }
+        if (line.getEarningsType() != EarningsType.BONUS) {
+            payrollItemTotalsService.applyNonBonusTaxSplit(line, updatedAmount);
+        }
+
         EarningsLine updatedLine = earningsRepository.save(line);
-        refreshItemTotals(item);
-        return toDtos(List.of(updatedLine), buildContext(List.of(updatedLine))).get(0);
+        if (updatedLine.getEarningsType() == EarningsType.BONUS) {
+            payrollItemTotalsService.syncBonusTaxationForEmployeeYear(
+                    item.getEmployee(),
+                    updatedLine.getEarningsDate()
+            );
+        } else {
+            payrollItemTotalsService.refreshItem(item);
+        }
+        return toDtos(List.of(refetch(updatedLine)), buildContext(List.of(refetch(updatedLine)))).get(0);
+    }
+
+    @Transactional
+    public EarningsDto createEarning(EarningsDto payload, Long itemId) {
+        if (payload == null) {
+            throw new InvalidActionException("Earnings create payload is required.");
+        }
+
+        PayrollItem item = payrollItemRepository.findById(itemId)
+                .orElseThrow(() -> new InvalidActionException("Payroll item ID:" + itemId + " not found."));
+        PayrollRun run = requireEditableAdjustmentRun(item);
+        BigDecimal amount = normalizePositive(payload.getAmount(), "Earnings amount must be greater than zero.");
+        EarningsType requestedType = payload.getEarningsType() == EarningsType.BONUS
+                ? EarningsType.BONUS
+                : EarningsType.FIXED;
+
+        EarningsLine line = new EarningsLine();
+        line.setPayrollItem(item);
+        line.setHours(requestedType == EarningsType.BONUS ? BigDecimal.ZERO.setScale(2) : BigDecimal.ONE.setScale(2));
+        line.setRate(requestedType == EarningsType.BONUS ? BigDecimal.ZERO.setScale(2) : amount);
+        line.setAmount(amount);
+        line.setEarningsDate(run.getPeriodEnd());
+        line.setOvertime(false);
+        line.setOvertimeRequest(null);
+        line.setEarningsType(requestedType);
+        if (requestedType == EarningsType.BONUS) {
+            line.setTaxableAmount(BigDecimal.ZERO.setScale(2));
+            line.setNonTaxableAmount(BigDecimal.ZERO.setScale(2));
+        } else {
+            payrollItemTotalsService.applyNonBonusTaxSplit(line, amount);
+        }
+
+        EarningsLine createdLine = earningsRepository.save(line);
+        if (requestedType == EarningsType.BONUS) {
+            payrollItemTotalsService.syncBonusTaxationForEmployeeYear(
+                    item.getEmployee(),
+                    createdLine.getEarningsDate()
+            );
+        } else {
+            payrollItemTotalsService.refreshItem(item);
+        }
+        return toDtos(List.of(refetch(createdLine)), buildContext(List.of(refetch(createdLine)))).get(0);
     }
 
     private List<EarningsDto> toDtos(List<EarningsLine> earnings, EarningsContext context) {
@@ -142,7 +201,9 @@ public class EarningsService {
                 List.of(employee.getEmployeeId()),
                 run.getPeriodStart().atStartOfDay(),
                 run.getPeriodEnd().plusDays(1).atStartOfDay()
-        );
+        ).stream()
+                .filter(schedule -> !schedule.isDayOff())
+                .toList();
         Map<LocalDate, List<DailyShiftSchedule>> schedulesByDate = schedules.stream()
                 .collect(Collectors.groupingBy(DailyShiftSchedule::getWorkDate));
 
@@ -162,10 +223,15 @@ public class EarningsService {
     }
 
     private boolean needsClassificationContext(EarningsLine line) {
-        return !isBasicPay(line) && !Boolean.TRUE.equals(line.getOvertime());
+        return line.getEarningsType() != EarningsType.BONUS
+                && !isBasicPay(line)
+                && !Boolean.TRUE.equals(line.getOvertime());
     }
 
     private String describeLine(EarningsLine line, EarningsContext context) {
+        if (line.getEarningsType() == EarningsType.BONUS) {
+            return "Bonus";
+        }
         if (line.getPayrollItem() != null
                 && line.getPayrollItem().getPayrollRun() != null
                 && line.getPayrollItem().getPayrollRun().getRunType() == RunType.ADJUSTMENT) {
@@ -175,7 +241,7 @@ public class EarningsService {
             return BASIC_PAY;
         }
         if (Boolean.TRUE.equals(line.getOvertime())) {
-            return APPROVED_OVERTIME;
+            return describeOvertimeLine(line);
         }
 
         LocalDate earningDate = line.getEarningsDate();
@@ -193,12 +259,7 @@ public class EarningsService {
         BigDecimal nightDiffExpectedRate = context.hourlyRate()
                 .multiply(workdayMultiplier)
                 .multiply(payrollConfig.getNightDifferentialMultiplier());
-        BigDecimal overtimeNightDiffExpectedRate = context.hourlyRate()
-                .multiply(workdayMultiplier)
-                .multiply(payrollConfig.getOvertimeMultiplier())
-                .multiply(payrollConfig.getNightDifferentialMultiplier());
-
-        if (matchesRate(line.getRate(), overtimeNightDiffExpectedRate)) {
+        if (matchesOvertimeNightDiffRate(line.getRate(), context.hourlyRate(), workdayMultiplier)) {
             return OT_NIGHT_DIFFERENTIAL;
         }
         if (matchesRate(line.getRate(), nightDiffExpectedRate)) {
@@ -219,6 +280,17 @@ public class EarningsService {
         return PREMIUM_PAY;
     }
 
+    private String describeOvertimeLine(EarningsLine line) {
+        if (line.getOvertimeRequest() == null || line.getOvertimeRequest().getOvertimeType() == null) {
+            return APPROVED_OVERTIME;
+        }
+        return switch (line.getOvertimeRequest().getOvertimeType()) {
+            case DOUBLE_OVERTIME -> APPROVED_DOUBLE_OVERTIME;
+            case TRIPLE_OVERTIME -> APPROVED_TRIPLE_OVERTIME;
+            default -> APPROVED_OVERTIME;
+        };
+    }
+
     private boolean isBasicPay(EarningsLine line) {
         return isZero(line.getHours()) && isZero(line.getRate());
     }
@@ -232,6 +304,27 @@ public class EarningsService {
                 .subtract(normalize(expected))
                 .abs()
                 .compareTo(RATE_TOLERANCE) <= 0;
+    }
+
+    private boolean matchesOvertimeNightDiffRate(
+            BigDecimal actualRate,
+            BigDecimal hourlyRate,
+            BigDecimal workdayMultiplier
+    ) {
+        for (EarningsType overtimeType : List.of(
+                EarningsType.OVERTIME,
+                EarningsType.DOUBLE_OVERTIME,
+                EarningsType.TRIPLE_OVERTIME
+        )) {
+            BigDecimal expectedRate = hourlyRate
+                    .multiply(workdayMultiplier)
+                    .multiply(payrollCalculator.resolveOvertimeMultiplier(overtimeType))
+                    .multiply(payrollConfig.getNightDifferentialMultiplier());
+            if (matchesRate(actualRate, expectedRate)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private BigDecimal normalize(BigDecimal value) {
@@ -250,6 +343,15 @@ public class EarningsService {
             throw new InvalidActionException("This payroll run has already been posted.");
         }
         return item;
+    }
+
+    private PayrollRun requireEditableAdjustmentRun(PayrollItem item) {
+        PayrollItem editableItem = getEditablePayrollItem(item);
+        PayrollRun run = editableItem.getPayrollRun();
+        if (run == null || run.getRunType() != RunType.ADJUSTMENT) {
+            throw new InvalidActionException("Manual lines can only be added to adjustment payroll items.");
+        }
+        return run;
     }
 
     private boolean isRegularRun(PayrollItem item) {
@@ -275,26 +377,22 @@ public class EarningsService {
         return normalized;
     }
 
-    private void refreshItemTotals(PayrollItem item) {
-        List<EarningsLine> earnings = earningsRepository.findByPayrollItem_ItemId(item.getItemId());
-        List<DeductionsLine> deductions = deductionsRepository.findByPayrollItem_ItemId(item.getItemId());
+    private BigDecimal normalizePositive(BigDecimal value, String errorMessage) {
+        if (value == null) {
+            throw new InvalidActionException(errorMessage);
+        }
+        BigDecimal normalized = normalize(value);
+        if (normalized.compareTo(BigDecimal.ZERO.setScale(2)) <= 0) {
+            throw new InvalidActionException(errorMessage);
+        }
+        return normalized;
+    }
 
-        item.setEarnings(earnings);
-        item.setDeductions(deductions);
-
-        BigDecimal totalEarnings = earnings.stream()
-                .map(EarningsLine::getAmount)
-                .filter(amount -> amount != null)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-
-        BigDecimal totalDeductions = deductions.stream()
-                .map(DeductionsLine::getAmount)
-                .filter(amount -> amount != null)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-
-        item.setGrossPay(CommonCalculator.normalize(totalEarnings));
-        item.setNetPay(CommonCalculator.normalize(totalEarnings.subtract(totalDeductions)));
-        payrollItemRepository.save(item);
+    private EarningsLine refetch(EarningsLine line) {
+        if (line == null || line.getEarningsId() <= 0L) {
+            return line;
+        }
+        return earningsRepository.findById(line.getEarningsId()).orElse(line);
     }
 
     private String getCurrentUsername() {

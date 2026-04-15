@@ -1,9 +1,7 @@
 package org.example.maridone.auth.twofactor;
 
-import dev.samstevens.totp.code.CodeVerifier;
-import dev.samstevens.totp.code.DefaultCodeGenerator;
-import dev.samstevens.totp.code.DefaultCodeVerifier;
-import dev.samstevens.totp.code.HashingAlgorithm;
+import dev.samstevens.totp.code.*;
+import dev.samstevens.totp.exceptions.CodeGenerationException;
 import dev.samstevens.totp.exceptions.QrGenerationException;
 import dev.samstevens.totp.qr.QrData;
 import dev.samstevens.totp.qr.QrGenerator;
@@ -17,16 +15,21 @@ import org.springframework.stereotype.Service;
 
 @Service
 public class TotpService {
+    private static final int PASSWORD_RESET_ALLOWED_TIME_PERIOD_DISCREPANCY = 20;
 
     private final SecretGenerator secretGenerator;
     private final QrGenerator qrGenerator;
     private final CodeVerifier codeVerifier;
+    private final CodeGenerator codeGenerator;
+    private final TimeProvider timeProvider;
 
     public TotpService() {
         this.secretGenerator = new DefaultSecretGenerator();
         this.qrGenerator = new ZxingPngQrGenerator();
-        TimeProvider timeProvider = new SystemTimeProvider();
-        this.codeVerifier = new DefaultCodeVerifier(new DefaultCodeGenerator(), timeProvider);
+        this.timeProvider = new SystemTimeProvider();
+        this.codeGenerator = new DefaultCodeGenerator();
+
+        this.codeVerifier = new DefaultCodeVerifier(this.codeGenerator, this.timeProvider);
     }
 
     public String generateSecret() {
@@ -51,7 +54,23 @@ public class TotpService {
         }
     }
 
+    public String generateCurrentCode(String secret) {
+        try {
+            long currentBucket = Math.floorDiv(timeProvider.getTime(), 30);
+
+            return codeGenerator.generate(secret, currentBucket);
+        } catch (CodeGenerationException e) {
+            throw new RuntimeException("Error generating the 6-digit TOTP code", e);
+        }
+    }
+
     public boolean verifyCode(String secret, String code) {
         return codeVerifier.isValidCode(secret, code);
+    }
+
+    public boolean verifyPasswordResetCode(String secret, String code) {
+        DefaultCodeVerifier verifier = new DefaultCodeVerifier(this.codeGenerator, this.timeProvider);
+        verifier.setAllowedTimePeriodDiscrepancy(PASSWORD_RESET_ALLOWED_TIME_PERIOD_DISCREPANCY);
+        return verifier.isValidCode(secret, code);
     }
 }

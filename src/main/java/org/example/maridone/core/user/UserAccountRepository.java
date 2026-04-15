@@ -2,6 +2,7 @@ package org.example.maridone.core.user;
 
 import org.example.maridone.enums.Position;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -30,4 +31,40 @@ public interface UserAccountRepository extends JpaRepository<UserAccount,Long> {
     List<UserAccount> findByUsernameIn(List<String> usernames);
 
     Optional<UserAccount> findByEmployee_EmployeeId(Long employeeId);
+
+    @Modifying
+    @Query(value = """
+            INSERT INTO user_account (
+                username,
+                password_hash,
+                account_status,
+                emp_id,
+                two_factor_enabled,
+                two_factor_secret,
+                password_change_required,
+                last_password_changed_at
+            )
+            VALUES (
+                :username,
+                :passwordHash,
+                :accountStatus,
+                :employeeId,
+                :twoFactorEnabled,
+                :twoFactorSecret,
+                :passwordChangeRequired,
+                :lastPasswordChangedAt
+            )
+            """, nativeQuery = true)
+    void insertReplacementAccount(@Param("username") String username,
+                                  @Param("passwordHash") String passwordHash,
+                                  @Param("accountStatus") String accountStatus,
+                                  @Param("employeeId") Long employeeId,
+                                  @Param("twoFactorEnabled") boolean twoFactorEnabled,
+                                  @Param("twoFactorSecret") String twoFactorSecret,
+                                  @Param("passwordChangeRequired") boolean passwordChangeRequired,
+                                  @Param("lastPasswordChangedAt") java.time.Instant lastPasswordChangedAt);
+
+    @Modifying
+    @Query(value = "DELETE FROM user_account WHERE username = :username", nativeQuery = true)
+    void deleteByUsernameNative(@Param("username") String username);
 }

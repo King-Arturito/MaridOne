@@ -14,6 +14,7 @@ import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -53,6 +54,7 @@ public class DisputeController {
 
     @PostMapping("/create/{itemId}")
     @PreAuthorize("@itemOwnerCheck.isSelf(#itemId, authentication.getName())")
+    @AuditLog
     public DisputeRequest createDisputeRequest
             (@PathVariable Long itemId,
              @RequestBody @Valid DisputeRequestDto payload,
@@ -64,8 +66,11 @@ public class DisputeController {
     @PatchMapping("/update/{disputeId}")
     @PreAuthorize("hasRole('HR')")
     @AuditLog
-    public ResponseEntity<?> updateDisputeRequest(@PathVariable Long disputeId, @RequestBody @Validated(OnUpdate.class) DisputeActionDto payload) {
-        DisputeResponseDto response = disputeService.updateDisputeStatus(disputeId, payload);
+    public ResponseEntity<?> updateDisputeRequest(
+            @PathVariable Long disputeId,
+            @RequestBody @Validated(OnUpdate.class) DisputeActionDto payload,
+            Authentication authentication) {
+        DisputeResponseDto response = disputeService.updateDisputeStatus(disputeId, payload, authentication.getName());
         return ResponseEntity.ok(response);
     }
 

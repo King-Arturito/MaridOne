@@ -14,11 +14,14 @@ import org.example.maridone.exception.notfound.AccountNotFoundException;
 import org.example.maridone.exception.badrequest.InvalidRefreshTokenException;
 import org.example.maridone.exception.badrequest.UnauthorizedAccessException;
 import org.example.maridone.exception.notfound.EmployeeNotFoundException;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -27,6 +30,8 @@ import java.time.temporal.ChronoUnit;
 
 @Service
 public class AuthService {
+    private static final long PASSWORD_RESET_WINDOW_MINUTES = 10;
+
     private final JwtService jwtService;
     private final AuthenticationManager authenticationManager;
     private final UserLoginService userLoginService;
@@ -35,6 +40,7 @@ public class AuthService {
     private final JwtConfig jwtConfig;
     private final TotpService totpService;
     private final EmailService emailService;
+    private final PasswordEncoder passwordEncoder;
 
     public AuthService(JwtService jwtService,
                        AuthenticationManager authenticationManager,
@@ -43,7 +49,8 @@ public class AuthService {
                        UserAccountRepository userAccountRepository,
                        JwtConfig jwtConfig,
                        TotpService totpService,
-                       EmailService emailService) {
+                       EmailService emailService,
+                       PasswordEncoder passwordEncoder) {
         this.jwtService = jwtService;
         this.authenticationManager = authenticationManager;
         this.userLoginService = userLoginService;
@@ -52,6 +59,7 @@ public class AuthService {
         this.jwtConfig = jwtConfig;
         this.totpService = totpService;
         this.emailService = emailService;
+        this.passwordEncoder = passwordEncoder;
     }
 
     @ExecutionTime
@@ -66,17 +74,12 @@ public class AuthService {
             UserAccount userAccount = userAccountRepository.findByUsername(authentication.getName())
                     .orElseThrow(() -> new AccountNotFoundException("username of: " + loginRequest.getUsername() + " not found"));
 
-            EmploymentStatus status = userAccount.getEmployee().getEmploymentStatus();
-            if (status.equals(EmploymentStatus.TERMINATED)) {
-                throw new UnauthorizedAccessException("You many not login. Your account has been terminated.");
-            } else if (status.equals(EmploymentStatus.SUSPENDED)) {
-                throw new UnauthorizedAccessException("You are currently suspended.");
-            }
+            ensureLoginAllowed(userAccount);
 
             if (userAccount.getTwoFactorEnabled()) {
                 String preAuthToken = jwtService.generatePreAuthToken(userDetails);
 
-                return new AuthResponse(preAuthToken, null, true);
+                return new AuthResponse(preAuthToken, null, true, false);
             }
 
 
@@ -98,6 +101,51 @@ public class AuthService {
         return null;
     }
 
+    public ResponseEntity<Object> sendTwoFactorLoginCode(String authHeader) {
+
+        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+
+        String preAuthToken = authHeader.substring(7);
+
+        if (!jwtService.isValidPreAuthToken(preAuthToken)) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+
+        String username = jwtService.extractUsername(preAuthToken);
+
+        UserAccount account = userAccountRepository.findByUsername(username)
+                .orElseThrow(() -> new AccountNotFoundException("username of: " + username));
+
+        String tokenToSend = totpService.generateCurrentCode(account.getTwoFactorSecret());
+        String email = account.getEmployee().getEmail();
+        emailService.sendVerificationCode(email, tokenToSend);
+        return null;
+    }
+
+    @Transactional
+    public void requestPasswordReset(ForgotPasswordRequest request) {
+        String username = normalizeRequiredValue(request.getUsername(), "Username is required.");
+        UserAccount account = userAccountRepository.findByUsername(username).orElse(null);
+
+        if (account == null || account.getEmployee() == null || account.getEmployee().getEmploymentStatus() == EmploymentStatus.TERMINATED) {
+            return;
+        }
+
+        String email = account.getEmployee().getEmail();
+        if (email == null || email.isBlank()) {
+            return;
+        }
+
+        String resetSecret = totpService.generateSecret();
+        account.setPasswordResetSecret(resetSecret);
+        account.setPasswordResetExpiresAt(Instant.now().plus(PASSWORD_RESET_WINDOW_MINUTES, ChronoUnit.MINUTES));
+        userAccountRepository.save(account);
+
+        String code = totpService.generateCurrentCode(resetSecret);
+        emailService.sendPasswordResetCode(email, code);
+    }
     @Transactional
     public AuthResponse refreshToken(RefreshRequest request) {
 
@@ -110,15 +158,45 @@ public class AuthService {
         }
 
         UserAccount userAccount = refreshTokenEntity.getUserAccount();
+        ensureLoginAllowed(userAccount);
         UserDetails userDetails = userLoginService.loadUserByUsername(userAccount.getUsername());
 
         String newAccessToken = jwtService.generateToken(userDetails);
-        return new AuthResponse(newAccessToken, request.getRefreshToken(), false);
+        return new AuthResponse(
+                newAccessToken,
+                request.getRefreshToken(),
+                false,
+                Boolean.TRUE.equals(userAccount.getPasswordChangeRequired())
+        );
     }
 
     @Transactional
     public void logoutUser(LogoutRequest request) {
         refreshTokenRepository.deleteByRefreshToken(request.getRefreshToken());
+    }
+
+    @Transactional
+    public void resetForgottenPassword(ForgotPasswordResetRequest request) {
+        String username = normalizeRequiredValue(request.getUsername(), "Username is required.");
+        String code = normalizeRequiredValue(request.getCode(), "Reset code is required.");
+        String newPassword = PasswordPolicy.requireUserSelectedPassword(
+                request.getNewPassword(),
+                "New password is required."
+        );
+
+        UserAccount account = userAccountRepository.findByUsername(username)
+                .orElseThrow(() -> new UnauthorizedAccessException("Invalid or expired password reset code."));
+
+        if (!isPasswordResetAllowed(account, code)) {
+            throw new UnauthorizedAccessException("Invalid or expired password reset code.");
+        }
+
+        account.setPasswordHash(passwordEncoder.encode(newPassword));
+        account.setPasswordChangeRequired(false);
+        account.setLastPasswordChangedAt(Instant.now());
+        clearPasswordResetState(account);
+        userAccountRepository.save(account);
+        refreshTokenRepository.deleteByUsername(account.getUsername());
     }
 
     private AuthResponse issueStandardTokens(UserDetails userDetails, UserAccount userAccount, boolean rememberMe) {
@@ -134,7 +212,12 @@ public class AuthService {
 
         refreshTokenRepository.save(refreshTokenEntity);
 
-        return new AuthResponse(accessToken, refreshTokenString, false);
+        return new AuthResponse(
+                accessToken,
+                refreshTokenString,
+                false,
+                Boolean.TRUE.equals(userAccount.getPasswordChangeRequired())
+        );
     }
 
     @Transactional
@@ -146,6 +229,7 @@ public class AuthService {
         String username = jwtService.extractUsername(preAuthToken);
         UserAccount userAccount = userAccountRepository.findByUsername(username)
                 .orElseThrow(() -> new AccountNotFoundException("Account not found"));
+        ensureLoginAllowed(userAccount);
 
         // Verify the 6-digit code
         boolean isCodeValid = totpService.verifyCode(userAccount.getTwoFactorSecret(), code);
@@ -177,5 +261,36 @@ public class AuthService {
         userAccountRepository.save(userAccount);
     }
 
+    private void ensureLoginAllowed(UserAccount userAccount) {
+        EmploymentStatus status = userAccount.getEmployee().getEmploymentStatus();
+        if (status == EmploymentStatus.TERMINATED) {
+            throw new UnauthorizedAccessException("You may not login. Your account has been terminated.");
+        }
+        if (status == EmploymentStatus.SUSPENDED) {
+            throw new UnauthorizedAccessException("You are currently suspended.");
+        }
+    }
+
+    private boolean isPasswordResetAllowed(UserAccount account, String code) {
+        String secret = account.getPasswordResetSecret();
+        Instant expiresAt = account.getPasswordResetExpiresAt();
+        if (secret == null || expiresAt == null || expiresAt.isBefore(Instant.now())) {
+            return false;
+        }
+
+        return totpService.verifyPasswordResetCode(secret, code);
+    }
+
+    private void clearPasswordResetState(UserAccount account) {
+        account.setPasswordResetSecret(null);
+        account.setPasswordResetExpiresAt(null);
+    }
+
+    private String normalizeRequiredValue(String value, String message) {
+        if (value == null || value.trim().isEmpty()) {
+            throw new IllegalArgumentException(message);
+        }
+        return value.trim();
+    }
 
 }

@@ -12,6 +12,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
+import org.springframework.web.multipart.MultipartException;
 
 import java.util.Map;
 
@@ -28,7 +30,6 @@ public class GlobalExceptionHandler {
             ShiftsNotFoundException.class,
             BankNotFoundException.class,
             CalendarEventNotFound.class,
-            RuntimeException.class,
             BalanceNotFoundException.class
     })
     public ResponseEntity<Map<String, String>> handleNotFoundExceptions(RuntimeException ex) {
@@ -59,7 +60,8 @@ public class GlobalExceptionHandler {
             InvalidRangeException.class,
             DuplicateAccountException.class,
             CloudReadException.class,
-            CloudWriteException.class
+            CloudWriteException.class,
+            IllegalArgumentException.class
     })
     public ResponseEntity<Map<String, String>> handleBadRequestExceptions(RuntimeException ex) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
@@ -82,5 +84,20 @@ public class GlobalExceptionHandler {
     public ResponseEntity<Map<String, String>> handleLargePayloadExceptions(RuntimeException ex) {
         return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE)
                 .body(Map.of("error", ex.getMessage()));
+    }
+
+    @ExceptionHandler({
+            MaxUploadSizeExceededException.class,
+            MultipartException.class
+    })
+    public ResponseEntity<Map<String, String>> handleMultipartExceptions(Exception ex) {
+        return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE)
+                .body(Map.of("error", "File size exceeded 10MB."));
+    }
+
+    @ExceptionHandler(Exception.class)
+    public ResponseEntity<Map<String, String>> handleUnexpectedExceptions(Exception ex) {
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(Map.of("error", ex.getMessage() != null ? ex.getMessage() : "Unexpected server error."));
     }
 }

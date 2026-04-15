@@ -3,6 +3,7 @@ package org.example.maridone.core.employee;
 import org.example.maridone.annotation.ExecutionTime;
 import org.example.maridone.config.PayrollConfig;
 import org.example.maridone.core.dto.EmployeeDetailsDto;
+import org.example.maridone.core.dto.EmployeeOptionDto;
 import org.example.maridone.core.dto.EmployeeRequestDto;
 import org.example.maridone.core.dto.EmployeeResponseDto;
 import org.example.maridone.core.mapper.CoreMapper;
@@ -12,12 +13,17 @@ import org.example.maridone.core.user.UserAccountRepository;
 import org.example.maridone.embeddable.Address;
 import org.example.maridone.exception.notfound.AccountNotFoundException;
 import org.example.maridone.exception.notfound.EmployeeNotFoundException;
+import org.example.maridone.exception.unauthorized.InvalidActionException;
 import org.example.maridone.enums.EmploymentStatus;
 import org.example.maridone.enums.ExemptionStatus;
+import org.example.maridone.enums.LeaveType;
 import org.example.maridone.enums.ManagerTitle;
 import org.example.maridone.enums.Position;
+import org.example.maridone.leave.balance.LeaveBalance;
+import org.example.maridone.leave.balance.LeaveBalanceRepository;
 import org.example.maridone.schedule.dto.ShiftResponseDto;
 import org.example.maridone.schedule.mapper.ScheduleMapper;
+import org.example.maridone.schedule.shift.ShiftService;
 import org.example.maridone.schedule.shift.TemplateShiftRepository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -32,6 +38,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 @Service
 public class EmployeeService {
@@ -41,20 +48,26 @@ public class EmployeeService {
     private final UserAccountRepository userAccountRepository;
     private final TemplateShiftRepository templateShiftRepository;
     private final ScheduleMapper scheduleMapper;
+    private final ShiftService shiftService;
     private final PayrollConfig payrollConfig;
+    private final LeaveBalanceRepository leaveBalanceRepository;
 
     EmployeeService(EmployeeRepository employeeRepository,
                     CoreMapper coreMapper,
                     UserAccountRepository userAccountRepository,
                     TemplateShiftRepository templateShiftRepository,
                     ScheduleMapper scheduleMapper,
-                    PayrollConfig payrollConfig) {
+                    ShiftService shiftService,
+                    PayrollConfig payrollConfig,
+                    LeaveBalanceRepository leaveBalanceRepository) {
         this.employeeRepository = employeeRepository;
         this.coreMapper = coreMapper;
         this.userAccountRepository = userAccountRepository;
         this.templateShiftRepository = templateShiftRepository;
         this.scheduleMapper = scheduleMapper;
+        this.shiftService = shiftService;
         this.payrollConfig = payrollConfig;
+        this.leaveBalanceRepository = leaveBalanceRepository;
     }
 
 
@@ -69,8 +82,11 @@ public class EmployeeService {
         employee.setEmploymentDateEnd(employeeRequestDto.getEmploymentDateEnd());
         employee.setExemptionStatus(Optional.ofNullable(employeeRequestDto.getExemptionStatus()).orElse(resolveExemptionStatus(employee.getPosition())));
         employee.setYearlySalary(Optional.ofNullable(employee.getYearlySalary()).orElse(BigDecimal.ZERO));
+        applyDepartmentAssignment(employee, employeeRequestDto);
         employee.setManager(resolveManager(employeeRequestDto.getManagerId(), null));
         employeeRepository.save(employee);
+        shiftService.createShifts(employee);
+        seedDefaultLeaveBalances(employee);
         return toEmployeeResponse(employee);
     }
 
@@ -81,6 +97,14 @@ public class EmployeeService {
         Map<Long, List<ShiftResponseDto>> schedulesByEmployeeId =
                 findSchedulesByEmployeeId(employeePage.stream().map(Employee::getEmployeeId).toList());
         return employeePage.map(employee -> toEmployeeResponse(employee, schedulesByEmployeeId));
+    }
+
+    @ExecutionTime
+    public List<EmployeeOptionDto> getEmployeeOptions() {
+        return employeeRepository.findByEmploymentStatusNotOrderByLastNameAscFirstNameAsc(EmploymentStatus.TERMINATED)
+                .stream()
+                .map(this::toEmployeeOption)
+                .toList();
     }
 
     @ExecutionTime
@@ -135,18 +159,17 @@ public class EmployeeService {
 
         Optional.ofNullable(updated.getEmail())
                 .filter(v -> !v.equals(emp.getEmail()))
-                .ifPresent(newEmail -> {
-                    emp.setEmail(newEmail);
-                    emp.setIsVerified(false);
-                });
+                .ifPresent(newEmail -> updateEmail(emp, newEmail));
 
         Optional.ofNullable(updated.getPhoneNumber())
                 .filter(v -> !v.equals(emp.getPhoneNumber()))
-                .ifPresent(phone -> emp.setPhoneNumber(normalizePhoneNumber(phone)));
+                .ifPresent(phone -> updatePhoneNumber(emp, phone));
 
         Optional.ofNullable(updated.getPosition())
                 .filter(v -> !v.equals(emp.getPosition()))
                 .ifPresent(emp::setPosition);
+
+        applyDepartmentAssignment(emp, updated);
 
         Optional.ofNullable(updated.getExemptionStatus())
                 .filter(v -> !v.equals(emp.getExemptionStatus()))
@@ -168,37 +191,16 @@ public class EmployeeService {
                 .filter(v -> emp.getManager() == null || !v.equals(emp.getManager().getEmployeeId()))
                 .ifPresent(managerId -> emp.setManager(resolveManager(managerId, id)));
 
-        Optional.ofNullable(updated.getAddress()).ifPresent(newAddr -> {
-            Address existing = Optional.ofNullable(emp.getAddress()).orElseGet(() -> {
-                Address a = new Address();
-                emp.setAddress(a);
-                return a;
-            });
+        Optional.ofNullable(updated.getAddress()).ifPresent(newAddr -> updateAddress(emp, newAddr));
 
-            Optional.ofNullable(newAddr.getPermanentAddress())
-                    .filter(v -> !v.equals(existing.getPermanentAddress()))
-                    .ifPresent(existing::setPermanentAddress);
+        Optional.ofNullable(updated.getSssNumber()).ifPresent(emp::setSssNumber);
+        Optional.ofNullable(updated.getPhilhealthNumber()).ifPresent(emp::setPhilhealthNumber);
+        Optional.ofNullable(updated.getPagibigNumber()).ifPresent(emp::setPagibigNumber);
+        Optional.ofNullable(updated.getTinNumber()).ifPresent(emp::setTinNumber);
 
-            Optional.ofNullable(newAddr.getTemporaryAddress())
-                    .filter(v -> !v.equals(existing.getTemporaryAddress()))
-                    .ifPresent(existing::setTemporaryAddress);
-
-            Optional.ofNullable(newAddr.getCity())
-                    .filter(v -> !v.equals(existing.getCity()))
-                    .ifPresent(existing::setCity);
-
-            Optional.ofNullable(newAddr.getState())
-                    .filter(v -> !v.equals(existing.getState()))
-                    .ifPresent(existing::setState);
-
-            Optional.ofNullable(newAddr.getCountry())
-                    .filter(v -> !v.equals(existing.getCountry()))
-                    .ifPresent(existing::setCountry);
-
-            Optional.ofNullable(newAddr.getZipCode())
-                    .filter(v -> !v.equals(existing.getZipCode()))
-                    .ifPresent(existing::setZipCode);
-        });
+        Optional.ofNullable(updated.getEmergencyContactName()).ifPresent(emp::setEmergencyContactName);
+        Optional.ofNullable(updated.getEmergencyContactRelationship()).ifPresent(emp::setEmergencyContactRelationship);
+        Optional.ofNullable(updated.getEmergencyContactNumber()).ifPresent(emp::setEmergencyContactNumber);
 
         employeeRepository.save(emp);
 
@@ -207,8 +209,44 @@ public class EmployeeService {
 
     @Transactional
     @ExecutionTime
+    public EmployeeResponseDto updateSelfEmployeeProfile(Long id, EmployeeRequestDto updated) {
+        Employee emp = employeeRepository.findById(id).orElseThrow(() -> new EmployeeNotFoundException(id));
+        assertSelfEditableFieldsOnly(updated);
+
+        Optional.ofNullable(updated.getEmail())
+                .filter(v -> !v.equals(emp.getEmail()))
+                .ifPresent(newEmail -> updateEmail(emp, newEmail));
+
+        Optional.ofNullable(updated.getPhoneNumber())
+                .filter(v -> !v.equals(emp.getPhoneNumber()))
+                .ifPresent(phone -> updatePhoneNumber(emp, phone));
+
+        Optional.ofNullable(updated.getAddress()).ifPresent(newAddr -> updateAddress(emp, newAddr));
+
+        Optional.ofNullable(updated.getSssNumber()).ifPresent(emp::setSssNumber);
+        Optional.ofNullable(updated.getPhilhealthNumber()).ifPresent(emp::setPhilhealthNumber);
+        Optional.ofNullable(updated.getPagibigNumber()).ifPresent(emp::setPagibigNumber);
+        Optional.ofNullable(updated.getTinNumber()).ifPresent(emp::setTinNumber);
+
+        Optional.ofNullable(updated.getEmergencyContactName()).ifPresent(emp::setEmergencyContactName);
+        Optional.ofNullable(updated.getEmergencyContactRelationship()).ifPresent(emp::setEmergencyContactRelationship);
+        Optional.ofNullable(updated.getEmergencyContactNumber()).ifPresent(emp::setEmergencyContactNumber);
+
+        employeeRepository.save(emp);
+        return toEmployeeResponse(emp);
+    }
+
+    @Transactional
+    @ExecutionTime
     public EmployeeResponseDto updateStatus(Long id, EmployeeRequestDto updated) {
         Employee emp = employeeRepository.findById(id).orElseThrow(() -> new EmployeeNotFoundException(id));
+        if (updated.getEmploymentStatus() == null) {
+            throw new InvalidActionException("Employment status is required.");
+        }
+        if (emp.getEmploymentStatus() == EmploymentStatus.TERMINATED
+                && updated.getEmploymentStatus() == EmploymentStatus.TERMINATED) {
+            throw new InvalidActionException("This employee is already terminated.");
+        }
 
         emp.setEmploymentStatus(updated.getEmploymentStatus());
         employeeRepository.save(emp);
@@ -219,12 +257,23 @@ public class EmployeeService {
         return toEmployeeResponse(employee, findSchedulesByEmployeeId(List.of(employee.getEmployeeId())));
     }
 
+    private EmployeeOptionDto toEmployeeOption(Employee employee) {
+        return new EmployeeOptionDto(
+                employee.getEmployeeId(),
+                formatEmployeeName(employee),
+                employee.getEmploymentStatus(),
+                employee.getPosition(),
+                resolveDepartment(employee)
+        );
+    }
+
     private EmployeeResponseDto toEmployeeResponse(Employee employee, Map<Long, List<ShiftResponseDto>> schedulesByEmployeeId) {
         EmployeeResponseDto response = coreMapper.toEmployeeResponse(employee);
         response.setDepartment(resolveDepartment(employee));
+        response.setManagerName(resolveManagerName(employee));
+        response.setManagerHeadLabel(resolveManagerHeadLabel(employee));
         response.setUserAccountName(findUsername(employee.getEmployeeId()));
         response.setShiftSchedules(resolveShiftSchedules(employee.getEmployeeId(), schedulesByEmployeeId));
-        response.setGracePeriodMinutes(resolveGracePeriodMinutes());
         return response;
     }
 
@@ -242,12 +291,17 @@ public class EmployeeService {
         return schedulesByEmployeeId.getOrDefault(employeeId, List.of());
     }
 
-    private Long resolveGracePeriodMinutes() {
-        return Math.max(payrollConfig.getGracePeriod().toMinutes(), 0L);
+    private String formatEmployeeName(Employee employee) {
+        return Stream.of(employee.getFirstName(), employee.getMiddleName(), employee.getLastName())
+                .filter(part -> part != null && !part.isBlank())
+                .collect(Collectors.joining(" "));
     }
 
     private EmployeeDetailsDto toEmployeeDetails(Employee employee) {
         EmployeeDetailsDto response = coreMapper.toEmployeeDetailsDto(employee);
+        response.setDepartment(resolveDepartment(employee));
+        response.setManagerName(resolveManagerName(employee));
+        response.setManagerHeadLabel(resolveManagerHeadLabel(employee));
         response.setUserAccountName(findUsername(employee.getEmployeeId()));
         return response;
     }
@@ -265,6 +319,67 @@ public class EmployeeService {
             throw new IllegalArgumentException("Phone number must be exactly 11 digits.");
         }
         return digitsOnly;
+    }
+
+    private void updateEmail(Employee employee, String email) {
+        employee.setEmail(email);
+        employee.setIsVerified(false);
+    }
+
+    private void updatePhoneNumber(Employee employee, String phoneNumber) {
+        employee.setPhoneNumber(normalizePhoneNumber(phoneNumber));
+    }
+
+    private void updateAddress(Employee employee, Address incoming) {
+        Address existing = Optional.ofNullable(employee.getAddress()).orElseGet(() -> {
+            Address address = new Address();
+            employee.setAddress(address);
+            return address;
+        });
+
+        Optional.ofNullable(incoming.getPermanentAddress())
+                .filter(v -> !v.equals(existing.getPermanentAddress()))
+                .ifPresent(existing::setPermanentAddress);
+
+        Optional.ofNullable(incoming.getTemporaryAddress())
+                .filter(v -> !v.equals(existing.getTemporaryAddress()))
+                .ifPresent(existing::setTemporaryAddress);
+
+        Optional.ofNullable(incoming.getCity())
+                .filter(v -> !v.equals(existing.getCity()))
+                .ifPresent(existing::setCity);
+
+        Optional.ofNullable(incoming.getState())
+                .filter(v -> !v.equals(existing.getState()))
+                .ifPresent(existing::setState);
+
+        Optional.ofNullable(incoming.getCountry())
+                .filter(v -> !v.equals(existing.getCountry()))
+                .ifPresent(existing::setCountry);
+
+        Optional.ofNullable(incoming.getZipCode())
+                .filter(v -> !v.equals(existing.getZipCode()))
+                .ifPresent(existing::setZipCode);
+    }
+
+    private void assertSelfEditableFieldsOnly(EmployeeRequestDto updated) {
+        boolean hasRestrictedField =
+                updated.getFirstName() != null
+                        || updated.getMiddleName() != null
+                        || updated.getLastName() != null
+                        || updated.getBirthDate() != null
+                        || updated.getEmploymentStatus() != null
+                        || updated.getExemptionStatus() != null
+                        || updated.getEmploymentDateStart() != null
+                        || updated.getEmploymentDateEnd() != null
+                        || updated.getPosition() != null
+                        || updated.getDepartment() != null
+                        || updated.getYearlySalary() != null
+                        || updated.getManagerId() != null;
+
+        if (hasRestrictedField) {
+            throw new InvalidActionException("You can only update your contact information and address.");
+        }
     }
 
     private ExemptionStatus resolveExemptionStatus(Position position) {
@@ -286,6 +401,67 @@ public class EmployeeService {
         return null;
     }
 
+    private String resolveManagerName(Employee employee) {
+        Employee manager = employee == null ? null : employee.getManager();
+        if (manager == null) {
+            return null;
+        }
+        return formatEmployeeName(manager);
+    }
+
+    private String resolveManagerHeadLabel(Employee employee) {
+        Employee manager = employee == null ? null : employee.getManager();
+        if (manager == null) {
+            return null;
+        }
+
+        if (manager.getEmpTitle() != null) {
+            return formatManagerHeadLabel(manager.getEmpTitle());
+        }
+
+        Position position = manager.getPosition();
+        if (position == null) {
+            return null;
+        }
+
+        return formatEnumLabel(position.name());
+    }
+
+    private String formatManagerHeadLabel(ManagerTitle managerTitle) {
+        return managerTitle == null ? null : formatEnumLabel(managerTitle.name());
+    }
+
+    private String formatEnumLabel(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+
+        return Stream.of(raw.trim().split("_+"))
+                .filter(part -> !part.isBlank())
+                .map(part -> part.substring(0, 1) + part.substring(1).toLowerCase())
+                .collect(Collectors.joining(" "));
+    }
+
+    private void applyDepartmentAssignment(Employee employee, EmployeeRequestDto request) {
+        Position effectivePosition = Optional.ofNullable(request.getPosition()).orElse(employee.getPosition());
+
+        if (effectivePosition == Position.MANAGER) {
+            if (request.getDepartment() != null && !request.getDepartment().isBlank()) {
+                employee.setEmpTitle(ManagerTitle.fromDepartmentLabel(request.getDepartment()));
+                return;
+            }
+
+            if (employee.getEmpTitle() == null) {
+                throw new IllegalArgumentException("Department is required when position is MANAGER.");
+            }
+            return;
+        }
+
+        if (request.getPosition() != null) {
+            employee.setEmpTitle(null);
+        }
+    }
+
     private Employee resolveManager(Long managerId, Long employeeId) {
         if (managerId == null) {
             return null;
@@ -295,6 +471,29 @@ public class EmployeeService {
         }
         return employeeRepository.findById(managerId)
                 .orElseThrow(() -> new EmployeeNotFoundException(managerId));
+    }
+
+    private void seedDefaultLeaveBalances(Employee employee) {
+        if (employee == null || employee.getEmployeeId() == null) {
+            return;
+        }
+
+        if (employee.getEmploymentStatus() == EmploymentStatus.TERMINATED
+                || employee.getEmploymentStatus() == EmploymentStatus.SUSPENDED) {
+            return;
+        }
+
+        LeaveBalance sickLeave = new LeaveBalance();
+        sickLeave.setEmployee(employee);
+        sickLeave.setLeaveType(LeaveType.SICK_LEAVE);
+        sickLeave.setBalanceHours(payrollConfig.getSickLeaveHours());
+
+        LeaveBalance vacationLeave = new LeaveBalance();
+        vacationLeave.setEmployee(employee);
+        vacationLeave.setLeaveType(LeaveType.VACATION_LEAVE);
+        vacationLeave.setBalanceHours(payrollConfig.getVacationLeaveHours());
+
+        leaveBalanceRepository.saveAll(List.of(sickLeave, vacationLeave));
     }
 
     private Long resolveCurrentEmployeeId(String username) {

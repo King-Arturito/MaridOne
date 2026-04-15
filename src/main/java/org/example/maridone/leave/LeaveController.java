@@ -31,7 +31,7 @@ public class LeaveController {
     }
 
     @GetMapping("/balance/{empId}")
-    @PreAuthorize("@userCheck.isSelf(#empId, authentication.getName())")
+    @PreAuthorize("hasRole('HR') or @userCheck.isSelf(#empId, authentication.getName())")
     public List<BalanceResponseDto> getBalance(@PathVariable Long empId){
         return leaveService.getBalance(empId);
     }
@@ -104,7 +104,7 @@ public class LeaveController {
 
     //create leave request
     @PostMapping("/create/{empId}")
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("@userCheck.isSelf(#empId, authentication.getName())")
     @AuditLog
     public ResponseEntity<List<LeaveRequest>> createLeaveRequest(
             @Valid @RequestBody LeaveRequestDto payload,
@@ -115,7 +115,7 @@ public class LeaveController {
     }
 
     @PatchMapping("/update/{requestId}")
-    @PreAuthorize("hasRole('HR')")
+    @PreAuthorize("hasAnyRole('HR', 'MANAGER')")
     @AuditLog
     public ResponseEntity<LeaveRequest> updateLeaveRequest(@Validated(OnUpdate.class) @RequestBody LeaveRequestDto payload, @PathVariable Long requestId) {
         LeaveRequest request = leaveService.updateLeaveRequest(payload, requestId);

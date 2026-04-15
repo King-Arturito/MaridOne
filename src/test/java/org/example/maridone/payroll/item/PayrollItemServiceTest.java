@@ -5,6 +5,7 @@ import org.example.maridone.core.employee.EmployeeRepository;
 import org.example.maridone.enums.Activity;
 import org.example.maridone.enums.AdjustmentKind;
 import org.example.maridone.enums.DeductionType;
+import org.example.maridone.enums.EarningsType;
 import org.example.maridone.enums.PayrollStatus;
 import org.example.maridone.enums.RunType;
 import org.example.maridone.exception.unauthorized.InvalidActionException;
@@ -21,6 +22,7 @@ import org.example.maridone.payroll.item.component.DeductionsService;
 import org.example.maridone.payroll.item.component.EarningsLine;
 import org.example.maridone.payroll.item.component.EarningsRepository;
 import org.example.maridone.payroll.item.component.EarningsService;
+import org.example.maridone.payroll.item.component.PayrollItemTotalsService;
 import org.example.maridone.payroll.mapper.PayrollMapper;
 import org.example.maridone.payroll.projection.PayTypeSummaryProjection;
 import org.example.maridone.payroll.run.PayrollItemRepository;
@@ -42,6 +44,7 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -66,6 +69,8 @@ public class PayrollItemServiceTest {
     private DeductionsService deductionsService;
     @Mock
     private ActivityLogRepository activityLogRepository;
+    @Mock
+    private PayrollItemTotalsService payrollItemTotalsService;
 
     @InjectMocks
     private PayrollItemService payrollItemService;
@@ -200,12 +205,14 @@ public class PayrollItemServiceTest {
             savedAdjustmentLine.set(line);
             return line;
         });
-        when(deductionsRepository.findByPayrollItem_ItemId(31L)).thenAnswer(invocation ->
-                savedAdjustmentLine.get() == null ? List.of() : List.of(savedAdjustmentLine.get())
-        );
-        when(earningsRepository.findByPayrollItem_ItemId(31L)).thenReturn(List.of());
         when(activityLogRepository.save(any(ActivityLog.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(payrollMapper.toItemDetailsDto(any(PayrollItem.class))).thenReturn(dto);
+        doAnswer(invocation -> {
+            PayrollItem adjustmentItem = invocation.getArgument(0);
+            adjustmentItem.setGrossPay(new BigDecimal("0.00"));
+            adjustmentItem.setNetPay(new BigDecimal("-150.00"));
+            return null;
+        }).when(payrollItemTotalsService).refreshItem(any(PayrollItem.class));
 
         ItemDetailsDto result = payrollItemService.addLineCorrection(5L, payload);
 
@@ -227,6 +234,78 @@ public class PayrollItemServiceTest {
                         && !log.getMessage().startsWith("PAYCORR|")
                         && log.getMessage().contains("emp #10 item #21 Basic Pay line #77 800.00->650.00 in adj run #5")
         ));
+    }
+
+    @Test
+    void addLineCorrection_ShouldCreateManualEarningLineWithFixedType() {
+        PayrollRun targetRun = new PayrollRun();
+        ReflectionTestUtils.setField(targetRun, "payId", 7L);
+        targetRun.setRunType(RunType.ADJUSTMENT);
+        targetRun.setPayrollStatus(PayrollStatus.IN_PROGRESS);
+        targetRun.setPeriodEnd(LocalDate.of(2026, 8, 15));
+
+        PayrollRun sourceRun = new PayrollRun();
+        sourceRun.setRunType(RunType.REGULAR);
+        sourceRun.setPayrollStatus(PayrollStatus.POSTED);
+
+        Employee employee = new Employee();
+        ReflectionTestUtils.setField(employee, "employeeId", 12L);
+
+        PayrollItem sourceItem = new PayrollItem();
+        ReflectionTestUtils.setField(sourceItem, "itemId", 25L);
+        sourceItem.setEmployee(employee);
+        sourceItem.setPayrollRun(sourceRun);
+
+        DeductionsLine sourceLine = new DeductionsLine();
+        ReflectionTestUtils.setField(sourceLine, "deductionsId", 88L);
+        sourceLine.setPayrollItem(sourceItem);
+        sourceLine.setDeductionType(DeductionType.MANUAL_ADJUSTMENT);
+        sourceLine.setAmount(new BigDecimal("400.00"));
+
+        org.example.maridone.payroll.dto.DeductionsDto sourceLineDto = new org.example.maridone.payroll.dto.DeductionsDto();
+        sourceLineDto.setDeductionsId(88L);
+        sourceLineDto.setDescription("Manual Adjustment");
+
+        PayrollLineCorrectionDto payload = new PayrollLineCorrectionDto();
+        payload.setSourceItemId(25L);
+        payload.setSourceLineType(AdjustmentKind.DEDUCTION);
+        payload.setSourceLineId(88L);
+        payload.setCorrectedAmount(new BigDecimal("250.00"));
+
+        AtomicReference<EarningsLine> savedAdjustmentLine = new AtomicReference<>();
+
+        when(payrollRunRepository.findById(7L)).thenReturn(Optional.of(targetRun));
+        when(payrollItemRepository.findByItemIdAndPayrollRun_PayrollStatusAndPayrollRun_RunTypeNot(
+                25L,
+                PayrollStatus.POSTED,
+                RunType.ADJUSTMENT
+        )).thenReturn(Optional.of(sourceItem));
+        when(payrollItemRepository.findByPayrollRun_PayIdAndEmployee_EmployeeId(7L, 12L)).thenReturn(Optional.empty());
+        when(payrollItemRepository.save(any(PayrollItem.class))).thenAnswer(invocation -> {
+            PayrollItem item = invocation.getArgument(0);
+            if (ReflectionTestUtils.getField(item, "itemId") == null) {
+                ReflectionTestUtils.setField(item, "itemId", 44L);
+            }
+            return item;
+        });
+        when(deductionsRepository.findById(88L)).thenReturn(Optional.of(sourceLine));
+        when(deductionsService.getOriginalDeductions(25L)).thenReturn(List.of(sourceLineDto));
+        when(earningsRepository.save(any(EarningsLine.class))).thenAnswer(invocation -> {
+            EarningsLine line = invocation.getArgument(0);
+            savedAdjustmentLine.set(line);
+            return line;
+        });
+        when(activityLogRepository.save(any(ActivityLog.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(payrollMapper.toItemDetailsDto(any(PayrollItem.class))).thenReturn(new ItemDetailsDto());
+        doAnswer(invocation -> null).when(payrollItemTotalsService).refreshItem(any(PayrollItem.class));
+
+        payrollItemService.addLineCorrection(7L, payload);
+
+        Assertions.assertNotNull(savedAdjustmentLine.get());
+        Assertions.assertEquals(EarningsType.FIXED, savedAdjustmentLine.get().getEarningsType());
+        Assertions.assertEquals(new BigDecimal("150.00"), savedAdjustmentLine.get().getAmount());
+        Assertions.assertEquals(new BigDecimal("150.00"), savedAdjustmentLine.get().getTaxableAmount());
+        Assertions.assertEquals(new BigDecimal("0.00"), savedAdjustmentLine.get().getNonTaxableAmount());
     }
 
     private PayTypeSummaryProjection summaryProjection(String type, BigDecimal totalAmount) {

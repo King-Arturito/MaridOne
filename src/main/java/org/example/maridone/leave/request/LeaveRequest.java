@@ -7,6 +7,7 @@ import org.example.maridone.enums.LeaveType;
 import org.example.maridone.enums.Status;
 import org.hibernate.annotations.Check;
 
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 
@@ -47,8 +48,26 @@ public class LeaveRequest {
     @Column(name = "approver_reason", nullable = true)
     private String approverReason;
 
+    @Column(name = "approved_at", nullable = true)
+    private Instant approvedAt;
+
+    @Column(name = "manager_approver", nullable = true)
+    private String managerApprover;
+
+    @Column(name = "manager_approver_reason", nullable = true)
+    private String managerApproverReason;
+
+    @Column(name = "manager_approved_at", nullable = true)
+    private Instant managerApprovedAt;
+
     @Column(name = "is_paid",  nullable = false)
     private Boolean isPaid = true;
+
+    @Column(name = "suggested_paid", nullable = false)
+    private Boolean suggestedPaid = true;
+
+    @Column(name = "paid_override_reason", nullable = true)
+    private String paidOverrideReason;
 
     public Long getRequestId() {
         return requestId;
@@ -118,12 +137,60 @@ public class LeaveRequest {
         this.approverReason = approverReason;
     }
 
+    public Instant getApprovedAt() {
+        return approvedAt;
+    }
+
+    public void setApprovedAt(Instant approvedAt) {
+        this.approvedAt = approvedAt;
+    }
+
+    public String getManagerApprover() {
+        return managerApprover;
+    }
+
+    public void setManagerApprover(String managerApprover) {
+        this.managerApprover = managerApprover;
+    }
+
+    public String getManagerApproverReason() {
+        return managerApproverReason;
+    }
+
+    public void setManagerApproverReason(String managerApproverReason) {
+        this.managerApproverReason = managerApproverReason;
+    }
+
+    public Instant getManagerApprovedAt() {
+        return managerApprovedAt;
+    }
+
+    public void setManagerApprovedAt(Instant managerApprovedAt) {
+        this.managerApprovedAt = managerApprovedAt;
+    }
+
     public Boolean getPaid() {
         return isPaid;
     }
 
     public void setPaid(Boolean paid) {
         isPaid = paid;
+    }
+
+    public Boolean getSuggestedPaid() {
+        return suggestedPaid;
+    }
+
+    public void setSuggestedPaid(Boolean suggestedPaid) {
+        this.suggestedPaid = suggestedPaid;
+    }
+
+    public String getPaidOverrideReason() {
+        return paidOverrideReason;
+    }
+
+    public void setPaidOverrideReason(String paidOverrideReason) {
+        this.paidOverrideReason = paidOverrideReason;
     }
 
     public boolean coversDate(LocalDate targetDate) {

@@ -1,6 +1,9 @@
 package org.example.maridone.core.user;
 
 import org.example.maridone.annotation.ExecutionTime;
+import org.example.maridone.auth.PasswordPolicy;
+import org.example.maridone.auth.token.RefreshTokenRepository;
+import org.example.maridone.core.dto.ChangePasswordDto;
 import org.example.maridone.core.dto.CreateUserAccountDto;
 import org.example.maridone.core.employee.Employee;
 import org.example.maridone.core.employee.EmployeeRepository;
@@ -8,37 +11,47 @@ import org.example.maridone.document.DocumentPathRepository;
 import org.example.maridone.document.dto.DocumentResponseDto;
 import org.example.maridone.document.mapper.DocumentMapper;
 import org.example.maridone.document.spec.DocumentSpecs;
+import org.example.maridone.exception.badrequest.UnauthorizedAccessException;
 import org.example.maridone.exception.notfound.AccountNotFoundException;
-import org.example.maridone.exception.unauthorized.DuplicateAccountException;
 import org.example.maridone.exception.notfound.EmployeeNotFoundException;
+import org.example.maridone.exception.unauthorized.DuplicateAccountException;
 import org.springframework.data.domain.Sort;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 
 
 @Service
 public class UserAccountService {
+    private static final ZoneId APP_TIME_ZONE = ZoneId.of("Asia/Manila");
+    private static final DateTimeFormatter PASSWORD_CHANGE_AVAILABLE_FORMAT =
+            DateTimeFormatter.ofPattern("MMMM d, yyyy 'at' h:mm a").withZone(APP_TIME_ZONE);
 
     private final UserAccountRepository userAccountRepository;
     private final PasswordEncoder passwordEncoder;
     private final EmployeeRepository employeeRepository;
     private final DocumentPathRepository documentPathRepository;
     private final DocumentMapper documentMapper;
+    private final RefreshTokenRepository refreshTokenRepository;
 
     public UserAccountService
             (UserAccountRepository userAccountRepository,
              PasswordEncoder passwordEncoder,
              EmployeeRepository employeeRepository,
              DocumentPathRepository documentPathRepository,
-             DocumentMapper documentMapper) {
+             DocumentMapper documentMapper,
+             RefreshTokenRepository refreshTokenRepository) {
         this.userAccountRepository = userAccountRepository;
         this.passwordEncoder = passwordEncoder;
         this.employeeRepository = employeeRepository;
         this.documentPathRepository = documentPathRepository;
         this.documentMapper = documentMapper;
+        this.refreshTokenRepository = refreshTokenRepository;
     }
 
     @ExecutionTime
@@ -65,6 +78,10 @@ public class UserAccountService {
         UserAccount user = new UserAccount();
         user.setUsername(username);
         user.setPasswordHash(passwordEncoder.encode(password));
+        user.setPasswordChangeRequired(true);
+        user.setPasswordResetSecret(null);
+        user.setPasswordResetExpiresAt(null);
+        user.setLastPasswordChangedAt(null);
         user.setEmployee(emp);
         emp.setUserAccount(user);
         user.setAccountStatus(payload.getAccountStatus());
@@ -85,17 +102,91 @@ public class UserAccountService {
             throw new DuplicateAccountException("Username already exists");
         }
 
+        String oldUsername = existing.getUsername();
+        String updatedPasswordHash = existing.getPasswordHash();
+        boolean passwordChangeRequired = Boolean.TRUE.equals(existing.getPasswordChangeRequired());
+        boolean passwordUpdated = payload.getPassword() != null && !payload.getPassword().trim().isEmpty();
+        if (passwordUpdated) {
+            updatedPasswordHash = passwordEncoder.encode(payload.getPassword().trim());
+            passwordChangeRequired = true;
+        }
+        Instant lastPasswordChangedAt = existing.getLastPasswordChangedAt();
+        if (passwordUpdated) {
+            lastPasswordChangedAt = null;
+        }
+
+        if (!oldUsername.equals(username)) {
+            userAccountRepository.insertReplacementAccount(
+                    username,
+                    updatedPasswordHash,
+                    existing.getAccountStatus().name(),
+                    payload.getEmployeeId(),
+                    Boolean.TRUE.equals(existing.getTwoFactorEnabled()),
+                    existing.getTwoFactorSecret(),
+                    passwordChangeRequired,
+                    lastPasswordChangedAt
+            );
+            documentPathRepository.reassignUsername(oldUsername, username);
+            refreshTokenRepository.deleteByUsername(oldUsername);
+            userAccountRepository.deleteByUsernameNative(oldUsername);
+
+            return userAccountRepository.findByUsername(username)
+                    .orElseThrow(() -> new AccountNotFoundException(username));
+        }
+
         existing.setUsername(username);
         if (existing.getEmployee() != null) {
             existing.getEmployee().setUserAccount(existing);
         }
 
-        if (payload.getPassword() != null && !payload.getPassword().trim().isEmpty()) {
-            existing.setPasswordHash(passwordEncoder.encode(payload.getPassword().trim()));
+        existing.setPasswordHash(updatedPasswordHash);
+        existing.setPasswordChangeRequired(passwordChangeRequired);
+        existing.setLastPasswordChangedAt(lastPasswordChangedAt);
+        if (passwordUpdated) {
+            existing.setPasswordResetSecret(null);
+            existing.setPasswordResetExpiresAt(null);
+            refreshTokenRepository.deleteByUsername(existing.getUsername());
         }
 
         userAccountRepository.save(existing);
         return existing;
+    }
+
+    @Transactional
+    @ExecutionTime
+    public void changeOwnPassword(String username, ChangePasswordDto payload) {
+        UserAccount existing = userAccountRepository.findByUsername(username)
+                .orElseThrow(() -> new AccountNotFoundException(username));
+
+        String currentPassword = requirePassword(payload.getCurrentPassword());
+        String newPassword = PasswordPolicy.requireUserSelectedPassword(
+                payload.getNewPassword(),
+                "New password is required."
+        );
+
+        if (!passwordEncoder.matches(currentPassword, existing.getPasswordHash())) {
+            throw new UnauthorizedAccessException("Current password is incorrect.");
+        }
+
+        Instant now = Instant.now();
+        if (!PasswordPolicy.canSelfServicePasswordBeChanged(
+                Boolean.TRUE.equals(existing.getPasswordChangeRequired()),
+                existing.getLastPasswordChangedAt(),
+                now
+        )) {
+            Instant availableAt = PasswordPolicy.getSelfServicePasswordChangeAvailableAt(existing.getLastPasswordChangedAt());
+            String formattedAvailableAt = availableAt == null
+                    ? "later"
+                    : PASSWORD_CHANGE_AVAILABLE_FORMAT.format(availableAt);
+            throw new IllegalArgumentException("You can change your password again on " + formattedAvailableAt + ".");
+        }
+
+        existing.setPasswordHash(passwordEncoder.encode(newPassword));
+        existing.setPasswordChangeRequired(false);
+        existing.setPasswordResetSecret(null);
+        existing.setPasswordResetExpiresAt(null);
+        existing.setLastPasswordChangedAt(now);
+        userAccountRepository.save(existing);
     }
 
     @ExecutionTime

@@ -18,13 +18,20 @@ CREATE TABLE employee (
     city                  VARCHAR(255),
     state                 VARCHAR(255),
     country               VARCHAR(255),
-    zip_code              VARCHAR(255),
-    emp_title             VARCHAR(255),
-    manager_id            BIGINT
+    zip_code                      VARCHAR(255),
+    emp_title                     VARCHAR(255),
+    sss_number                    VARCHAR(255),
+    philhealth_number             VARCHAR(255),
+    pagibig_number                VARCHAR(255),
+    tin_number                    VARCHAR(255),
+    emergency_contact_name        VARCHAR(255),
+    emergency_contact_relationship VARCHAR(255),
+    emergency_contact_number      VARCHAR(255),
+    manager_id                    BIGINT,
 
     CONSTRAINT employee_employment_status_check CHECK (employment_status IN ('REGULAR', 'NEW_HIRE', 'PART_TIME', 'TERMINATED', 'SUSPENDED')),
     CONSTRAINT employee_exemption_status_check  CHECK (exemption_status  IN ('EXEMPT', 'NON_EXEMPT')),
     CONSTRAINT employee_position_check          CHECK (position          IN ('MANAGEMENT', 'HR', 'ACCOUNTING', 'EMPLOYEE', 'MANAGER', 'UNKNOWN')),
-    CONSTRAINT fk_employee_manager FOREIGN KEY (manager_id) REFERENCES Employee(emp_id)
+    CONSTRAINT fk_employee_manager FOREIGN KEY (manager_id) REFERENCES employee(emp_id)
 
 );

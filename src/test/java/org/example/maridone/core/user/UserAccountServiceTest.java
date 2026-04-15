@@ -1,7 +1,11 @@
 package org.example.maridone.core.user;
 
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.Optional;
 
+import org.example.maridone.auth.token.RefreshTokenRepository;
+import org.example.maridone.core.dto.ChangePasswordDto;
 import org.example.maridone.core.dto.CreateUserAccountDto;
 import org.example.maridone.core.employee.Employee;
 import org.example.maridone.core.employee.EmployeeRepository;
@@ -15,8 +19,11 @@ import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.ArgumentCaptor;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -32,6 +39,7 @@ class UserAccountServiceTest {
     @Mock private PasswordEncoder passwordEncoder;
     @Mock private DocumentPathRepository documentPathRepository;
     @Mock private DocumentMapper documentMapper;
+    @Mock private RefreshTokenRepository refreshTokenRepository;
 
     @InjectMocks
     private UserAccountService userAccountService;
@@ -49,13 +57,13 @@ class UserAccountServiceTest {
         when(employeeRepository.findById(1L)).thenReturn(Optional.of(emp));
         when(passwordEncoder.encode("secretPassword")).thenReturn("hashed_secret");
         when(userAccountRepository.save(any(UserAccount.class))).thenAnswer(i -> i.getArgument(0));
-
         UserAccount result = userAccountService.createUserAccount(dto);
     
         Assertions.assertNotNull(result);
         Assertions.assertEquals("niko123", result.getUsername());
         Assertions.assertEquals("hashed_secret", result.getPasswordHash());
         Assertions.assertEquals(AccountStatus.ACTIVE, result.getAccountStatus());
+        Assertions.assertTrue(Boolean.TRUE.equals(result.getPasswordChangeRequired()));
         verify(userAccountRepository).save(any(UserAccount.class));
     }
 
@@ -105,5 +113,142 @@ class UserAccountServiceTest {
 
         Assertions.assertEquals(1, result.size());
         Assertions.assertEquals(payslip.getFilePath(), result.get(0).getFilePath());
+    }
+
+    @Test
+    void updateUserAccount_ShouldMigrateLinkedRecords_WhenUsernameChanges() {
+        CreateUserAccountDto dto = new CreateUserAccountDto();
+        dto.setEmployeeId(21L);
+        dto.setUsername("chloe.renamed");
+
+        Employee employee = new Employee();
+        UserAccount existing = new UserAccount();
+        existing.setUsername("chloe.old");
+        existing.setPasswordHash("existing_hash");
+        existing.setAccountStatus(AccountStatus.ACTIVE);
+        existing.setEmployee(employee);
+        existing.setTwoFactorEnabled(true);
+        existing.setTwoFactorSecret("secret-2fa");
+
+        UserAccount replacement = new UserAccount();
+        replacement.setUsername("chloe.renamed");
+
+        when(userAccountRepository.findByEmployee_EmployeeId(21L)).thenReturn(Optional.of(existing));
+        when(userAccountRepository.existsByUsername("chloe.renamed")).thenReturn(false);
+        when(userAccountRepository.findByUsername("chloe.renamed")).thenReturn(Optional.of(replacement));
+
+        UserAccount result = userAccountService.updateUserAccount(dto);
+
+        Assertions.assertEquals("chloe.renamed", result.getUsername());
+        verify(userAccountRepository).insertReplacementAccount(
+                "chloe.renamed",
+                "existing_hash",
+                AccountStatus.ACTIVE.name(),
+                21L,
+                true,
+                "secret-2fa",
+                false,
+                null
+        );
+        verify(documentPathRepository).reassignUsername("chloe.old", "chloe.renamed");
+        verify(refreshTokenRepository).deleteByUsername("chloe.old");
+        verify(userAccountRepository).deleteByUsernameNative("chloe.old");
+        verify(userAccountRepository, never()).save(existing);
+    }
+
+    @Test
+    void updateUserAccount_ShouldRequirePasswordChange_WhenPasswordIsReset() {
+        CreateUserAccountDto dto = new CreateUserAccountDto();
+        dto.setEmployeeId(21L);
+        dto.setUsername("chloe.old");
+        dto.setPassword("temp1234");
+
+        Employee employee = new Employee();
+        UserAccount existing = new UserAccount();
+        existing.setUsername("chloe.old");
+        existing.setPasswordHash("existing_hash");
+        existing.setAccountStatus(AccountStatus.ACTIVE);
+        existing.setEmployee(employee);
+        existing.setPasswordChangeRequired(false);
+
+        when(userAccountRepository.findByEmployee_EmployeeId(21L)).thenReturn(Optional.of(existing));
+        when(passwordEncoder.encode("temp1234")).thenReturn("reset_hash");
+        when(userAccountRepository.save(any(UserAccount.class))).thenAnswer(i -> i.getArgument(0));
+        UserAccount result = userAccountService.updateUserAccount(dto);
+
+        Assertions.assertEquals("reset_hash", result.getPasswordHash());
+        Assertions.assertTrue(Boolean.TRUE.equals(result.getPasswordChangeRequired()));
+        verify(refreshTokenRepository).deleteByUsername("chloe.old");
+    }
+
+    @Test
+    void changeOwnPassword_ShouldClearPasswordChangeRequired_AfterSuccessfulUpdate() {
+        ChangePasswordDto dto = new ChangePasswordDto();
+        dto.setCurrentPassword("temp1234");
+        dto.setNewPassword("myNewPassword");
+
+        UserAccount existing = new UserAccount();
+        existing.setUsername("niko123");
+        existing.setPasswordHash("hashed_temp");
+        existing.setPasswordChangeRequired(true);
+
+        when(userAccountRepository.findByUsername("niko123")).thenReturn(Optional.of(existing));
+        when(passwordEncoder.matches("temp1234", "hashed_temp")).thenReturn(true);
+        when(passwordEncoder.encode("myNewPassword")).thenReturn("hashed_new");
+        when(userAccountRepository.save(any(UserAccount.class))).thenAnswer(i -> i.getArgument(0));
+
+        userAccountService.changeOwnPassword("niko123", dto);
+
+        Assertions.assertEquals("hashed_new", existing.getPasswordHash());
+        Assertions.assertFalse(Boolean.TRUE.equals(existing.getPasswordChangeRequired()));
+        ArgumentCaptor<UserAccount> captor = ArgumentCaptor.forClass(UserAccount.class);
+        verify(userAccountRepository).save(captor.capture());
+        Assertions.assertEquals("hashed_new", captor.getValue().getPasswordHash());
+        Assertions.assertNotNull(captor.getValue().getLastPasswordChangedAt());
+    }
+
+    @Test
+    void changeOwnPassword_ShouldRejectShortUserPasswords() {
+        ChangePasswordDto dto = new ChangePasswordDto();
+        dto.setCurrentPassword("temp1234");
+        dto.setNewPassword("short");
+
+        UserAccount existing = new UserAccount();
+        existing.setUsername("niko123");
+        existing.setPasswordHash("hashed_temp");
+
+        when(userAccountRepository.findByUsername("niko123")).thenReturn(Optional.of(existing));
+
+        IllegalArgumentException error = Assertions.assertThrows(
+                IllegalArgumentException.class,
+                () -> userAccountService.changeOwnPassword("niko123", dto)
+        );
+
+        Assertions.assertTrue(error.getMessage().contains("at least 8 characters"));
+        verify(userAccountRepository, never()).save(any(UserAccount.class));
+    }
+
+    @Test
+    void changeOwnPassword_ShouldRejectChangesInsideCooldownWindow() {
+        ChangePasswordDto dto = new ChangePasswordDto();
+        dto.setCurrentPassword("temp1234");
+        dto.setNewPassword("myNewPassword");
+
+        UserAccount existing = new UserAccount();
+        existing.setUsername("niko123");
+        existing.setPasswordHash("hashed_temp");
+        existing.setPasswordChangeRequired(false);
+        existing.setLastPasswordChangedAt(Instant.now().minus(10, ChronoUnit.DAYS));
+
+        when(userAccountRepository.findByUsername("niko123")).thenReturn(Optional.of(existing));
+        when(passwordEncoder.matches("temp1234", "hashed_temp")).thenReturn(true);
+
+        IllegalArgumentException error = Assertions.assertThrows(
+                IllegalArgumentException.class,
+                () -> userAccountService.changeOwnPassword("niko123", dto)
+        );
+
+        Assertions.assertTrue(error.getMessage().contains("You can change your password again on"));
+        verify(userAccountRepository, never()).save(any(UserAccount.class));
     }
 }

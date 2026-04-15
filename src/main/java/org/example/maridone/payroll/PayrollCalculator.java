@@ -16,6 +16,7 @@ import org.example.maridone.config.DefaultConfig;
 import org.example.maridone.config.PayrollConfig;
 import org.example.maridone.core.employee.Employee;
 import org.example.maridone.enums.DeductionType;
+import org.example.maridone.enums.EarningsType;
 import org.example.maridone.enums.ExemptionStatus;
 import org.example.maridone.leave.request.LeaveRequest;
 import org.example.maridone.log.attendance.AttendanceLog;
@@ -76,6 +77,9 @@ public class PayrollCalculator {
         line.setEarningsDate(earningsDate);
         line.setPayrollItem(item);
         line.setOvertime(false);
+        line.setEarningsType(EarningsType.BASIC);
+        line.setTaxableAmount(CommonCalculator.normalize(amount));
+        line.setNonTaxableAmount(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
         return line;
     }
 
@@ -91,11 +95,6 @@ public class PayrollCalculator {
         }
         return LocalDate.now();
     }
-
-    private long resolveGracePeriodMinutes() {
-        return Math.max(payrollConfig.getGracePeriod().toMinutes(), 0L);
-    }
-
 
     public List<EarningsLine> setEarnings(Employee emp, PayrollItem item) {
         List<EarningsLine> earnings =  new ArrayList<>();
@@ -136,6 +135,14 @@ public class PayrollCalculator {
             }
             if (line.getAmount() == null) {
                 line.setAmount(BigDecimal.ZERO);
+            }
+            if (line.getEarningsType() == null) {
+                line.setEarningsType(EarningsType.FIXED);
+            }
+            if (line.getEarningsType() != EarningsType.BONUS) {
+                BigDecimal normalizedAmount = CommonCalculator.normalize(line.getAmount());
+                line.setTaxableAmount(normalizedAmount);
+                line.setNonTaxableAmount(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
             }
             earnings.add(line);
         }
@@ -395,34 +402,6 @@ public class PayrollCalculator {
         return deductUnpaidLunchHour(calculateHours(schedules));
     }
 
-    public BigDecimal applyGracePeriodToMissingHours(
-            DailyShiftSchedule schedule,
-            AttendanceLog inLog,
-            LeaveRequest leave,
-            BigDecimal missingHours
-    ) {
-        if (missingHours == null || missingHours.compareTo(BigDecimal.ZERO) <= 0) {
-            return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
-        }
-
-        BigDecimal missingMinutes = missingHours.multiply(BigDecimal.valueOf(60));
-        BigDecimal roundedMissingMinutes = missingMinutes.setScale(0, RoundingMode.HALF_UP);
-        long lateMinutes = calculateLateMinutes(schedule, inLog, leave);
-        long graceMinutes = resolveGracePeriodMinutes();
-        long coveredMinutes = Math.min(
-                roundedMissingMinutes.longValue(),
-                Math.min(lateMinutes, graceMinutes)
-        );
-
-        BigDecimal chargeableMinutes = roundedMissingMinutes.subtract(BigDecimal.valueOf(coveredMinutes));
-        if (chargeableMinutes.compareTo(BigDecimal.ZERO) <= 0) {
-            return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
-        }
-
-        return chargeableMinutes.divide(BigDecimal.valueOf(60), 6, RoundingMode.HALF_UP);
-    }
-
-
     public long calculateLateMinutes(DailyShiftSchedule schedule, AttendanceLog inLog, LeaveRequest leave) {
         if (schedule == null || inLog == null) {
             return 0L;
@@ -554,6 +533,27 @@ public class PayrollCalculator {
         return yearly.divide(BigDecimal.valueOf(24), 2, RoundingMode.HALF_UP);
     }
 
+    public BigDecimal computeProratedSemiMonthlyBasicPay(
+            BigDecimal yearlyCompensation,
+            long coveredUnits,
+            long totalUnits
+    ) {
+        BigDecimal fullPeriodPay = computeSemiMonthlyBasicPay(yearlyCompensation);
+        if (fullPeriodPay.compareTo(BigDecimal.ZERO) <= 0) {
+            return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+        }
+
+        if (totalUnits <= 0) {
+            return fullPeriodPay;
+        }
+
+        long normalizedCoveredUnits = Math.max(0L, Math.min(coveredUnits, totalUnits));
+        BigDecimal ratio = BigDecimal.valueOf(normalizedCoveredUnits)
+                .divide(BigDecimal.valueOf(totalUnits), 6, RoundingMode.HALF_UP);
+
+        return fullPeriodPay.multiply(ratio).setScale(2, RoundingMode.HALF_UP);
+    }
+
     public BigDecimal computeDailyRate(BigDecimal yearlyCompensation) {
         BigDecimal monthly = computeMonthlyBasicPay(yearlyCompensation);
         if (monthly.compareTo(BigDecimal.ZERO) <= 0) {
@@ -627,6 +627,16 @@ public class PayrollCalculator {
     public BigDecimal resolveHolidayOrRestDayMultiplier(boolean isRestDay, boolean isHoliday, boolean isRegularHoliday) {
         BigDecimal premiumRate = resolveHolidayOrRestDayPremiumRate(isRestDay, isHoliday, isRegularHoliday);
         return premiumRate.add(BigDecimal.ONE);
+    }
+
+    public BigDecimal resolveOvertimeMultiplier(EarningsType overtimeType) {
+        if (overtimeType == EarningsType.DOUBLE_OVERTIME) {
+            return payrollConfig.getDoubleOvertimeMultiplier();
+        }
+        if (overtimeType == EarningsType.TRIPLE_OVERTIME) {
+            return payrollConfig.getTripleOvertimeMultiplier();
+        }
+        return payrollConfig.getOvertimeMultiplier();
     }
 
     private BigDecimal resolveSssMsc(BigDecimal monthlyCompensation) {

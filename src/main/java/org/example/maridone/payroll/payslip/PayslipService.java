@@ -5,9 +5,12 @@ import org.example.maridone.config.DefaultConfig;
 import org.example.maridone.core.employee.Employee;
 import org.example.maridone.core.employee.EmployeeRepository;
 import org.example.maridone.core.user.UserAccount;
-import org.example.maridone.document.NOCLOUD.LocalDocumentService;
+import org.example.maridone.document.DocumentService;
 import org.example.maridone.enums.Directories;
+import org.example.maridone.enums.EarningsType;
 import org.example.maridone.enums.ManagerTitle;
+import org.example.maridone.enums.PayrollStatus;
+import org.example.maridone.enums.RunType;
 import org.example.maridone.log.AttendanceLogRepository;
 import org.example.maridone.log.attendance.AttendanceLog;
 import org.example.maridone.payroll.item.PayrollItem;
@@ -17,7 +20,6 @@ import org.example.maridone.payroll.item.component.EarningsLine;
 import org.example.maridone.payroll.item.component.EarningsRepository;
 import org.example.maridone.payroll.run.PayrollItemRepository;
 import org.example.maridone.payroll.run.PayrollRunRepository;
-import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -34,16 +36,14 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
-//todo: modify localDocumentService after defense, use Cloud
-
 public class PayslipService {
-
+    private static final String PAYSLIP_LOGO_RESOURCE_PATH = "/static/images/marid-logo-transparent.png";
     private final EmployeeRepository employeeRepository;
     private final PayrollRunRepository payrollRunRepository;
     private final AttendanceLogRepository attendanceLogRepository;
     private final EarningsRepository earningsRepository;
     private final DeductionsRepository deductionsRepository;
-    private final LocalDocumentService localDocumentService;
+    private final DocumentService documentService;
     private final PayrollItemRepository payrollItemRepository;
     private final DefaultConfig defaultConfig;
     private final TemplateEngine templateEngine;
@@ -53,7 +53,7 @@ public class PayslipService {
                           AttendanceLogRepository attendanceLogRepository,
                           EarningsRepository earningsRepository,
                           DeductionsRepository deductionsRepository,
-                          LocalDocumentService localDocumentService,
+                          DocumentService documentService,
                           PayrollItemRepository payrollItemRepository,
                           DefaultConfig defaultConfig,
                           TemplateEngine templateEngine)
@@ -63,7 +63,7 @@ public class PayslipService {
         this.attendanceLogRepository = attendanceLogRepository;
         this.earningsRepository = earningsRepository;
         this.deductionsRepository = deductionsRepository;
-        this.localDocumentService = localDocumentService;
+        this.documentService = documentService;
         this.payrollItemRepository = payrollItemRepository;
         this.defaultConfig = defaultConfig;
         this.templateEngine = templateEngine;
@@ -73,23 +73,7 @@ public class PayslipService {
     public void generatePayslips(List<DetailBlocks> detailBlocks) {
         List<FileUploadBatchRequest> batchRequests = new ArrayList<>();
         for (DetailBlocks block : detailBlocks) {
-            Context context = new Context();
-            context.setVariable("details", block);
-
-            String htmlContent = templateEngine.process("payslip-template", context);
-
-            byte[] pdfBytes;
-            try (ByteArrayOutputStream os = new ByteArrayOutputStream()) {
-                PdfRendererBuilder builder = new PdfRendererBuilder();
-                builder.useFastMode();
-                builder.withHtmlContent(htmlContent, Objects.requireNonNull(getClass().getResource("/templates/")).toExternalForm());
-                builder.toStream(os);
-                builder.run();
-
-                pdfBytes = os.toByteArray();
-            } catch (Exception e) {
-                throw new RuntimeException("Failed to generate PDF for " + block.name(), e);
-            }
+            byte[] pdfBytes = renderPayslipPdf(block);
 
             // sample file name: UUID_Payslip_Arthur_Evangelista_2026-03-31.pdf
             String safeName = block.name().replace(" ", "_");
@@ -104,7 +88,17 @@ public class PayslipService {
             );
             batchRequests.add(new FileUploadBatchRequest(multipartFile, block.userAccountName(), Directories.PAYSLIP.getDisplayName()));
         }
-        localDocumentService.batchUpload(batchRequests);
+        documentService.batchUpload(batchRequests);
+    }
+
+    @Transactional(readOnly = true)
+    public GeneratedPayslipPdf generatePayslipPdf(Long itemId) {
+        PayrollItem item = payrollItemRepository.findByItemIdAndPayrollRun_PayrollStatus(itemId, PayrollStatus.POSTED)
+                .orElseThrow(() -> new RuntimeException("No posted payslip was found for item " + itemId + "."));
+
+        DetailBlocks details = buildDetailBlock(item);
+        String fileName = "Payslip_" + details.name().replace(" ", "_") + "_" + details.periodEnd() + ".pdf";
+        return new GeneratedPayslipPdf(fileName, renderPayslipPdf(details));
     }
 
     @Transactional
@@ -154,42 +148,21 @@ public class PayslipService {
 
         //iterate to build details
         for (Employee employee : employees) {
-            Employee targetForTitle = managerMap.getOrDefault(employee, employee);
-
-            String department = java.util.Optional.ofNullable(targetForTitle.getEmpTitle())
-                    .map(ManagerTitle::getDisplayName)
-                    .orElse("_");
-
             PayrollItem item = payrollItemMap.get(employee.getEmployeeId());
             if (item == null) {
                 throw new RuntimeException("Unknown Error: No PayrollItem for employee " + employee.getEmployeeId());
             }
-
-            // Retrieve prefetched lists
-            List<EarningsLine> employeeEarningsLines = earningsMap.getOrDefault(item.getItemId(), Collections.emptyList());
-            List<DeductionsLine> employeeDeductionsLines = deductionsMap.getOrDefault(item.getItemId(), Collections.emptyList());
-            List<AttendanceLog> employeeLogs = logsMap.getOrDefault(employee.getEmployeeId(), Collections.emptyList());
-
-            // Process data
-            List<PayBreakdown> earnings = buildEarningsList(employeeEarningsLines);
-            List<PayBreakdown> deductions = buildDeductionsList(employeeDeductionsLines);
-            Integer workedDays = resolveWorkedDays(employeeLogs);
-
-            BigDecimal overallEarnings =  earnings.stream().map(PayBreakdown::amount).reduce(BigDecimal.ZERO, BigDecimal::add);
-            BigDecimal overallDeductions = deductions.stream().map(PayBreakdown::amount).reduce(BigDecimal.ZERO, BigDecimal::add);
-
-            DetailBlocks details = new DetailBlocks(
-                    employee.getFirstName() + " " + employee.getLastName(),
-                    department,
-                    employee.getPosition() != null ? employee.getPosition().toString() : "_",
+            DetailBlocks details = buildDetailBlock(
+                    item,
+                    employee,
+                    managerMap.getOrDefault(employee, employee),
+                    earningsMap.getOrDefault(item.getItemId(), Collections.emptyList()),
+                    deductionsMap.getOrDefault(item.getItemId(), Collections.emptyList()),
+                    logsMap.getOrDefault(employee.getEmployeeId(), Collections.emptyList()),
                     payslipProjection.getPayPeriodStart(),
                     payslipProjection.getPayPeriodEnd(),
-                    workedDays,
-                    earnings,
-                    deductions,
-                    overallEarnings,
-                    overallDeductions,
-                    userAccountMap.get(employee).getUsername()
+                    payslipProjection.getPaymentDate(),
+                    Optional.ofNullable(userAccountMap.get(employee)).map(UserAccount::getUsername).orElse("")
             );
             detailBlocks.add(details);
         }
@@ -199,22 +172,136 @@ public class PayslipService {
 
     public record DetailBlocks(
             String name,
+            String taxNumber,
             String department,
             String designation,
+            String payPeriod,
             LocalDate periodStart,
             LocalDate periodEnd,
+            LocalDate paymentDate,
             Integer workedDays,
             List<PayBreakdown> earningsList,
             List<PayBreakdown> deductionsBreakdownList,
             BigDecimal overallEarnings,
             BigDecimal overallDeductions,
+            BigDecimal netPay,
             String userAccountName
     ){}
+
+    public record GeneratedPayslipPdf(
+            String fileName,
+            byte[] content
+    ) {}
 
     public record PayBreakdown(
             String name,
             BigDecimal amount
     ) {}
+
+    private byte[] renderPayslipPdf(DetailBlocks block) {
+        Context context = new Context();
+        context.setVariable("details", block);
+        context.setVariable("logoUrl", getPayslipLogoUrl());
+
+        String htmlContent = templateEngine.process("payslip-template", context);
+
+        try (ByteArrayOutputStream os = new ByteArrayOutputStream()) {
+            PdfRendererBuilder builder = new PdfRendererBuilder();
+            builder.useFastMode();
+            builder.withHtmlContent(htmlContent, Objects.requireNonNull(getClass().getResource("/templates/")).toExternalForm());
+            builder.toStream(os);
+            builder.run();
+
+            return os.toByteArray();
+        } catch (Exception e) {
+            String reason = e.getMessage() == null || e.getMessage().isBlank() ? "Unknown PDF rendering error." : e.getMessage();
+            throw new RuntimeException("Failed to generate PDF for " + block.name() + ": " + reason, e);
+        }
+    }
+
+    private String getPayslipLogoUrl() {
+        return Optional.ofNullable(getClass().getResource(PAYSLIP_LOGO_RESOURCE_PATH))
+                .map(Object::toString)
+                .orElse("");
+    }
+
+    private DetailBlocks buildDetailBlock(PayrollItem item) {
+        Employee employee = item.getEmployee();
+        if (employee == null) {
+            throw new RuntimeException("The selected payroll item is missing its employee.");
+        }
+        if (item.getPayrollRun() == null || item.getPayrollRun().getPeriodStart() == null || item.getPayrollRun().getPeriodEnd() == null) {
+            throw new RuntimeException("The selected payroll item is missing its pay period.");
+        }
+
+        List<EarningsLine> employeeEarningsLines = earningsRepository.findByPayrollItem_ItemIdOrderByEarningsDateAsc(item.getItemId());
+        List<DeductionsLine> employeeDeductionsLines = deductionsRepository.findByPayrollItem_ItemId(item.getItemId());
+        Instant startInstant = item.getPayrollRun().getPeriodStart().atStartOfDay(defaultConfig.getTimeZone()).toInstant();
+        Instant endInstant = item.getPayrollRun().getPeriodEnd().atTime(LocalTime.MAX).atZone(defaultConfig.getTimeZone()).toInstant();
+        List<AttendanceLog> employeeLogs = attendanceLogRepository.findByEmployeeIdInAndDirectionAndTimestampBetween(
+                List.of(employee.getEmployeeId()),
+                "IN",
+                startInstant,
+                endInstant
+        );
+
+        return buildDetailBlock(
+                item,
+                employee,
+                employee.getManager() != null ? employee.getManager() : employee,
+                employeeEarningsLines,
+                employeeDeductionsLines,
+                employeeLogs,
+                item.getPayrollRun().getPeriodStart(),
+                item.getPayrollRun().getPeriodEnd(),
+                item.getPayrollRun().getPaymentDate(),
+                employee.getUserAccount() != null ? employee.getUserAccount().getUsername() : ""
+        );
+    }
+
+    private DetailBlocks buildDetailBlock(
+            PayrollItem item,
+            Employee employee,
+            Employee targetForTitle,
+            List<EarningsLine> employeeEarningsLines,
+            List<DeductionsLine> employeeDeductionsLines,
+            List<AttendanceLog> employeeLogs,
+            LocalDate periodStart,
+            LocalDate periodEnd,
+            LocalDate paymentDate,
+            String userAccountName
+    ) {
+        String department = Optional.ofNullable(targetForTitle.getEmpTitle())
+                .map(ManagerTitle::getDisplayName)
+                .orElse("_");
+
+        List<PayBreakdown> earnings = buildEarningsList(employeeEarningsLines);
+        List<PayBreakdown> deductions = buildDeductionsList(employeeDeductionsLines);
+        Integer workedDays = resolveWorkedDays(employeeLogs);
+
+        BigDecimal overallEarnings = earnings.stream().map(PayBreakdown::amount).reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal overallDeductions = deductions.stream().map(PayBreakdown::amount).reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal netPay = item.getNetPay() != null ? item.getNetPay() : overallEarnings.subtract(overallDeductions);
+        String payPeriod = periodStart + " to " + periodEnd;
+
+        return new DetailBlocks(
+                employee.getFirstName() + " " + employee.getLastName(),
+                employee.getTinNumber() != null && !employee.getTinNumber().isBlank() ? employee.getTinNumber() : "-",
+                department,
+                employee.getPosition() != null ? employee.getPosition().toString() : "_",
+                payPeriod,
+                periodStart,
+                periodEnd,
+                paymentDate,
+                workedDays,
+                earnings,
+                deductions,
+                overallEarnings,
+                overallDeductions,
+                netPay,
+                userAccountName
+        );
+    }
 
     public record ByteArrayMultipartFile(String name, String originalFilename, String contentType, byte[] content) implements MultipartFile {
         @Override
@@ -269,9 +356,27 @@ public class PayslipService {
     public List<PayBreakdown> buildEarningsList(List<EarningsLine> earningsLines) {
         List<PayBreakdown> earnings = new ArrayList<>();
         for (EarningsLine earningsLine : earningsLines) {
-            String name = earningsLine.getOvertime() != null && earningsLine.getOvertime()
-                    ? "Overtime: " + earningsLine.getEarningsDate().toString()
-                    : earningsLine.getEarningsDate().toString();
+            String name;
+            if (earningsLine.getEarningsType() == EarningsType.BONUS) {
+                name = "Bonus";
+            } else if (earningsLine.getPayrollItem() != null
+                    && earningsLine.getPayrollItem().getPayrollRun() != null
+                    && earningsLine.getPayrollItem().getPayrollRun().getRunType() == RunType.ADJUSTMENT) {
+                name = "Manual Adjustment";
+            } else if (Boolean.TRUE.equals(earningsLine.getOvertime())) {
+                name = earningsLine.getEarningsDate() != null
+                        ? "Overtime: " + earningsLine.getEarningsDate()
+                        : "Overtime";
+            } else if (earningsLine.getHours() != null
+                    && earningsLine.getRate() != null
+                    && earningsLine.getHours().compareTo(BigDecimal.ZERO) == 0
+                    && earningsLine.getRate().compareTo(BigDecimal.ZERO) == 0) {
+                name = "Basic Pay";
+            } else {
+                name = earningsLine.getEarningsDate() != null
+                        ? earningsLine.getEarningsDate().toString()
+                        : "Earning";
+            }
 
             PayBreakdown breakdown = new PayBreakdown(name, earningsLine.getAmount());
             earnings.add(breakdown);
@@ -289,4 +394,3 @@ public class PayslipService {
         return deductions;
     }
 }
-

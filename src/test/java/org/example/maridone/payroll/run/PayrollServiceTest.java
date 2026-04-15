@@ -8,12 +8,14 @@ import java.time.LocalTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 import org.example.maridone.config.DefaultConfig;
 import org.example.maridone.config.PayrollConfig;
 import org.example.maridone.core.employee.Employee;
 import org.example.maridone.core.employee.EmployeeRepository;
 import org.example.maridone.enums.DeductionType;
+import org.example.maridone.enums.EarningsType;
 import org.example.maridone.enums.ExemptionStatus;
 import org.example.maridone.enums.PayrollStatus;
 import org.example.maridone.enums.RunType;
@@ -37,11 +39,13 @@ import org.example.maridone.payroll.item.PayrollItemService;
 import org.example.maridone.payroll.item.component.EarningsLine;
 import org.example.maridone.schedule.shift.DailyShiftRepository;
 import org.example.maridone.schedule.shift.DailyShiftSchedule;
+import org.example.maridone.schedule.shift.TemplateShiftRepository;
 import org.example.maridone.schedule.shift.TemplateShiftSchedule;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.jpa.domain.Specification;
@@ -63,6 +67,7 @@ class PayrollServiceTest {
     @Mock private EmployeeRepository employeeRepository;
     @Mock private AttendanceLogRepository attendanceLogRepository;
     @Mock private DailyShiftRepository dailyShiftRepository;
+    @Mock private TemplateShiftRepository templateShiftRepository;
     @Mock private OvertimeRequestRepository overtimeRequestRepository;
     @Mock private LeaveRequestRepository leaveRequestRepository;
     @Mock private HolidayService holidayService;
@@ -87,6 +92,7 @@ class PayrollServiceTest {
                 employeeRepository,
                 attendanceLogRepository,
                 dailyShiftRepository,
+                templateShiftRepository,
                 overtimeRequestRepository,
                 leaveRequestRepository,
                 holidayService,
@@ -116,7 +122,7 @@ class PayrollServiceTest {
                 .thenReturn(HolidayLookup.empty());
 
         List<PayrollItem> items = new ArrayList<>();
-        payrollService.processPayrollNonExempt(run, items, List.of(employee));
+        payrollService.processPayrollNonExempt(run, items, List.of(employee), Map.of());
 
         Assertions.assertEquals(1, items.size());
         Assertions.assertTrue(items.get(0).getDeductions().stream()
@@ -152,13 +158,51 @@ class PayrollServiceTest {
                 .thenReturn(HolidayLookup.empty());
 
         List<PayrollItem> items = new ArrayList<>();
-        payrollService.processPayrollNonExempt(run, items, List.of(employee));
+        payrollService.processPayrollNonExempt(run, items, List.of(employee), Map.of());
 
         Assertions.assertEquals(1, items.size());
         Assertions.assertTrue(items.get(0).getDeductions().stream()
                 .noneMatch(line -> line.getDeductionType() == DeductionType.ABSENT_DEDUCTION));
         Assertions.assertTrue(items.get(0).getDeductions().stream()
                 .noneMatch(line -> line.getDeductionType() == DeductionType.LATE_PENALTY));
+    }
+
+    @Test
+    void processPayrollNonExempt_SmallLateArrivalShouldCreateLatePenalty() {
+        LocalDate workDate = LocalDate.of(2026, 3, 3);
+        PayrollRun run = buildSingleDayRun(workDate);
+        Employee employee = buildEmployee(19L, ExemptionStatus.NON_EXEMPT, "624000.00");
+        DailyShiftSchedule dailyShift = buildDailyShift(employee, workDate, LocalTime.of(8, 0), LocalTime.of(17, 0));
+        List<AttendanceLog> attendanceLogs = List.of(
+                buildAttendanceLog(employee, workDate, LocalTime.of(8, 10), "IN"),
+                buildAttendanceLog(employee, workDate, LocalTime.of(17, 0), "OUT")
+        );
+
+        when(defaultConfig.getTimeZone()).thenReturn(ZONE);
+        when(attendanceLogRepository.findByEmployeeIdInAndTimestampBetween(anyList(), any(Instant.class), any(Instant.class), any()))
+                .thenReturn(attendanceLogs);
+        when(overtimeRequestRepository.findAll(any(Specification.class)))
+                .thenReturn(List.of());
+        when(dailyShiftRepository.findAllByEmployeeIdsAndPeriod(anyList(), any(LocalDateTime.class), any(LocalDateTime.class)))
+                .thenReturn(List.of(dailyShift));
+        when(leaveRequestRepository.findApprovedLeavesForPeriod(anyList(), any(LocalDateTime.class), any(LocalDateTime.class)))
+                .thenReturn(List.of());
+        when(holidayService.getHolidayLookup(any(LocalDate.class), any(LocalDate.class)))
+                .thenReturn(HolidayLookup.empty());
+
+        List<PayrollItem> items = new ArrayList<>();
+        payrollService.processPayrollNonExempt(run, items, List.of(employee), Map.of());
+
+        Assertions.assertEquals(1, items.size());
+        BigDecimal latePenaltyAmount = items.get(0).getDeductions().stream()
+                .filter(line -> line.getDeductionType() == DeductionType.LATE_PENALTY)
+                .map(line -> line.getAmount())
+                .findFirst()
+                .orElse(BigDecimal.ZERO);
+
+        Assertions.assertTrue(latePenaltyAmount.compareTo(BigDecimal.ZERO) > 0);
+        Assertions.assertTrue(items.get(0).getDeductions().stream()
+                .noneMatch(line -> line.getDeductionType() == DeductionType.ABSENT_DEDUCTION));
     }
 
     @Test
@@ -177,7 +221,7 @@ class PayrollServiceTest {
         when(holidayService.getHolidayLookup(any(LocalDate.class), any(LocalDate.class)))
                 .thenReturn(HolidayLookup.empty());
 
-        List<PayrollItem> items = payrollService.processPayrollExempt(run, List.of(employee));
+        List<PayrollItem> items = payrollService.processPayrollExempt(run, List.of(employee), Map.of());
 
         Assertions.assertEquals(1, items.size());
         Assertions.assertTrue(items.get(0).getDeductions().stream()
@@ -204,7 +248,7 @@ class PayrollServiceTest {
         when(holidayService.getHolidayLookup(any(LocalDate.class), any(LocalDate.class)))
                 .thenReturn(HolidayLookup.empty());
 
-        List<PayrollItem> items = payrollService.processPayrollExempt(run, List.of(employee));
+        List<PayrollItem> items = payrollService.processPayrollExempt(run, List.of(employee), Map.of());
 
         Assertions.assertEquals(1, items.size());
         Assertions.assertTrue(items.get(0).getDeductions().stream()
@@ -229,11 +273,36 @@ class PayrollServiceTest {
         when(holidayService.getHolidayLookup(any(LocalDate.class), any(LocalDate.class)))
                 .thenReturn(HolidayLookup.empty());
 
-        List<PayrollItem> items = payrollService.processPayrollExempt(run, List.of(employee));
+        List<PayrollItem> items = payrollService.processPayrollExempt(run, List.of(employee), Map.of());
 
         Assertions.assertEquals(1, items.size());
         Assertions.assertTrue(items.get(0).getDeductions().stream()
                 .noneMatch(line -> line.getDeductionType() == DeductionType.ABSENT_DEDUCTION));
+    }
+
+    @Test
+    void processPayrollExempt_UnpaidOverlappingLeave_ShouldStillCreateAbsentDeduction() {
+        LocalDate workDate = LocalDate.of(2026, 3, 21);
+        PayrollRun run = buildSingleDayRun(workDate);
+        Employee employee = buildEmployee(11L, ExemptionStatus.EXEMPT, "624000.00");
+        DailyShiftSchedule dailyShift = buildDailyShift(employee, workDate, LocalTime.of(8, 0), LocalTime.of(17, 0));
+        LeaveRequest unpaidLeave = buildLeave(employee, workDate.atTime(8, 0), workDate.atTime(17, 0), false);
+
+        when(defaultConfig.getTimeZone()).thenReturn(ZONE);
+        when(attendanceLogRepository.findByEmployeeIdInAndTimestampBetween(anyList(), any(Instant.class), any(Instant.class), any()))
+                .thenReturn(List.of());
+        when(dailyShiftRepository.findAllByEmployeeIdsAndPeriod(anyList(), any(LocalDateTime.class), any(LocalDateTime.class)))
+                .thenReturn(List.of(dailyShift));
+        when(leaveRequestRepository.findApprovedLeavesForPeriod(anyList(), any(LocalDateTime.class), any(LocalDateTime.class)))
+                .thenReturn(List.of(unpaidLeave));
+        when(holidayService.getHolidayLookup(any(LocalDate.class), any(LocalDate.class)))
+                .thenReturn(HolidayLookup.empty());
+
+        List<PayrollItem> items = payrollService.processPayrollExempt(run, List.of(employee), Map.of());
+
+        Assertions.assertEquals(1, items.size());
+        Assertions.assertTrue(items.get(0).getDeductions().stream()
+                .anyMatch(line -> line.getDeductionType() == DeductionType.ABSENT_DEDUCTION));
     }
 
     @Test
@@ -266,12 +335,94 @@ class PayrollServiceTest {
                 .thenReturn(HolidayLookup.empty());
 
         List<PayrollItem> items = new ArrayList<>();
-        payrollService.processPayrollNonExempt(run, items, List.of(employee));
+        payrollService.processPayrollNonExempt(run, items, List.of(employee), Map.of());
 
         Assertions.assertEquals(1, items.size());
         PayrollItem item = items.get(0);
         Assertions.assertTrue(item.getEarnings().stream().noneMatch(line -> Boolean.TRUE.equals(line.getOvertime())));
         assertBigDecimalEquals("26000.00", item.getGrossPay());
+    }
+
+    @Test
+    void processPayrollNonExempt_UnpaidLeaveShouldNotSuppressAbsentDeduction() {
+        LocalDate workDate = LocalDate.of(2026, 3, 24);
+        PayrollRun run = buildSingleDayRun(workDate);
+        Employee employee = buildEmployee(12L, ExemptionStatus.NON_EXEMPT, "624000.00");
+        DailyShiftSchedule dailyShift = buildDailyShift(employee, workDate, LocalTime.of(8, 0), LocalTime.of(17, 0));
+        LeaveRequest unpaidLeave = buildLeave(employee, workDate.atTime(8, 0), workDate.atTime(17, 0), false);
+
+        when(defaultConfig.getTimeZone()).thenReturn(ZONE);
+        when(attendanceLogRepository.findByEmployeeIdInAndTimestampBetween(anyList(), any(Instant.class), any(Instant.class), any()))
+                .thenReturn(List.of());
+        when(overtimeRequestRepository.findAll(any(Specification.class)))
+                .thenReturn(List.of());
+        when(dailyShiftRepository.findAllByEmployeeIdsAndPeriod(anyList(), any(LocalDateTime.class), any(LocalDateTime.class)))
+                .thenReturn(List.of(dailyShift));
+        when(leaveRequestRepository.findApprovedLeavesForPeriod(anyList(), any(LocalDateTime.class), any(LocalDateTime.class)))
+                .thenReturn(List.of(unpaidLeave));
+        when(holidayService.getHolidayLookup(any(LocalDate.class), any(LocalDate.class)))
+                .thenReturn(HolidayLookup.empty());
+
+        List<PayrollItem> items = new ArrayList<>();
+        payrollService.processPayrollNonExempt(run, items, List.of(employee), Map.of());
+
+        Assertions.assertEquals(1, items.size());
+        Assertions.assertTrue(items.get(0).getDeductions().stream()
+                .anyMatch(line -> line.getDeductionType() == DeductionType.ABSENT_DEDUCTION));
+    }
+
+    @Test
+    void processPayrollNonExempt_MidPeriodHireShouldProrateBasicPay() {
+        LocalDate periodStart = LocalDate.of(2026, 4, 1);
+        LocalDate periodEnd = LocalDate.of(2026, 4, 15);
+        PayrollRun run = new PayrollRun();
+        run.setPeriodStart(periodStart);
+        run.setPeriodEnd(periodEnd);
+
+        Employee employee = buildEmployee(17L, ExemptionStatus.NON_EXEMPT, "624000.00");
+        employee.setEmploymentDateStart(LocalDate.of(2026, 4, 10));
+
+        when(defaultConfig.getTimeZone()).thenReturn(ZONE);
+        when(attendanceLogRepository.findByEmployeeIdInAndTimestampBetween(anyList(), any(Instant.class), any(Instant.class), any()))
+                .thenReturn(List.of());
+        when(overtimeRequestRepository.findAll(any(Specification.class))).thenReturn(List.of());
+        when(dailyShiftRepository.findAllByEmployeeIdsAndPeriod(anyList(), any(LocalDateTime.class), any(LocalDateTime.class)))
+                .thenReturn(List.of());
+        when(leaveRequestRepository.findApprovedLeavesForPeriod(anyList(), any(LocalDateTime.class), any(LocalDateTime.class)))
+                .thenReturn(List.of());
+        when(holidayService.getHolidayLookup(periodStart, periodEnd)).thenReturn(HolidayLookup.empty());
+
+        List<PayrollItem> items = new ArrayList<>();
+        payrollService.processPayrollNonExempt(run, items, List.of(employee), buildTemplateScheduleMap(employee));
+
+        Assertions.assertEquals(1, items.size());
+        assertBigDecimalEquals("10400.00", items.get(0).getGrossPay());
+    }
+
+    @Test
+    void processPayrollExempt_MidPeriodTerminationShouldProrateBasicPay() {
+        LocalDate periodStart = LocalDate.of(2026, 4, 1);
+        LocalDate periodEnd = LocalDate.of(2026, 4, 15);
+        PayrollRun run = new PayrollRun();
+        run.setPeriodStart(periodStart);
+        run.setPeriodEnd(periodEnd);
+
+        Employee employee = buildEmployee(18L, ExemptionStatus.EXEMPT, "624000.00");
+        employee.setEmploymentDateEnd(LocalDate.of(2026, 4, 5));
+
+        when(defaultConfig.getTimeZone()).thenReturn(ZONE);
+        when(attendanceLogRepository.findByEmployeeIdInAndTimestampBetween(anyList(), any(Instant.class), any(Instant.class), any()))
+                .thenReturn(List.of());
+        when(dailyShiftRepository.findAllByEmployeeIdsAndPeriod(anyList(), any(LocalDateTime.class), any(LocalDateTime.class)))
+                .thenReturn(List.of());
+        when(leaveRequestRepository.findApprovedLeavesForPeriod(anyList(), any(LocalDateTime.class), any(LocalDateTime.class)))
+                .thenReturn(List.of());
+        when(holidayService.getHolidayLookup(periodStart, periodEnd)).thenReturn(HolidayLookup.empty());
+
+        List<PayrollItem> items = payrollService.processPayrollExempt(run, List.of(employee), buildTemplateScheduleMap(employee));
+
+        Assertions.assertEquals(1, items.size());
+        assertBigDecimalEquals("8666.66", items.get(0).getGrossPay());
     }
 
     @Test
@@ -304,7 +455,7 @@ class PayrollServiceTest {
                 .thenReturn(HolidayLookup.empty());
 
         List<PayrollItem> items = new ArrayList<>();
-        payrollService.processPayrollNonExempt(run, items, List.of(employee));
+        payrollService.processPayrollNonExempt(run, items, List.of(employee), Map.of());
 
         Assertions.assertEquals(1, items.size());
         PayrollItem item = items.get(0);
@@ -327,11 +478,65 @@ class PayrollServiceTest {
     }
 
     @Test
+    void processPayrollNonExempt_DoubleNightOvertimeShouldUseDoubleOvertimeRates() {
+        LocalDate workDate = LocalDate.of(2026, 3, 24);
+        PayrollRun run = buildSingleDayRun(workDate);
+        Employee employee = buildEmployee(17L, ExemptionStatus.NON_EXEMPT, "624000.00");
+        DailyShiftSchedule dailyShift = buildDailyShift(employee, workDate, LocalTime.of(14, 0), LocalTime.of(22, 0));
+        OvertimeRequest overtimeRequest = buildOvertimeRequest(
+                employee,
+                workDate,
+                workDate.atTime(22, 0),
+                workDate.plusDays(1).atTime(0, 0),
+                EarningsType.DOUBLE_OVERTIME
+        );
+        List<AttendanceLog> attendanceLogs = List.of(
+                buildAttendanceLog(employee, workDate, LocalTime.of(14, 0), "IN"),
+                buildAttendanceLog(employee, workDate.plusDays(1), LocalTime.of(0, 0), "OUT")
+        );
+
+        when(defaultConfig.getTimeZone()).thenReturn(ZONE);
+        when(attendanceLogRepository.findByEmployeeIdInAndTimestampBetween(anyList(), any(Instant.class), any(Instant.class), any()))
+                .thenReturn(attendanceLogs);
+        when(overtimeRequestRepository.findAll(any(Specification.class)))
+                .thenReturn(List.of(overtimeRequest));
+        when(dailyShiftRepository.findAllByEmployeeIdsAndPeriod(anyList(), any(LocalDateTime.class), any(LocalDateTime.class)))
+                .thenReturn(List.of(dailyShift));
+        when(leaveRequestRepository.findApprovedLeavesForPeriod(anyList(), any(LocalDateTime.class), any(LocalDateTime.class)))
+                .thenReturn(List.of());
+        when(holidayService.getHolidayLookup(any(LocalDate.class), any(LocalDate.class)))
+                .thenReturn(HolidayLookup.empty());
+
+        List<PayrollItem> items = new ArrayList<>();
+        payrollService.processPayrollNonExempt(run, items, List.of(employee), Map.of());
+
+        Assertions.assertEquals(1, items.size());
+        PayrollItem item = items.get(0);
+
+        EarningsLine overtimeLine = item.getEarnings().stream()
+                .filter(line -> Boolean.TRUE.equals(line.getOvertime()))
+                .findFirst()
+                .orElseThrow();
+        assertBigDecimalEquals("2.00", overtimeLine.getHours());
+        assertBigDecimalEquals("1000.00", overtimeLine.getAmount());
+
+        EarningsLine overtimeNightDiffLine = item.getEarnings().stream()
+                .filter(line -> !Boolean.TRUE.equals(line.getOvertime()))
+                .filter(line -> line.getHours() != null && line.getHours().compareTo(BigDecimal.ZERO) > 0)
+                .findFirst()
+                .orElseThrow();
+        assertBigDecimalEquals("2.00", overtimeNightDiffLine.getHours());
+        assertBigDecimalEquals("100.00", overtimeNightDiffLine.getAmount());
+        assertBigDecimalEquals("27100.00", item.getGrossPay());
+    }
+
+    @Test
     void processPayroll_RegularRunShouldReturnGeneratedRunView() {
         LocalDate workDate = LocalDate.of(2026, 3, 25);
         RunCreateDto payload = buildRunPayload(workDate, workDate, RunType.REGULAR);
         PayrollRunViewDto viewDto = new PayrollRunViewDto(
                 77L,
+                workDate,
                 workDate,
                 workDate,
                 "Test run",
@@ -347,7 +552,8 @@ class PayrollServiceTest {
             ReflectionTestUtils.setField(run, "payId", 77L);
             return run;
         });
-        when(employeeRepository.findAll(any(Specification.class))).thenReturn(List.of());
+        when(employeeRepository.findPayrollEligibleEmployees(workDate, workDate, org.example.maridone.enums.EmploymentStatus.TERMINATED))
+                .thenReturn(List.of());
         when(payrollItemRepository.saveAll(anyList())).thenAnswer(invocation -> invocation.getArgument(0));
         when(payrollRunRepository.findRunViewByPayId(77L)).thenReturn(java.util.Optional.of(viewDto));
 
@@ -359,11 +565,207 @@ class PayrollServiceTest {
     }
 
     @Test
+    void processPayroll_ShouldQueryOnlyEmployeesWhoseEmploymentOverlapsPayrollPeriod() {
+        LocalDate periodStart = LocalDate.of(2026, 2, 1);
+        LocalDate periodEnd = LocalDate.of(2026, 2, 15);
+        RunCreateDto payload = buildRunPayload(periodStart, periodEnd, RunType.REGULAR);
+        PayrollRunViewDto viewDto = new PayrollRunViewDto(
+                78L,
+                periodStart,
+                periodEnd,
+                periodEnd,
+                "Test run",
+                PayrollStatus.IN_PROGRESS,
+                RunType.REGULAR,
+                1L
+        );
+        Employee eligibleEmployee = buildEmployee(13L, ExemptionStatus.NON_EXEMPT, "624000.00");
+        eligibleEmployee.setEmploymentDateStart(LocalDate.of(2026, 1, 15));
+        Employee newlyAddedEmployee = buildEmployee(14L, ExemptionStatus.NON_EXEMPT, "624000.00");
+        newlyAddedEmployee.setEmploymentDateStart(LocalDate.of(2026, 3, 1));
+        DailyShiftSchedule eligibleShift = buildDailyShift(
+                eligibleEmployee,
+                periodStart,
+                LocalTime.of(8, 0),
+                LocalTime.of(17, 0)
+        );
+
+        when(payrollRunRepository.existsByPeriodStartAndPeriodEndAndRunType(periodStart, periodEnd, RunType.REGULAR))
+                .thenReturn(false);
+        when(payrollRunRepository.save(any(PayrollRun.class))).thenAnswer(invocation -> {
+            PayrollRun run = invocation.getArgument(0);
+            ReflectionTestUtils.setField(run, "payId", 78L);
+            return run;
+        });
+        when(employeeRepository.findPayrollEligibleEmployees(
+                periodStart,
+                periodEnd,
+                org.example.maridone.enums.EmploymentStatus.TERMINATED
+        )).thenReturn(List.of(eligibleEmployee));
+        when(defaultConfig.getTimeZone()).thenReturn(ZONE);
+        when(attendanceLogRepository.findByEmployeeIdInAndTimestampBetween(anyList(), any(Instant.class), any(Instant.class), any()))
+                .thenReturn(List.of());
+        when(overtimeRequestRepository.findAll(any(Specification.class))).thenReturn(List.of());
+        when(dailyShiftRepository.findAllByEmployeeIdsAndPeriod(anyList(), any(LocalDateTime.class), any(LocalDateTime.class)))
+                .thenReturn(List.of(eligibleShift));
+        when(leaveRequestRepository.findApprovedLeavesForPeriod(anyList(), any(LocalDateTime.class), any(LocalDateTime.class)))
+                .thenReturn(List.of());
+        when(holidayService.getHolidayLookup(periodStart, periodEnd)).thenReturn(HolidayLookup.empty());
+        when(payrollItemRepository.saveAll(anyList())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(payrollRunRepository.findRunViewByPayId(78L)).thenReturn(java.util.Optional.of(viewDto));
+
+        PayrollRunViewDto result = payrollService.processPayroll(payload);
+
+        Assertions.assertEquals(78L, result.getPayId());
+        verify(employeeRepository).findPayrollEligibleEmployees(
+                periodStart,
+                periodEnd,
+                org.example.maridone.enums.EmploymentStatus.TERMINATED
+        );
+        ArgumentCaptor<Iterable<PayrollItem>> savedItemsCaptor = ArgumentCaptor.forClass(Iterable.class);
+        verify(payrollItemRepository).saveAll(savedItemsCaptor.capture());
+
+        List<PayrollItem> savedItems = new ArrayList<>();
+        savedItemsCaptor.getValue().forEach(savedItems::add);
+        Assertions.assertEquals(1, savedItems.size());
+        Assertions.assertEquals(eligibleEmployee.getEmployeeId(), savedItems.get(0).getEmployee().getEmployeeId());
+        Assertions.assertTrue(savedItems.stream().noneMatch(item ->
+                item.getEmployee() != null
+                        && item.getEmployee().getEmployeeId().equals(newlyAddedEmployee.getEmployeeId())
+        ));
+    }
+
+    @Test
+    void processPayroll_ShouldExcludeEmployeeWithoutDailyShiftsOrPaidLeave() {
+        LocalDate periodStart = LocalDate.of(2026, 4, 5);
+        LocalDate periodEnd = LocalDate.of(2026, 4, 5);
+        RunCreateDto payload = buildRunPayload(periodStart, periodEnd, RunType.REGULAR);
+        PayrollRunViewDto viewDto = new PayrollRunViewDto(
+                79L,
+                periodStart,
+                periodEnd,
+                periodEnd,
+                "Test run",
+                PayrollStatus.IN_PROGRESS,
+                RunType.REGULAR,
+                0L
+        );
+        Employee employee = buildEmployee(15L, ExemptionStatus.NON_EXEMPT, "624000.00");
+        employee.setEmploymentDateStart(LocalDate.of(2026, 1, 1));
+
+        when(payrollRunRepository.existsByPeriodStartAndPeriodEndAndRunType(periodStart, periodEnd, RunType.REGULAR))
+                .thenReturn(false);
+        when(payrollRunRepository.save(any(PayrollRun.class))).thenAnswer(invocation -> {
+            PayrollRun run = invocation.getArgument(0);
+            ReflectionTestUtils.setField(run, "payId", 79L);
+            return run;
+        });
+        when(employeeRepository.findPayrollEligibleEmployees(
+                periodStart,
+                periodEnd,
+                org.example.maridone.enums.EmploymentStatus.TERMINATED
+        )).thenReturn(List.of(employee));
+        when(dailyShiftRepository.findAllByEmployeeIdsAndPeriod(anyList(), any(LocalDateTime.class), any(LocalDateTime.class)))
+                .thenReturn(List.of());
+        when(leaveRequestRepository.findApprovedLeavesForPeriod(anyList(), any(LocalDateTime.class), any(LocalDateTime.class)))
+                .thenReturn(List.of());
+        when(payrollItemRepository.saveAll(anyList())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(payrollRunRepository.findRunViewByPayId(79L)).thenReturn(java.util.Optional.of(viewDto));
+
+        PayrollRunViewDto result = payrollService.processPayroll(payload);
+
+        Assertions.assertEquals(79L, result.getPayId());
+        ArgumentCaptor<Iterable<PayrollItem>> savedItemsCaptor = ArgumentCaptor.forClass(Iterable.class);
+        verify(payrollItemRepository).saveAll(savedItemsCaptor.capture());
+
+        List<PayrollItem> savedItems = new ArrayList<>();
+        savedItemsCaptor.getValue().forEach(savedItems::add);
+        Assertions.assertTrue(savedItems.isEmpty());
+    }
+
+    @Test
+    void processPayroll_ShouldKeepEmployeeWithPaidLeaveEvenWithoutDailyShifts() {
+        LocalDate periodStart = LocalDate.of(2026, 4, 5);
+        LocalDate periodEnd = LocalDate.of(2026, 4, 5);
+        RunCreateDto payload = buildRunPayload(periodStart, periodEnd, RunType.REGULAR);
+        PayrollRunViewDto viewDto = new PayrollRunViewDto(
+                80L,
+                periodStart,
+                periodEnd,
+                periodEnd,
+                "Test run",
+                PayrollStatus.IN_PROGRESS,
+                RunType.REGULAR,
+                1L
+        );
+        Employee employee = buildEmployee(16L, ExemptionStatus.EXEMPT, "624000.00");
+        employee.setEmploymentDateStart(LocalDate.of(2026, 1, 1));
+        LeaveRequest paidLeave = buildLeave(
+                employee,
+                periodStart.atStartOfDay(),
+                periodEnd.plusDays(1).atStartOfDay(),
+                true
+        );
+
+        when(payrollRunRepository.existsByPeriodStartAndPeriodEndAndRunType(periodStart, periodEnd, RunType.REGULAR))
+                .thenReturn(false);
+        when(payrollRunRepository.save(any(PayrollRun.class))).thenAnswer(invocation -> {
+            PayrollRun run = invocation.getArgument(0);
+            ReflectionTestUtils.setField(run, "payId", 80L);
+            return run;
+        });
+        when(employeeRepository.findPayrollEligibleEmployees(
+                periodStart,
+                periodEnd,
+                org.example.maridone.enums.EmploymentStatus.TERMINATED
+        )).thenReturn(List.of(employee));
+        when(defaultConfig.getTimeZone()).thenReturn(ZONE);
+        when(attendanceLogRepository.findByEmployeeIdInAndTimestampBetween(anyList(), any(Instant.class), any(Instant.class), any()))
+                .thenReturn(List.of());
+        when(dailyShiftRepository.findAllByEmployeeIdsAndPeriod(anyList(), any(LocalDateTime.class), any(LocalDateTime.class)))
+                .thenReturn(List.of());
+        when(leaveRequestRepository.findApprovedLeavesForPeriod(anyList(), any(LocalDateTime.class), any(LocalDateTime.class)))
+                .thenReturn(List.of(paidLeave));
+        when(holidayService.getHolidayLookup(periodStart, periodEnd)).thenReturn(HolidayLookup.empty());
+        when(payrollItemRepository.saveAll(anyList())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(payrollRunRepository.findRunViewByPayId(80L)).thenReturn(java.util.Optional.of(viewDto));
+
+        PayrollRunViewDto result = payrollService.processPayroll(payload);
+
+        Assertions.assertEquals(80L, result.getPayId());
+        ArgumentCaptor<Iterable<PayrollItem>> savedItemsCaptor = ArgumentCaptor.forClass(Iterable.class);
+        verify(payrollItemRepository).saveAll(savedItemsCaptor.capture());
+
+        List<PayrollItem> savedItems = new ArrayList<>();
+        savedItemsCaptor.getValue().forEach(savedItems::add);
+        Assertions.assertEquals(1, savedItems.size());
+        Assertions.assertEquals(employee.getEmployeeId(), savedItems.get(0).getEmployee().getEmployeeId());
+    }
+
+    @Test
     void processPayroll_AdjustmentRunShouldRejectAutomaticGeneration() {
         LocalDate workDate = LocalDate.of(2026, 3, 26);
         RunCreateDto payload = buildRunPayload(workDate, workDate, RunType.ADJUSTMENT);
 
         Assertions.assertThrows(InvalidActionException.class, () -> payrollService.processPayroll(payload));
+    }
+
+    @Test
+    void processPayroll_FuturePeriodShouldRejectGeneration() {
+        when(defaultConfig.getTimeZone()).thenReturn(ZONE);
+        LocalDate tomorrow = LocalDate.now(ZONE).plusDays(1);
+        RunCreateDto payload = buildRunPayload(tomorrow, tomorrow, RunType.REGULAR);
+
+        Assertions.assertThrows(InvalidActionException.class, () -> payrollService.processPayroll(payload));
+    }
+
+    @Test
+    void createRun_FuturePeriodShouldRejectCreation() {
+        when(defaultConfig.getTimeZone()).thenReturn(ZONE);
+        LocalDate tomorrow = LocalDate.now(ZONE).plusDays(1);
+        RunCreateDto payload = buildRunPayload(tomorrow, tomorrow, RunType.ADJUSTMENT);
+
+        Assertions.assertThrows(InvalidActionException.class, () -> payrollService.createRun(payload));
     }
 
     @Test
@@ -399,6 +801,7 @@ class PayrollServiceTest {
         PayrollRunViewDto viewDto = new PayrollRunViewDto(
                 89L,
                 run.getPeriodStart(),
+                run.getPeriodEnd(),
                 run.getPeriodEnd(),
                 "Adjustment run",
                 PayrollStatus.POSTED,
@@ -440,6 +843,7 @@ class PayrollServiceTest {
         ReflectionTestUtils.setField(employee, "employeeId", employeeId);
         employee.setExemptionStatus(exemptionStatus);
         employee.setYearlySalary(new BigDecimal(yearlySalary));
+        employee.setEmploymentDateStart(LocalDate.of(2026, 1, 1));
         return employee;
     }
 
@@ -461,12 +865,22 @@ class PayrollServiceTest {
     }
 
     private LeaveRequest buildLeave(Employee employee, LocalDateTime startDateTime, LocalDateTime endDateTime) {
+        return buildLeave(employee, startDateTime, endDateTime, true);
+    }
+
+    private LeaveRequest buildLeave(
+            Employee employee,
+            LocalDateTime startDateTime,
+            LocalDateTime endDateTime,
+            boolean paid
+    ) {
         LeaveRequest leaveRequest = new LeaveRequest();
         leaveRequest.setEmployee(employee);
         leaveRequest.setStartDateTime(startDateTime);
         leaveRequest.setEndDateTime(endDateTime);
         leaveRequest.setRequestStatus(Status.APPROVED);
         leaveRequest.setReason("Test leave");
+        leaveRequest.setPaid(paid);
         return leaveRequest;
     }
 
@@ -476,11 +890,22 @@ class PayrollServiceTest {
             LocalDateTime startDateTime,
             LocalDateTime endDateTime
     ) {
+        return buildOvertimeRequest(employee, workDate, startDateTime, endDateTime, EarningsType.OVERTIME);
+    }
+
+    private OvertimeRequest buildOvertimeRequest(
+            Employee employee,
+            LocalDate workDate,
+            LocalDateTime startDateTime,
+            LocalDateTime endDateTime,
+            EarningsType overtimeType
+    ) {
         OvertimeRequest overtimeRequest = new OvertimeRequest();
         overtimeRequest.setEmployee(employee);
         overtimeRequest.setWorkDate(workDate);
         overtimeRequest.setStartTime(startDateTime);
         overtimeRequest.setEndTime(endDateTime);
+        overtimeRequest.setOvertimeType(overtimeType);
         overtimeRequest.setRequestStatus(Status.APPROVED);
         overtimeRequest.setReason("Test overtime");
         ReflectionTestUtils.setField(overtimeRequest, "employeeId", employee.getEmployeeId());
@@ -493,6 +918,24 @@ class PayrollServiceTest {
         attendanceLog.setTimestamp(workDate.atTime(time).atZone(ZONE).toInstant());
         attendanceLog.setDirection(direction);
         return attendanceLog;
+    }
+
+    private Map<Long, Map<java.time.DayOfWeek, List<TemplateShiftSchedule>>> buildTemplateScheduleMap(Employee employee) {
+        Map<java.time.DayOfWeek, List<TemplateShiftSchedule>> schedulesByDay = java.util.Arrays.stream(java.time.DayOfWeek.values())
+                .collect(java.util.stream.Collectors.toMap(
+                        dayOfWeek -> dayOfWeek,
+                        dayOfWeek -> List.of(buildTemplateShift(employee, dayOfWeek))
+                ));
+        return Map.of(employee.getEmployeeId(), schedulesByDay);
+    }
+
+    private TemplateShiftSchedule buildTemplateShift(Employee employee, java.time.DayOfWeek dayOfWeek) {
+        TemplateShiftSchedule templateShiftSchedule = new TemplateShiftSchedule();
+        templateShiftSchedule.setEmployee(employee);
+        templateShiftSchedule.setDayOfWeek(dayOfWeek);
+        templateShiftSchedule.setStartTime(LocalTime.of(8, 0));
+        templateShiftSchedule.setEndTime(LocalTime.of(17, 0));
+        return templateShiftSchedule;
     }
 
     private void assertBigDecimalEquals(String expected, BigDecimal actual) {

@@ -15,6 +15,7 @@ public class DisputeResponseDto {
     private Instant createdAt;
     private Instant updatedAt;
     private String statusReason;
+    private String approver;
     private Long itemId;
     @NotNull(groups = OnUpdate.class)
     private Long employeeId;
@@ -74,6 +75,14 @@ public class DisputeResponseDto {
 
     public void setStatusReason(String statusReason) {
         this.statusReason = statusReason;
+    }
+
+    public String getApprover() {
+        return approver;
+    }
+
+    public void setApprover(String approver) {
+        this.approver = approver;
     }
 
     public Long getItemId() {

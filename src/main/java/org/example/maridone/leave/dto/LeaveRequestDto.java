@@ -33,6 +33,10 @@ public class LeaveRequestDto {
     @NotNull(groups = OnUpdate.class)
     private String approverReason;
 
+    private Boolean paid;
+
+    private String paidOverrideReason;
+
     public LeaveRequestDto() {}
 
     public LeaveRequestDto(LocalDateTime startDateTime, LocalDateTime endDateTime) {
@@ -104,5 +108,21 @@ public class LeaveRequestDto {
 
     public void setApproverReason(String approverReason) {
         this.approverReason = approverReason;
+    }
+
+    public Boolean getPaid() {
+        return paid;
+    }
+
+    public void setPaid(Boolean paid) {
+        this.paid = paid;
+    }
+
+    public String getPaidOverrideReason() {
+        return paidOverrideReason;
+    }
+
+    public void setPaidOverrideReason(String paidOverrideReason) {
+        this.paidOverrideReason = paidOverrideReason;
     }
 }

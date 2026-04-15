@@ -1,23 +1,31 @@
 package org.example.maridone.overtime;
 
-import org.example.maridone.annotation.NotifyRole;
 import org.example.maridone.annotation.ExecutionTime;
-import org.example.maridone.annotation.Notify;
 import org.example.maridone.common.CommonSpecs;
+import org.example.maridone.config.DefaultConfig;
 import org.example.maridone.core.employee.Employee;
 import org.example.maridone.core.employee.EmployeeRepository;
 import org.example.maridone.core.spec.EmployeeSpecs;
+import org.example.maridone.core.user.UserAccount;
 import org.example.maridone.core.user.UserAccountRepository;
+import org.example.maridone.enums.EmploymentStatus;
 import org.example.maridone.enums.Position;
 import org.example.maridone.enums.Status;
 import org.example.maridone.exception.conflict.OverlappingDatesException;
 import org.example.maridone.exception.notfound.AccountNotFoundException;
+import org.example.maridone.exception.unauthorized.InvalidActionException;
 import org.example.maridone.exception.unauthorized.OvertimeException;
+import org.example.maridone.leave.request.LeaveRequestRepository;
+import org.example.maridone.notification.NotificationMessageFormatter;
+import org.example.maridone.notification.NotificationService;
+import org.example.maridone.notification.WorkflowEmailService;
 import org.example.maridone.overtime.dto.OvertimeRequestDto;
 import org.example.maridone.overtime.dto.OvertimeResponseDto;
 import org.example.maridone.overtime.dto.OvertimeUpdateDto;
 import org.example.maridone.overtime.mapper.OvertimeMapper;
 import org.example.maridone.overtime.spec.OvertimeSpecs;
+import org.example.maridone.schedule.shift.TemplateShiftRepository;
+import org.example.maridone.schedule.shift.TemplateShiftSchedule;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
@@ -25,6 +33,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.time.Clock;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.time.ZoneId;
 import java.util.List;
 
 @Service
@@ -34,28 +47,48 @@ public class OvertimeService {
     private final EmployeeRepository employeeRepository;
     private final OvertimeMapper overtimeMapper;
     private final UserAccountRepository userAccountRepository;
+    private final TemplateShiftRepository templateShiftRepository;
+    private final DefaultConfig defaultConfig;
+    private final NotificationService notificationService;
+    private final LeaveRequestRepository leaveRequestRepository;
+    private final WorkflowEmailService workflowEmailService;
+    private Clock clock = Clock.systemDefaultZone();
 
     public OvertimeService(OvertimeRequestRepository overtimeRequestRepository,
                            OvertimeMapper overtimeMapper,
                            EmployeeRepository employeeRepository,
-                           UserAccountRepository userAccountRepository) {
+                           UserAccountRepository userAccountRepository,
+                           TemplateShiftRepository templateShiftRepository,
+                           DefaultConfig defaultConfig,
+                           NotificationService notificationService,
+                           LeaveRequestRepository leaveRequestRepository,
+                           WorkflowEmailService workflowEmailService) {
         this.overtimeRequestRepository = overtimeRequestRepository;
         this.overtimeMapper = overtimeMapper;
         this.employeeRepository = employeeRepository;
         this.userAccountRepository = userAccountRepository;
+        this.templateShiftRepository = templateShiftRepository;
+        this.defaultConfig = defaultConfig;
+        this.notificationService = notificationService;
+        this.leaveRequestRepository = leaveRequestRepository;
+        this.workflowEmailService = workflowEmailService;
     }
 
     @Transactional
     @ExecutionTime
-    @NotifyRole(message = "Overtime Requested", importance = "HIGH", targetRole = Position.HR)
     public OvertimeRequest createOvertimeRequest(OvertimeRequestDto requestDto, String username) {
         Specification<Employee> spec = Specification.allOf(
                 EmployeeSpecs.hasUserAccount(username)
         );
         Employee emp = employeeRepository.findOne(spec).orElseThrow(() -> new AccountNotFoundException(username));
+        validateRequestWindow(requestDto);
+        validateNoLeaveConflict(emp, requestDto);
+        validateOutsideShiftSchedule(emp, requestDto.getStartTime(), requestDto.getEndTime());
 
         Specification<OvertimeRequest> checkConflicts = Specification.allOf(
                 CommonSpecs.fieldEquals("employee", emp),
+                CommonSpecs.fieldNotEquals("requestStatus", Status.CANCELLED),
+                CommonSpecs.fieldNotEquals("requestStatus", Status.REJECTED),
                 OvertimeSpecs.checkOverlaps(requestDto.getStartTime(), requestDto.getEndTime())
         );
         if (overtimeRequestRepository.count(checkConflicts) > 0) {
@@ -63,31 +96,52 @@ public class OvertimeService {
         }
         OvertimeRequest request = overtimeMapper.toOvertimeRequest(requestDto);
         request.setEmployee(emp);
+        request.setRequestStatus(emp.getManager() == null ? Status.PENDING_HR : Status.PENDING_MANAGER);
+        request.setSuggestedPaid(true);
+        request.setPaid(true);
 
-        return overtimeRequestRepository.save(request);
+        OvertimeRequest savedRequest = overtimeRequestRepository.save(request);
+        if (emp.getManager() != null) {
+            notifyManager(
+                    emp,
+                    "New team overtime request from " + emp.getFirstName() + " " + emp.getLastName()
+                            + " for " + requestDto.getWorkDate()
+            );
+            workflowEmailService.sendOvertimeSubmittedToManager(savedRequest);
+        } else {
+            notifyHr("New overtime request from " + emp.getFirstName() + " " + emp.getLastName()
+                    + " for " + requestDto.getWorkDate() + " is waiting for HR review.");
+            
+            // Send email to HR for manager-less request
+            workflowEmailService.sendOvertimeForwardedToHr(savedRequest);
+        }
+        return savedRequest;
     }
 
     @Transactional
     @ExecutionTime
-    @Notify(message = "Your Overtime Request has been #{#result.requestStatus}", importance = "HIGH", targetEmployee = "#result.employeeId")
     public OvertimeResponseDto updateOvertimeRequest(OvertimeUpdateDto updateDto, String approverUsername) {
-        OvertimeRequest req = overtimeRequestRepository.findById(updateDto.getOvertimeId()).orElseThrow(() -> new OvertimeException("Overtime Not Found"));
-        if (req.getRequestStatus() != Status.PENDING) {
-            throw new OvertimeException("Overtime Request Not Pending/Already Processed");
+        OvertimeRequest req = overtimeRequestRepository.findByIdForUpdate(updateDto.getOvertimeId())
+                .orElseThrow(() -> new OvertimeException("Overtime Not Found"));
+        Employee emp = userAccountRepository.findByUsername(approverUsername)
+                .map(UserAccount::getEmployee)
+                .orElseThrow(() -> new AccountNotFoundException(approverUsername));
+
+        Long requestEmployeeId = req.getEmployeeId() != null
+                ? req.getEmployeeId()
+                : req.getEmployee() != null
+                    ? req.getEmployee().getEmployeeId()
+                    : null;
+
+        validateApproverAccess(emp, approverUsername, requestEmployeeId);
+
+        if (emp.getPosition() == Position.MANAGER) {
+            return handleManagerOvertimeReview(req, updateDto, emp);
         }
-        Specification<Employee> spec = Specification.allOf(
-                EmployeeSpecs.hasUserAccount(approverUsername)
-        );
-        Employee emp = employeeRepository.findOne(spec).orElseThrow(() -> new AccountNotFoundException(approverUsername));
-        req.setApprover(emp.getLastName() + ", " +  emp.getFirstName());
-        req.setRequestStatus(updateDto.getUpdateStatus());
-        req.setApprovedAt(Instant.now());
-        req.setApproveReason(updateDto.getApproveReason());
-        overtimeRequestRepository.save(req);
-        OvertimeResponseDto response = overtimeMapper.toOvertimeResponseDto(req);
-        response.setEmployeeId(req.getEmployeeId());
-        response.setApproveReason(req.getApproveReason());
-        return response;
+        if (emp.getPosition() == Position.HR) {
+            return handleHrOvertimeReview(req, updateDto, emp);
+        }
+        throw new InvalidActionException("Only managers and HR can review overtime requests.");
     }
 
     @ExecutionTime
@@ -125,14 +179,21 @@ public class OvertimeService {
 
     @Transactional
     @ExecutionTime
-    @NotifyRole(message = "Overtime Request Cancelled.", targetRole = Position.HR)
     public void cancelRequest(Long overtimeId) {
-        OvertimeRequest overtimeRequest =  overtimeRequestRepository.findById(overtimeId).orElseThrow(() -> new OvertimeException("Overtime Not Found"));
+        OvertimeRequest overtimeRequest = overtimeRequestRepository.findByIdForUpdate(overtimeId)
+                .orElseThrow(() -> new OvertimeException("Overtime Not Found"));
         if (overtimeRequest.getRequestStatus().equals(Status.APPROVED)) {
             throw new IllegalStateException("Cannot cancel. Overtime Request has been approved already.");
         }
         overtimeRequest.setRequestStatus(Status.CANCELLED);
         overtimeRequestRepository.save(overtimeRequest);
+        String employeeName = NotificationMessageFormatter.formatEmployeeName(overtimeRequest.getEmployee());
+        String workDate = NotificationMessageFormatter.formatDate(overtimeRequest.getWorkDate());
+        notifyHr("Overtime request from " + employeeName + " for " + workDate + " was cancelled.");
+        notifyManager(
+                overtimeRequest.getEmployee(),
+                "Team overtime request from " + employeeName + " for " + workDate + " was cancelled."
+        );
 
     }
 
@@ -142,5 +203,256 @@ public class OvertimeService {
             throw new AccountNotFoundException(username);
         }
         return employeeRepository.findHandledEmployeeIds(employeeId);
+    }
+
+    private void validateApproverAccess(Employee approver, String username, Long requestEmployeeId) {
+        if (approver.getPosition() == Position.HR) {
+            return;
+        }
+
+        if (approver.getPosition() != Position.MANAGER) {
+            throw new InvalidActionException("Only managers and HR can review overtime requests.");
+        }
+
+        if (requestEmployeeId == null) {
+            throw new InvalidActionException("The overtime request is missing its employee reference.");
+        }
+
+        List<Long> handledEmployeeIds = resolveHandledEmployeeIds(username);
+        if (!handledEmployeeIds.contains(requestEmployeeId)) {
+            throw new InvalidActionException("Managers can only review overtime requests from their own team.");
+        }
+    }
+
+    private void notifyManager(Employee employee, String message) {
+        Employee manager = employee.getManager();
+        if (manager == null || manager.getPosition() != Position.MANAGER) {
+            return;
+        }
+        notificationService.createNotification(manager, message, "HIGH");
+    }
+
+    private void notifyHr(String message) {
+        List<Long> hrEmployeeIds = employeeRepository.findEmployeeIdsByPosition(Position.HR, EmploymentStatus.TERMINATED);
+        for (Long employeeId : hrEmployeeIds) {
+            notificationService.createNotification(employeeRepository.getReferenceById(employeeId), message, "HIGH");
+        }
+    }
+
+    private OvertimeResponseDto handleManagerOvertimeReview(
+            OvertimeRequest request,
+            OvertimeUpdateDto updateDto,
+            Employee manager
+    ) {
+        if (request.getRequestStatus() != Status.PENDING_MANAGER && request.getRequestStatus() != Status.PENDING) {
+            throw new OvertimeException("This overtime request is no longer waiting for manager review.");
+        }
+
+        Status decision = validateReviewDecision(updateDto.getUpdateStatus());
+        String reason = validateDecisionReason(updateDto.getApproveReason(), "Please enter at least 5 characters for the manager review.");
+        String approverName = manager.getLastName() + ", " + manager.getFirstName();
+        Instant decisionTime = Instant.now();
+
+        request.setManagerApprover(approverName);
+        request.setManagerApproveReason(reason);
+        request.setManagerApprovedAt(decisionTime);
+
+        if (decision == Status.APPROVED) {
+            request.setRequestStatus(Status.PENDING_HR);
+            request.setApprover(null);
+            request.setApproveReason(null);
+            request.setApprovedAt(null);
+            overtimeRequestRepository.save(request);
+            String employeeName = NotificationMessageFormatter.formatEmployeeName(request.getEmployee());
+            String workDate = NotificationMessageFormatter.formatDate(request.getWorkDate());
+            notifyHr("Overtime request from " + employeeName + " for " + workDate + " is ready for HR review.");
+            notifyEmployee(
+                    request.getEmployee(),
+                    "Your overtime request for " + workDate + " was endorsed by your manager and is now waiting for HR review."
+            );
+            workflowEmailService.sendOvertimeForwardedToHr(request);
+            workflowEmailService.sendOvertimeForwardedToEmployee(request);
+        } else {
+            request.setRequestStatus(Status.REJECTED);
+            request.setApprover(approverName);
+            request.setApproveReason(reason);
+            request.setApprovedAt(decisionTime);
+            overtimeRequestRepository.save(request);
+            notifyEmployee(
+                    request.getEmployee(),
+                    "Your overtime request for " + NotificationMessageFormatter.formatDate(request.getWorkDate()) + " was denied by your manager."
+            );
+            workflowEmailService.sendOvertimeManagerDecisionToEmployee(request);
+        }
+
+        OvertimeResponseDto response = overtimeMapper.toOvertimeResponseDto(request);
+        response.setEmployeeId(request.getEmployeeId());
+        return response;
+    }
+
+    private OvertimeResponseDto handleHrOvertimeReview(
+            OvertimeRequest request,
+            OvertimeUpdateDto updateDto,
+            Employee hr
+    ) {
+        if (request.getRequestStatus() != Status.PENDING_HR) {
+            throw new OvertimeException("This overtime request is no longer waiting for HR review.");
+        }
+
+        Status decision = validateReviewDecision(updateDto.getUpdateStatus());
+        String reason = validateDecisionReason(updateDto.getApproveReason(), "Please enter at least 5 characters for the HR decision.");
+        String approverName = hr.getLastName() + ", " + hr.getFirstName();
+        Instant decisionTime = Instant.now();
+
+        if (decision == Status.APPROVED) {
+            boolean finalPaid = resolveFinalPaidValue(updateDto.getPaid(), request.getPaid());
+            boolean paidOverrideApplied = !Boolean.valueOf(finalPaid).equals(request.getSuggestedPaid());
+            String paidOverrideReason = validatePaidOverrideReason(
+                    paidOverrideApplied,
+                    updateDto.getPaidOverrideReason()
+            );
+            request.setPaid(finalPaid);
+            request.setPaidOverrideReason(paidOverrideReason);
+        }
+
+        request.setApprover(approverName);
+        request.setRequestStatus(decision);
+        request.setApprovedAt(decisionTime);
+        request.setApproveReason(reason);
+        overtimeRequestRepository.save(request);
+
+        String workDate = NotificationMessageFormatter.formatDate(request.getWorkDate());
+        if (decision == Status.APPROVED) {
+            String payLabel = Boolean.TRUE.equals(request.getPaid()) ? "paid" : "unpaid";
+            notifyEmployee(
+                    request.getEmployee(),
+                    "Your overtime request for " + workDate + " was approved by HR as " + payLabel + " overtime."
+            );
+            workflowEmailService.sendOvertimeDecisionToEmployee(request);
+        } else {
+            notifyEmployee(
+                    request.getEmployee(),
+                    "Your overtime request for " + workDate + " was denied by HR."
+            );
+            workflowEmailService.sendOvertimeDecisionToEmployee(request);
+        }
+
+        OvertimeResponseDto response = overtimeMapper.toOvertimeResponseDto(request);
+        response.setEmployeeId(request.getEmployeeId());
+        return response;
+    }
+
+    private Status validateReviewDecision(Status decision) {
+        if (decision != Status.APPROVED && decision != Status.REJECTED) {
+            throw new InvalidActionException("Only approve or reject decisions are allowed here.");
+        }
+        return decision;
+    }
+
+    private String validateDecisionReason(String reason, String message) {
+        String trimmed = reason == null ? "" : reason.trim();
+        if (trimmed.length() < 5) {
+            throw new InvalidActionException(message);
+        }
+        return trimmed;
+    }
+
+    private String validatePaidOverrideReason(boolean overrideApplied, String reason) {
+        if (!overrideApplied) {
+            return null;
+        }
+        String trimmed = reason == null ? "" : reason.trim();
+        if (trimmed.length() < 5) {
+            throw new InvalidActionException("Please explain why HR is overriding the paid or unpaid overtime treatment.");
+        }
+        return trimmed;
+    }
+
+    private boolean resolveFinalPaidValue(Boolean payloadPaid, Boolean currentPaid) {
+        if (payloadPaid != null) {
+            return payloadPaid;
+        }
+        return Boolean.TRUE.equals(currentPaid);
+    }
+
+    private void notifyEmployee(Employee employee, String message) {
+        if (employee == null) {
+            return;
+        }
+        notificationService.createNotification(employee, message, "HIGH");
+    }
+
+    private void validateRequestWindow(OvertimeRequestDto requestDto) {
+        LocalDate workDate = requestDto.getWorkDate();
+        LocalDateTime startTime = requestDto.getStartTime();
+        LocalDateTime endTime = requestDto.getEndTime();
+
+        if (workDate == null || startTime == null || endTime == null) {
+            throw new OvertimeException("Overtime date and time window are required.");
+        }
+        if (!startTime.toLocalDate().equals(workDate)) {
+            throw new OvertimeException("The overtime start date must match the selected work date.");
+        }
+        if (!endTime.isAfter(startTime)) {
+            throw new OvertimeException("End date and time must be later than the start date and time.");
+        }
+        if (workDate.isBefore(currentDateTime().toLocalDate())) {
+            throw new OvertimeException("Overtime cannot be requested for past dates.");
+        }
+        if (!startTime.isAfter(currentDateTime())) {
+            throw new OvertimeException("Overtime cannot be requested for a time window that has already started or passed.");
+        }
+
+        LocalDate maxEndDate = startTime.toLocalDate().plusDays(1);
+        if (endTime.toLocalDate().isAfter(maxEndDate)) {
+            throw new OvertimeException("End date can only be up to the day after the selected start date.");
+        }
+        if (endTime.toLocalDate().isEqual(maxEndDate) && endTime.toLocalTime().isAfter(LocalTime.of(6, 0))) {
+            throw new OvertimeException("If overtime ends the next day, the latest allowed end time is 6:00 AM.");
+        }
+    }
+
+    private void validateOutsideShiftSchedule(Employee employee, LocalDateTime requestStart, LocalDateTime requestEnd) {
+        TemplateShiftSchedule shiftSchedule = templateShiftRepository.findAllByEmployeeId(employee.getEmployeeId())
+                .stream()
+                .filter(schedule -> schedule.getDayOfWeek() == requestStart.getDayOfWeek())
+                .findFirst()
+                .orElseThrow(() -> new OvertimeException("Your work schedule is not set up yet, so overtime cannot be processed."));
+
+        LocalDate shiftDate = requestStart.toLocalDate();
+        LocalDateTime shiftStart = LocalDateTime.of(shiftDate, shiftSchedule.getStartTime());
+        LocalDateTime shiftEnd = shiftSchedule.getEndTime().isAfter(shiftSchedule.getStartTime())
+                || shiftSchedule.getEndTime().equals(shiftSchedule.getStartTime())
+                ? LocalDateTime.of(shiftDate, shiftSchedule.getEndTime())
+                : LocalDateTime.of(shiftDate.plusDays(1), shiftSchedule.getEndTime());
+
+        boolean isOutsideShift = !requestEnd.isAfter(shiftStart) || !requestStart.isBefore(shiftEnd);
+        if (!isOutsideShift) {
+            throw new OvertimeException("Overtime can only be requested outside your scheduled shift.");
+        }
+    }
+
+    private void validateNoLeaveConflict(Employee employee, OvertimeRequestDto requestDto) {
+        if (employee == null || employee.getEmployeeId() == null || requestDto.getWorkDate() == null || requestDto.getEndTime() == null) {
+            return;
+        }
+
+        LocalDateTime startOfOvertimeDay = requestDto.getWorkDate().atStartOfDay();
+        LocalDateTime endOfOvertimeDayExclusive = requestDto.getEndTime().toLocalDate().plusDays(1).atStartOfDay();
+
+        boolean hasConflict = leaveRequestRepository.existsActiveOverlapForEmployee(
+                employee.getEmployeeId(),
+                startOfOvertimeDay,
+                endOfOvertimeDayExclusive
+        );
+
+        if (hasConflict) {
+            throw new OverlappingDatesException("Leave and overtime requests cannot be filed on the same day.");
+        }
+    }
+
+    private LocalDateTime currentDateTime() {
+        ZoneId zoneId = defaultConfig.getTimeZone();
+        return LocalDateTime.now(clock.withZone(zoneId));
     }
 }

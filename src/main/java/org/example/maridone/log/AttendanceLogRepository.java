@@ -14,7 +14,9 @@ import java.util.List;
 public interface AttendanceLogRepository extends JpaRepository<AttendanceLog, Long>, JpaSpecificationExecutor<AttendanceLog> {
     List<AttendanceLog> findByEmployeeIdIn(List<Long> employeeIds);
 
-    AttendanceLog findTopByEmployeeIdOrderByAttendanceIdDesc(Long empId);
+    AttendanceLog findTopByEmployeeIdOrderByTimestampDescAttendanceIdDesc(Long empId);
+
+    boolean existsByEmployeeIdAndTimestampAndDirection(Long employeeId, Instant timestamp, String direction);
 
     List<AttendanceLog> findByEmployeeIdInAndTimestampBetween(Collection<Long> employeeId, Instant timestamp, Instant timestamp2, Sort sort);
 

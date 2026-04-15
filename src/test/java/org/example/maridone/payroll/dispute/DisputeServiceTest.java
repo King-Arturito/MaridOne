@@ -2,13 +2,23 @@ package org.example.maridone.payroll.dispute;
 
 import java.util.Optional;
 
+import org.example.maridone.core.employee.Employee;
+import org.example.maridone.core.employee.EmployeeRepository;
+import org.example.maridone.core.user.UserAccountRepository;
+import org.example.maridone.document.DocumentPathRepository;
+import org.example.maridone.document.DocumentService;
+import org.example.maridone.enums.EmploymentStatus;
+import org.example.maridone.enums.Position;
 import org.example.maridone.enums.Status;
 import org.example.maridone.exception.notfound.ItemNotFoundException;
+import org.example.maridone.notification.NotificationService;
+import org.example.maridone.notification.WorkflowEmailService;
 import org.example.maridone.payroll.dto.DisputeResponseDto;
 import org.example.maridone.payroll.item.PayrollItem;
 import org.example.maridone.payroll.dto.DisputeRequestDto;
 import org.example.maridone.payroll.mapper.PayrollMapper;
 import org.example.maridone.payroll.run.PayrollItemRepository;
+import org.example.maridone.payroll.run.PayrollRun;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -28,7 +38,13 @@ class DisputeServiceTest {
 
     @Mock private DisputeRequestRepository disputeRepository;
     @Mock private PayrollItemRepository payrollItemRepository;
+    @Mock private EmployeeRepository employeeRepository;
+    @Mock private UserAccountRepository userAccountRepository;
+    @Mock private DocumentPathRepository documentPathRepository;
+    @Mock private DocumentService documentService;
     @Mock private PayrollMapper payrollMapper;
+    @Mock private NotificationService notificationService;
+    @Mock private WorkflowEmailService workflowEmailService;
 
     @InjectMocks
     private DisputeService disputeService;
@@ -85,5 +101,41 @@ class DisputeServiceTest {
         Assertions.assertEquals(6L, result.getContent().get(0).getEmployeeId());
         Assertions.assertEquals("Juan Dela Cruz", result.getContent().get(0).getEmployeeName());
         verify(payrollMapper).toResponseDto(disputeRequest);
+    }
+
+    @Test
+    void cancelRequest_ShouldNotifyHr_WithDetailedPayrollPeriod() {
+        Employee employee = new Employee();
+        employee.setFirstName("Niko");
+        employee.setLastName("Santos");
+
+        PayrollRun payrollRun = new PayrollRun();
+        payrollRun.setPeriodStart(java.time.LocalDate.of(2026, 4, 1));
+        payrollRun.setPeriodEnd(java.time.LocalDate.of(2026, 4, 15));
+
+        PayrollItem payrollItem = new PayrollItem();
+        payrollItem.setEmployee(employee);
+        payrollItem.setPayrollRun(payrollRun);
+
+        Employee hr = new Employee();
+        hr.setFirstName("Pat");
+        hr.setLastName("Reyes");
+
+        DisputeRequest disputeRequest = new DisputeRequest();
+        disputeRequest.setPayrollItem(payrollItem);
+        disputeRequest.setStatus(Status.PENDING);
+
+        when(disputeRepository.findByIdWithEmployeeForUpdate(9L)).thenReturn(Optional.of(disputeRequest));
+        when(disputeRepository.save(any(DisputeRequest.class))).thenReturn(disputeRequest);
+        when(employeeRepository.findEmployeeIdsByPosition(Position.HR, EmploymentStatus.TERMINATED)).thenReturn(java.util.List.of(5L));
+        when(employeeRepository.getReferenceById(5L)).thenReturn(hr);
+
+        disputeService.cancelRequest(9L);
+
+        Assertions.assertEquals(Status.CANCELLED, disputeRequest.getStatus());
+        verify(notificationService).createNotification(
+                hr,
+                "Dispute request from Niko Santos for April 1, 2026 to April 15, 2026 was cancelled.",
+                "HIGH");
     }
 }

@@ -20,5 +20,6 @@ public enum LeaveType {
     PATERNITY_LEAVE,
     SOLO_PARENT_LEAVE,
     MAGNA_CARTA,
-    RA9262
+    RA9262,
+    EMERGENCY_LEAVE
 }

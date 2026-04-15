@@ -25,4 +25,17 @@ public interface DeductionsRepository extends JpaRepository<DeductionsLine, Long
     GROUP BY d.deduction_type
 """, nativeQuery = true)
     List<PayTypeSummaryProjection> getSummarizedDeductions(@Param("payId") Long payId);
+    @Query("""
+        SELECT dl.deductionType AS type, SUM(dl.amount) AS totalAmount
+        FROM DeductionsLine dl
+        JOIN dl.payrollItem pi
+        WHERE pi.payrollRun.payrollStatus = 'POSTED'
+          AND pi.payrollRun.paymentDate >= :startDate
+          AND pi.payrollRun.paymentDate <= :endDate
+        GROUP BY dl.deductionType
+    """)
+    List<PayTypeSummaryProjection> getSummarizedDeductionsByDateRange(
+            @Param("startDate") java.time.LocalDate startDate,
+            @Param("endDate") java.time.LocalDate endDate
+    );
 }

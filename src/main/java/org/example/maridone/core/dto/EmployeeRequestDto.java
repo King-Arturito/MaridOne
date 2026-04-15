@@ -35,10 +35,20 @@ public class EmployeeRequestDto {
     @Pattern(regexp = "^\\D*(?:\\d\\D*){11}$", message = "Phone number must be exactly 11 digits.")
     private String phoneNumber;
     private Position position;
+    private String department;
     private BigDecimal yearlySalary;
     private Long managerId;
 
     private Address address;
+
+    private String sssNumber;
+    private String philhealthNumber;
+    private String pagibigNumber;
+    private String tinNumber;
+
+    private String emergencyContactName;
+    private String emergencyContactRelationship;
+    private String emergencyContactNumber;
 
     public String getFirstName() {
         return firstName;
@@ -128,6 +138,14 @@ public class EmployeeRequestDto {
         this.position = position;
     }
 
+    public String getDepartment() {
+        return department;
+    }
+
+    public void setDepartment(String department) {
+        this.department = department;
+    }
+
     public BigDecimal getYearlySalary() {
         return yearlySalary;
     }
@@ -150,5 +168,61 @@ public class EmployeeRequestDto {
 
     public void setAddress(Address address) {
         this.address = address;
+    }
+
+    public String getSssNumber() {
+        return sssNumber;
+    }
+
+    public void setSssNumber(String sssNumber) {
+        this.sssNumber = sssNumber;
+    }
+
+    public String getPhilhealthNumber() {
+        return philhealthNumber;
+    }
+
+    public void setPhilhealthNumber(String philhealthNumber) {
+        this.philhealthNumber = philhealthNumber;
+    }
+
+    public String getPagibigNumber() {
+        return pagibigNumber;
+    }
+
+    public void setPagibigNumber(String pagibigNumber) {
+        this.pagibigNumber = pagibigNumber;
+    }
+
+    public String getTinNumber() {
+        return tinNumber;
+    }
+
+    public void setTinNumber(String tinNumber) {
+        this.tinNumber = tinNumber;
+    }
+
+    public String getEmergencyContactName() {
+        return emergencyContactName;
+    }
+
+    public void setEmergencyContactName(String emergencyContactName) {
+        this.emergencyContactName = emergencyContactName;
+    }
+
+    public String getEmergencyContactRelationship() {
+        return emergencyContactRelationship;
+    }
+
+    public void setEmergencyContactRelationship(String emergencyContactRelationship) {
+        this.emergencyContactRelationship = emergencyContactRelationship;
+    }
+
+    public String getEmergencyContactNumber() {
+        return emergencyContactNumber;
+    }
+
+    public void setEmergencyContactNumber(String emergencyContactNumber) {
+        this.emergencyContactNumber = emergencyContactNumber;
     }
 }

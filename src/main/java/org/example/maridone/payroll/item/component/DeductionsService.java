@@ -23,20 +23,20 @@ import java.util.List;
 public class DeductionsService {
 
     private final DeductionsRepository deductionsRepository;
-    private final EarningsRepository earningsRepository;
     private final PayrollItemRepository payrollItemRepository;
     private final PayrollMapper payrollMapper;
+    private final PayrollItemTotalsService payrollItemTotalsService;
 
     public DeductionsService(
             DeductionsRepository deductionsRepository,
-            EarningsRepository earningsRepository,
             PayrollItemRepository payrollItemRepository,
-            PayrollMapper payrollMapper
+            PayrollMapper payrollMapper,
+            PayrollItemTotalsService payrollItemTotalsService
     ) {
         this.deductionsRepository = deductionsRepository;
-        this.earningsRepository = earningsRepository;
         this.payrollItemRepository = payrollItemRepository;
         this.payrollMapper = payrollMapper;
+        this.payrollItemTotalsService = payrollItemTotalsService;
     }
 
     @Transactional(readOnly = true)
@@ -70,8 +70,29 @@ public class DeductionsService {
 
         line.setAmount(updatedAmount);
         DeductionsLine updatedLine = deductionsRepository.save(line);
-        refreshItemTotals(item);
+        payrollItemTotalsService.refreshItem(item);
         return toDtos(List.of(updatedLine)).get(0);
+    }
+
+    @Transactional
+    public DeductionsDto createDeduction(DeductionsDto payload, Long itemId) {
+        if (payload == null) {
+            throw new InvalidActionException("Deduction create payload is required.");
+        }
+
+        PayrollItem item = payrollItemRepository.findById(itemId)
+                .orElseThrow(() -> new InvalidActionException("Payroll item ID:" + itemId + " not found."));
+        requireEditableAdjustmentRun(item);
+        BigDecimal amount = normalizePositive(payload.getAmount(), "Deduction amount must be greater than zero.");
+
+        DeductionsLine line = new DeductionsLine();
+        line.setPayrollItem(item);
+        line.setDeductionType(DeductionType.MANUAL_ADJUSTMENT);
+        line.setAmount(amount);
+
+        DeductionsLine createdLine = deductionsRepository.save(line);
+        payrollItemTotalsService.refreshItem(item);
+        return toDtos(List.of(createdLine)).get(0);
     }
 
     private List<DeductionsDto> toDtos(List<DeductionsLine> deductions) {
@@ -124,6 +145,15 @@ public class DeductionsService {
         return item;
     }
 
+    private PayrollRun requireEditableAdjustmentRun(PayrollItem item) {
+        PayrollItem editableItem = getEditablePayrollItem(item);
+        PayrollRun run = editableItem.getPayrollRun();
+        if (run == null || run.getRunType() != RunType.ADJUSTMENT) {
+            throw new InvalidActionException("Manual lines can only be added to adjustment payroll items.");
+        }
+        return run;
+    }
+
     private boolean isRegularRun(PayrollItem item) {
         return item.getPayrollRun() != null && item.getPayrollRun().getRunType() == RunType.REGULAR;
     }
@@ -147,26 +177,15 @@ public class DeductionsService {
         return normalized;
     }
 
-    private void refreshItemTotals(PayrollItem item) {
-        List<EarningsLine> earnings = earningsRepository.findByPayrollItem_ItemId(item.getItemId());
-        List<DeductionsLine> deductions = deductionsRepository.findByPayrollItem_ItemId(item.getItemId());
-
-        item.setEarnings(earnings);
-        item.setDeductions(deductions);
-
-        BigDecimal totalEarnings = earnings.stream()
-                .map(EarningsLine::getAmount)
-                .filter(amount -> amount != null)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-
-        BigDecimal totalDeductions = deductions.stream()
-                .map(DeductionsLine::getAmount)
-                .filter(amount -> amount != null)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-
-        item.setGrossPay(CommonCalculator.normalize(totalEarnings));
-        item.setNetPay(CommonCalculator.normalize(totalEarnings.subtract(totalDeductions)));
-        payrollItemRepository.save(item);
+    private BigDecimal normalizePositive(BigDecimal value, String errorMessage) {
+        if (value == null) {
+            throw new InvalidActionException(errorMessage);
+        }
+        BigDecimal normalized = CommonCalculator.normalize(value);
+        if (normalized.compareTo(BigDecimal.ZERO.setScale(2)) <= 0) {
+            throw new InvalidActionException(errorMessage);
+        }
+        return normalized;
     }
 
     private String getCurrentUsername() {

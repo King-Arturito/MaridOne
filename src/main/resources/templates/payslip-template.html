@@ -1,42 +1,520 @@
 <!DOCTYPE html>
-<html xmlns:th="http://www.thymeleaf.org">
+<html xmlns:th="http://www.thymeleaf.org" lang="en">
 <head>
     <meta charset="UTF-8"/>
     <title>Payslip</title>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        @page {
+            size: A4 landscape;
+            margin: 10mm;
+        }
+
+        body {
+            margin: 0;
+            font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+            font-size: 13px;
+            color: #1a1a1a;
+            background: #ffffff;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .header-table,
+        .info-table,
+        .line-table {
+            table-layout: fixed;
+        }
+
+        .sheet {
+            width: 100%;
+            height: 186mm;
+            border: 2px solid #1a1a1a;
+            border-radius: 0;
+            padding: 24px 28px 24px;
+            overflow: hidden;
+        }
+
+        .page-layout {
+            height: 100%;
+            table-layout: fixed;
+        }
+
+        .page-layout > tbody > tr > td {
+            padding: 0;
+            vertical-align: top;
+        }
+
+        .header-table td {
+            vertical-align: top;
+            padding: 0;
+        }
+
+        .company-brand {
+            width: auto;
+        }
+
+        .company-brand td {
+            padding: 0;
+            vertical-align: top;
+        }
+
+        .company-logo-cell {
+            width: 68px;
+            padding-right: 10px;
+        }
+
+        .company-logo {
+            width: 54px;
+            height: auto;
+            display: block;
+        }
+
+        .company-copy {
+            display: block;
+        }
+
+        .company-name {
+            margin: 0;
+            font-size: 16px;
+            font-weight: 700;
+            color: #1a1a1a;
+        }
+
+        .company-meta {
+            margin: 0;
+            font-size: 12px;
+            line-height: 1.5;
+            color: #555555;
+        }
+
+        .title-cell {
+            width: 28%;
+            text-align: right;
+        }
+
+        .title {
+            margin: 0;
+            font-family: Georgia, "Times New Roman", serif;
+            font-size: 36px;
+            font-weight: 900;
+            letter-spacing: 2px;
+            color: #1a1a1a;
+        }
+
+        .section-rule {
+            border-top: 2px solid #1a1a1a;
+            margin: 20px 0 18px;
+        }
+
+        .info-layout {
+            table-layout: fixed;
+            margin-bottom: 16px;
+        }
+
+        .info-layout > tbody > tr > td {
+            width: 50%;
+            vertical-align: top;
+            padding: 0;
+        }
+
+        .info-layout > tbody > tr > td:first-child {
+            padding-right: 12px;
+        }
+
+        .info-layout > tbody > tr > td:last-child {
+            padding-left: 12px;
+        }
+
+        .info-table td {
+            padding: 3px 0;
+            vertical-align: baseline;
+        }
+
+        .info-table tr {
+            height: 36px;
+        }
+
+        .info-label {
+            width: 112px;
+            font-size: 12px;
+            font-weight: 500;
+            color: #444444;
+            white-space: nowrap;
+        }
+
+        .info-value {
+            font-size: 13px;
+            color: #1a1a1a;
+            border-bottom: 1px solid #cccccc;
+            padding: 0 0 2px 0;
+            white-space: nowrap;
+            font-weight: 500;
+            line-height: 1.3;
+        }
+
+        .financial-layout {
+            table-layout: fixed;
+            margin-bottom: 12px;
+        }
+
+        .financial-layout > tbody > tr > td {
+            width: 50%;
+            vertical-align: top;
+            padding: 0;
+        }
+
+        .financial-layout > tbody > tr > td:first-child {
+            padding-right: 12px;
+        }
+
+        .financial-layout > tbody > tr > td:last-child {
+            padding-left: 12px;
+        }
+
+        .financial-box {
+            width: 100%;
+            table-layout: fixed;
+        }
+
+        .financial-box,
+        .net-pay-table {
+            max-width: 100%;
+        }
+
+        .financial-box th {
+            background: #e0e0e0;
+            border-bottom: none;
+            padding: 8px 10px;
+            font-size: 12px;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+            color: #1a1a1a;
+            text-transform: uppercase;
+        }
+
+        .financial-box th:last-child {
+            text-align: right;
+        }
+
+        .financial-content {
+            height: 188px;
+            vertical-align: top;
+            padding: 0;
+        }
+
+        .line-table td {
+            padding: 7px 10px;
+            font-size: 12px;
+            color: #1a1a1a;
+            border-top: none;
+            border-bottom: 1px solid #eeeeee;
+        }
+
+        .line-table tr:last-child td {
+            border-bottom: none;
+        }
+
+        .line-table td:last-child {
+            text-align: right;
+            white-space: nowrap;
+            width: 128px;
+            font-weight: 400;
+        }
+
+        .line-table td:first-child {
+            padding-right: 18px;
+        }
+
+        .total-row td {
+            background: #f5f5f5;
+            border-top: none;
+            padding: 9px 10px;
+            font-size: 12px;
+            font-weight: 700;
+            color: #1a1a1a;
+        }
+
+        .total-row td:last-child {
+            text-align: right;
+            white-space: nowrap;
+            width: 128px;
+        }
+
+        .net-pay-wrap {
+            width: 100%;
+        }
+
+        .net-pay-row {
+            table-layout: fixed;
+        }
+
+        .net-pay-row > tbody > tr > td {
+            width: 50%;
+            vertical-align: top;
+            padding: 0;
+        }
+
+        .net-pay-row > tbody > tr > td:first-child {
+            padding-right: 12px;
+        }
+
+        .net-pay-row > tbody > tr > td:last-child {
+            padding-left: 12px;
+        }
+
+        .net-pay-table {
+            border: 2px solid #1a1a1a;
+            table-layout: fixed;
+        }
+
+        .net-pay-table td {
+            padding: 10px 20px;
+            font-size: 16px;
+            font-weight: 700;
+            color: #1a1a1a;
+        }
+
+        .net-pay-table td:first-child {
+            background: #e0e0e0;
+        }
+
+        .net-pay-table td:last-child {
+            background: #ffffff;
+            text-align: right;
+            white-space: nowrap;
+            width: 150px;
+        }
+
+        .spacer-row td {
+            height: 100%;
+        }
+
+        .footer-rule {
+            border-top: 1px solid #999999;
+            margin: 48px 0 0;
+        }
+
+        .signatures-table td {
+            width: 50%;
+            padding: 0 0 0;
+            text-align: center;
+            vertical-align: bottom;
+        }
+
+        .signatures-table td:first-child {
+            padding-right: 12px;
+        }
+
+        .signatures-table td:last-child {
+            padding-left: 12px;
+        }
+
+        .signature-line {
+            border-top: 1px solid #999999;
+            margin: 0 0 6px;
+            width: 100%;
+        }
+
+        .signature-text {
+            font-size: 11px;
+            color: #666666;
+            font-style: italic;
+        }
+
+        .currency-text {
+            white-space: nowrap;
+        }
+    </style>
 </head>
 <body>
+<div class="sheet">
+    <table class="page-layout">
+        <tr>
+            <td>
+                <table class="header-table">
+                    <tr>
+                        <td>
+                            <table class="company-brand">
+                                <tr>
+                                    <td class="company-logo-cell">
+                                        <img th:if="${logoUrl != null and !#strings.isEmpty(logoUrl)}" th:src="${logoUrl}" class="company-logo" alt="Marid logo"/>
+                                    </td>
+                                    <td class="company-copy">
+                                        <p class="company-name">Marid Industries Corporation</p>
+                                        <p class="company-meta">Address</p>
+                                        <p class="company-meta">marid@marid.com</p>
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                        <td class="title-cell">
+                            <p class="title">PAYSLIP</p>
+                        </td>
+                    </tr>
+                </table>
 
-<h1>Payslip Details</h1>
+                <div class="section-rule"></div>
 
-<div>
-    <p><strong>Name:</strong> <span th:text="${details.name}">Employee Name</span></p>
-    <p><strong>Department:</strong> <span th:text="${details.department}">Department</span></p>
-    <p><strong>Designation:</strong> <span th:text="${details.designation}">Designation</span></p>
-    <p><strong>Pay Period:</strong> <span th:text="${details.periodStart}">Start Date</span> to <span th:text="${details.periodEnd}">End Date</span></p>
-    <p><strong>Worked Days:</strong> <span th:text="${details.workedDays}">0</span></p>
+                <table class="info-layout">
+                    <tr>
+                        <td>
+                            <table class="info-table">
+                                <tr>
+                                    <td class="info-label">Name</td>
+                                    <td class="info-value" th:text="${details.name}">Richard Moore</td>
+                                </tr>
+                                <tr>
+                                    <td class="info-label">Tax Number</td>
+                                    <td class="info-value" th:text="${details.taxNumber}">-</td>
+                                </tr>
+                                <tr>
+                                    <td class="info-label">Designation</td>
+                                    <td class="info-value" th:text="${details.designation}">EMPLOYEE</td>
+                                </tr>
+                                <tr>
+                                    <td class="info-label">Department</td>
+                                    <td class="info-value" th:text="${details.department}">Product Development Department</td>
+                                </tr>
+                            </table>
+                        </td>
+                        <td>
+                            <table class="info-table">
+                                <tr>
+                                    <td class="info-label">Payment Date</td>
+                                    <td class="info-value" th:text="${details.paymentDate != null ? #temporals.format(details.paymentDate, 'MMMM d, yyyy') : '-'}">August 30, 2026</td>
+                                </tr>
+                                <tr>
+                                    <td class="info-label">Start Date</td>
+                                    <td class="info-value" th:text="${#temporals.format(details.periodStart, 'MMMM d, yyyy')}">August 1, 2026</td>
+                                </tr>
+                                <tr>
+                                    <td class="info-label">End Date</td>
+                                    <td class="info-value" th:text="${#temporals.format(details.periodEnd, 'MMMM d, yyyy')}">August 30, 2026</td>
+                                </tr>
+                                <tr>
+                                    <td class="info-label">Worked Days</td>
+                                    <td class="info-value" th:text="${details.workedDays}">30</td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+                </table>
+
+                <table class="financial-layout">
+                    <tr>
+                        <td>
+                            <table class="financial-box">
+                                <tr>
+                                    <th>EARNINGS</th>
+                                    <th>AMOUNT</th>
+                                </tr>
+                                <tr>
+                                    <td colspan="2" class="financial-content">
+                                        <table class="line-table">
+                                            <tr th:each="earning : ${details.earningsList}">
+                                                <td th:text="${#strings.contains(earning.name, 'Overtime:') ? 'Overtime Pay' : 'Basic Pay'}">Basic Pay</td>
+                                                <td class="currency-text"
+                                                    th:text="${'P' + #numbers.formatDecimal(earning.amount, 1, 'COMMA', 2, 'POINT')}">
+                                                    P11,666.67
+                                                </td>
+                                            </tr>
+                                        </table>
+                                    </td>
+                                </tr>
+                                <tr class="total-row">
+                                    <td>Total Earnings</td>
+                                    <td class="currency-text"
+                                        th:text="${'P' + #numbers.formatDecimal(details.overallEarnings, 1, 'COMMA', 2, 'POINT')}">
+                                        P11,666.67
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                        <td>
+                            <table class="financial-box">
+                                <tr>
+                                    <th>DEDUCTIONS</th>
+                                    <th>AMOUNT</th>
+                                </tr>
+                                <tr>
+                                    <td colspan="2" class="financial-content">
+                                        <table class="line-table">
+                                            <tr th:each="deduction : ${details.deductionsBreakdownList}"
+                                                th:with="deductionLabel=${
+                                                    deduction.name == 'PAGIBIG' ? 'Pag-IBIG' :
+                                                    deduction.name == 'PHILHEALTH' ? 'PhilHealth' :
+                                                    #strings.startsWith(deduction.name, 'BRACKET_LEVEL_') ? 'Withholding Tax' :
+                                                    deduction.name
+                                                }">
+                                                <td th:text="${deductionLabel}">SSS</td>
+                                                <td class="currency-text"
+                                                    th:text="${'P' + #numbers.formatDecimal(deduction.amount, 1, 'COMMA', 2, 'POINT')}">
+                                                    P587.50
+                                                </td>
+                                            </tr>
+                                        </table>
+                                    </td>
+                                </tr>
+                                <tr class="total-row">
+                                    <td>Total Deductions</td>
+                                    <td class="currency-text"
+                                        th:text="${'P' + #numbers.formatDecimal(details.overallDeductions, 1, 'COMMA', 2, 'POINT')}">
+                                        P1,019.74
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+                </table>
+
+                <table class="net-pay-row">
+                    <tr>
+                        <td></td>
+                        <td>
+                            <div class="net-pay-wrap">
+                                <table class="net-pay-table">
+                                    <tr>
+                                        <td>Net Pay</td>
+                                        <td class="currency-text"
+                                            th:text="${'P' + #numbers.formatDecimal(details.netPay, 1, 'COMMA', 2, 'POINT')}">
+                                            P10,646.93
+                                        </td>
+                                    </tr>
+                                </table>
+                            </div>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+        <tr class="spacer-row">
+            <td></td>
+        </tr>
+        <tr>
+            <td>
+                <div class="footer-rule"></div>
+                <table class="signatures-table">
+                    <tr>
+                        <td>
+                            <div class="signature-line"></div>
+                            <div class="signature-text">Employee Signature over Printed Name</div>
+                        </td>
+                        <td>
+                            <div class="signature-line"></div>
+                            <div class="signature-text">Employer Signature over Printed Name</div>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
 </div>
-
-<hr />
-
-<h2>Earnings</h2>
-<ul>
-    <li th:each="earning : ${details.earningsList}">
-        <span th:text="${earning.name}">Earning Name</span>:
-        <span th:text="${earning.amount}">0.00</span>
-    </li>
-</ul>
-<p><strong>Overall Earnings:</strong> <span th:text="${details.overallEarnings}">0.00</span></p>
-
-<hr />
-
-<h2>Deductions</h2>
-<ul>
-    <li th:each="deduction : ${details.deductionsBreakdownList}">
-        <span th:text="${deduction.name}">Deduction Name</span>:
-        <span th:text="${deduction.amount}">0.00</span>
-    </li>
-</ul>
-<p><strong>Overall Deductions:</strong> <span th:text="${details.overallDeductions}">0.00</span></p>
-
 </body>
 </html>

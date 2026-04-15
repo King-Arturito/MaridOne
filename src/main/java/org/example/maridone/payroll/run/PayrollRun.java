@@ -24,6 +24,9 @@ public class PayrollRun {
     @Column(name = "period_end", nullable = false)
     private LocalDate periodEnd;
 
+    @Column(name = "payment_date", nullable = true)
+    private LocalDate paymentDate;
+
     @Column(name = "period_description", nullable = true)
     private String periodDescription;
 
@@ -64,6 +67,14 @@ public class PayrollRun {
 
     public void setPeriodEnd(LocalDate periodEnd) {
         this.periodEnd = periodEnd;
+    }
+
+    public LocalDate getPaymentDate() {
+        return paymentDate;
+    }
+
+    public void setPaymentDate(LocalDate paymentDate) {
+        this.paymentDate = paymentDate;
     }
 
     public String getPeriodDescription() {

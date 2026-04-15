@@ -8,6 +8,7 @@ import org.example.maridone.core.employee.EmployeeRepository;
 import org.example.maridone.enums.Activity;
 import org.example.maridone.enums.AdjustmentKind;
 import org.example.maridone.enums.DeductionType;
+import org.example.maridone.enums.EarningsType;
 import org.example.maridone.enums.PayrollStatus;
 import org.example.maridone.enums.RunType;
 import org.example.maridone.exception.notfound.EmployeeNotFoundException;
@@ -30,6 +31,7 @@ import org.example.maridone.payroll.item.component.DeductionsService;
 import org.example.maridone.payroll.item.component.EarningsLine;
 import org.example.maridone.payroll.item.component.EarningsRepository;
 import org.example.maridone.payroll.item.component.EarningsService;
+import org.example.maridone.payroll.item.component.PayrollItemTotalsService;
 import org.example.maridone.payroll.mapper.PayrollMapper;
 import org.example.maridone.payroll.run.PayrollItemRepository;
 import org.example.maridone.payroll.run.PayrollRun;
@@ -57,6 +59,7 @@ public class PayrollItemService {
     private final EarningsService earningsService;
     private final DeductionsService deductionsService;
     private final ActivityLogRepository activityLogRepository;
+    private final PayrollItemTotalsService payrollItemTotalsService;
 
     public PayrollItemService(
             PayrollItemRepository payrollItemRepository,
@@ -67,7 +70,8 @@ public class PayrollItemService {
             EarningsRepository earningsRepository,
             EarningsService earningsService,
             DeductionsService deductionsService,
-            ActivityLogRepository activityLogRepository
+            ActivityLogRepository activityLogRepository,
+            PayrollItemTotalsService payrollItemTotalsService
     ) {
         this.payrollItemRepository = payrollItemRepository;
         this.payrollMapper = payrollMapper;
@@ -78,6 +82,7 @@ public class PayrollItemService {
         this.earningsService = earningsService;
         this.deductionsService = deductionsService;
         this.activityLogRepository = activityLogRepository;
+        this.payrollItemTotalsService = payrollItemTotalsService;
     }
 
     @Transactional
@@ -165,7 +170,7 @@ public class PayrollItemService {
                 correctedAmount
         );
 
-        refreshItemTotals(adjustmentItem);
+        payrollItemTotalsService.refreshItem(adjustmentItem);
         payrollItemRepository.save(adjustmentItem);
         logLineCorrectionStaged(targetRun, source, correctedAmount);
         return payrollMapper.toItemDetailsDto(adjustmentItem);
@@ -179,6 +184,40 @@ public class PayrollItemService {
         );
 
         earningsRepository.getSummarizedEarnings(payId).forEach(p ->
+                summaryDtos.add(new PayTypeSummaryDto(AdjustmentKind.EARNING, p.getType(), p.getTotalAmount()))
+        );
+
+        return summaryDtos;
+    }
+
+    @Transactional(readOnly = true)
+    @ExecutionTime
+    public Page<ItemViewDto> getReportItemsByDateRange(
+            java.time.LocalDate startDate,
+            java.time.LocalDate endDate,
+            ItemFilter filter,
+            Pageable pageable
+    ) {
+        Page<ItemViewDto> items = payrollItemRepository.findSpecificDetailsByDateRange(startDate, endDate, filter, pageable);
+        List<ItemViewDto> displayedItems = items.getContent().stream()
+                .map(this::toDisplayedItemView)
+                .toList();
+        return new PageImpl<>(displayedItems, pageable, items.getTotalElements());
+    }
+
+    @Transactional(readOnly = true)
+    @ExecutionTime
+    public List<PayTypeSummaryDto> getSummarizedReportItemsByDateRange(
+            java.time.LocalDate startDate,
+            java.time.LocalDate endDate
+    ) {
+        List<PayTypeSummaryDto> summaryDtos = new ArrayList<>();
+
+        deductionsRepository.getSummarizedDeductionsByDateRange(startDate, endDate).forEach(p ->
+                summaryDtos.add(new PayTypeSummaryDto(AdjustmentKind.DEDUCTION, p.getType(), p.getTotalAmount()))
+        );
+
+        earningsRepository.getSummarizedEarningsByDateRange(startDate, endDate).forEach(p ->
                 summaryDtos.add(new PayTypeSummaryDto(AdjustmentKind.EARNING, p.getType(), p.getTotalAmount()))
         );
 
@@ -262,6 +301,9 @@ public class PayrollItemService {
         line.setEarningsDate(targetRun.getPeriodEnd());
         line.setOvertime(false);
         line.setOvertimeRequest(null);
+        line.setEarningsType(EarningsType.FIXED);
+        line.setTaxableAmount(stagedAmount);
+        line.setNonTaxableAmount(BigDecimal.ZERO.setScale(2));
         return earningsRepository.save(line);
     }
 
@@ -275,6 +317,7 @@ public class PayrollItemService {
         line.setAmount(stagedAmount);
         return deductionsRepository.save(line);
     }
+
 
     private CorrectionSource resolveCorrectionSource(PayrollLineCorrectionDto payload) {
         validateCorrectionPayload(payload);
@@ -456,34 +499,6 @@ public class PayrollItemService {
                 .map(DeductionsDto::getAmount)
                 .filter(amount -> amount != null)
                 .reduce(BigDecimal.ZERO.setScale(2), BigDecimal::add);
-    }
-
-    private void refreshItemTotals(PayrollItem item) {
-        if (item == null) {
-            return;
-        }
-        if (item.getItemId() == 0L) {
-            return;
-        }
-
-        List<EarningsLine> earnings = earningsRepository.findByPayrollItem_ItemId(item.getItemId());
-        List<DeductionsLine> deductions = deductionsRepository.findByPayrollItem_ItemId(item.getItemId());
-
-        item.setEarnings(earnings);
-        item.setDeductions(deductions);
-
-        BigDecimal totalEarnings = earnings.stream()
-                .map(EarningsLine::getAmount)
-                .filter(amount -> amount != null)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-
-        BigDecimal totalDeductions = deductions.stream()
-                .map(DeductionsLine::getAmount)
-                .filter(amount -> amount != null)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-
-        item.setGrossPay(CommonCalculator.normalize(totalEarnings));
-        item.setNetPay(CommonCalculator.normalize(totalEarnings.subtract(totalDeductions)));
     }
 
     private void assertRunIsEditable(PayrollRun run) {

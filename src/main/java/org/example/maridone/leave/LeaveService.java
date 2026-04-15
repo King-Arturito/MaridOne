@@ -5,7 +5,7 @@ import org.example.maridone.common.CommonCalculator;
 import org.example.maridone.common.CommonSpecs;
 import org.example.maridone.config.PayrollConfig;
 import org.example.maridone.document.DocumentPathRepository;
-import org.example.maridone.document.NOCLOUD.LocalDocumentService;
+import org.example.maridone.document.DocumentService;
 import org.example.maridone.document.path.DocumentPath;
 import org.example.maridone.document.spec.DocumentSpecs;
 import org.example.maridone.enums.*;
@@ -17,12 +17,17 @@ import org.example.maridone.exception.conflict.OverlappingDatesException;
 import org.example.maridone.exception.notfound.*;
 import org.example.maridone.exception.toolarge.FileTooLargeException;
 import org.example.maridone.exception.unauthorized.DuplicateLeaveException;
+import org.example.maridone.exception.unauthorized.InvalidActionException;
 import org.example.maridone.exception.unauthorized.InsufficientBalanceException;
 import org.example.maridone.leave.balance.*;
 import org.example.maridone.leave.dto.*;
 import org.example.maridone.leave.request.LeaveRequest;
 import org.example.maridone.leave.request.LeaveRequestRepository;
 import org.example.maridone.leave.spec.LeaveSpecs;
+import org.example.maridone.notification.NotificationMessageFormatter;
+import org.example.maridone.notification.NotificationService;
+import org.example.maridone.notification.WorkflowEmailService;
+import org.example.maridone.overtime.OvertimeRequestRepository;
 import org.example.maridone.schedule.shift.TemplateShiftRepository;
 import org.example.maridone.schedule.shift.TemplateShiftSchedule;
 import org.springframework.data.domain.Page;
@@ -38,8 +43,10 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.Clock;
 import java.time.DayOfWeek;
 import java.time.Duration;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -50,6 +57,8 @@ import java.util.stream.Collectors;
 
 @Service
 public class LeaveService {
+    private static final int NON_SICK_LEAVE_NOTICE_DAYS = 7;
+    private static final int MAX_ADVANCE_LEAVE_MONTHS = 2;
 
     private final LeaveBalanceRepository leaveBalanceRepository;
     private final LeaveRequestRepository leaveRequestRepository;
@@ -58,8 +67,12 @@ public class LeaveService {
     private final TemplateShiftRepository templateShiftRepository;
     private final DocumentPathRepository documentPathRepository;
     private final LeaveMapper leaveMapper;
-    private final LocalDocumentService localDocumentService;
+    private final DocumentService documentService;
     private final PayrollConfig payrollConfig;
+    private final NotificationService notificationService;
+    private final OvertimeRequestRepository overtimeRequestRepository;
+    private final WorkflowEmailService workflowEmailService;
+    private Clock clock = Clock.systemDefaultZone();
 
     public LeaveService(
             LeaveBalanceRepository leaveBalanceRepository,
@@ -69,9 +82,11 @@ public class LeaveService {
             TemplateShiftRepository templateShiftRepository,
             DocumentPathRepository documentPathRepository,
             LeaveMapper leaveMapper,
-            //todo: change to Cloud
-            LocalDocumentService localDocumentService,
-            PayrollConfig payrollConfig) {
+            DocumentService documentService,
+            PayrollConfig payrollConfig,
+            NotificationService notificationService,
+            OvertimeRequestRepository overtimeRequestRepository,
+            WorkflowEmailService workflowEmailService) {
         this.leaveBalanceRepository = leaveBalanceRepository;
         this.leaveRequestRepository = leaveRequestRepository;
         this.employeeRepository = employeeRepository;
@@ -79,8 +94,11 @@ public class LeaveService {
         this.templateShiftRepository = templateShiftRepository;
         this.documentPathRepository = documentPathRepository;
         this.leaveMapper = leaveMapper;
-        this.localDocumentService = localDocumentService;
+        this.documentService = documentService;
         this.payrollConfig = payrollConfig;
+        this.notificationService = notificationService;
+        this.overtimeRequestRepository = overtimeRequestRepository;
+        this.workflowEmailService = workflowEmailService;
     }
 
     @Transactional
@@ -135,14 +153,24 @@ public class LeaveService {
     @ExecutionTime
     @Transactional
     @AuditLog
-    @NotifyRole(message = "Leave Request has been cancelled", targetRole = Position.HR)
     public void cancelRequest(Long requestId) {
-        LeaveRequest request = leaveRequestRepository.findById(requestId).orElseThrow(() -> new RequestNotFoundException("Leave Request", requestId));
+        LeaveRequest request = leaveRequestRepository.findByIdForUpdate(requestId)
+                .orElseThrow(() -> new RequestNotFoundException("Leave Request", requestId));
         if (request.getRequestStatus().equals(Status.APPROVED)) {
             throw new IllegalStateException("Cannot cancel. Dispute Request has been approved already.");
         }
         request.setRequestStatus(Status.CANCELLED);
         leaveRequestRepository.save(request);
+        String employeeName = NotificationMessageFormatter.formatEmployeeName(request.getEmployee());
+        String leaveDates = NotificationMessageFormatter.formatDateRange(
+                request.getStartDateTime().toLocalDate(),
+                request.getEndDateTime().toLocalDate()
+        );
+        notifyHr("Leave request from " + employeeName + " (" + leaveDates + ") was cancelled.");
+        notifyManager(
+                request.getEmployee(),
+                "Team leave request from " + employeeName + " (" + leaveDates + ") was cancelled."
+        );
     }
 
     @ExecutionTime
@@ -208,62 +236,71 @@ public class LeaveService {
 
     @Transactional
     @ExecutionTime
-    @NotifyRole(message = "Leave Request Pending", targetRole = Position.HR, importance = "HIGH")
     public List<LeaveRequest> createLeaveRequest(LeaveRequestDto payload, Long empId, MultipartFile file) {
         Employee emp =  employeeRepository.findById(empId).orElseThrow(() -> new EmployeeNotFoundException(empId));
-        List<LeaveRequest> requests = new ArrayList<>();
-
-        BigDecimal remainingHours = leaveBalanceRepository
-                .findByLeaveTypeAndEmployee_EmployeeId(payload.getLeaveType(), empId)
-                .orElseThrow(() -> new BalanceNotFoundException("Balance of Type:  " + payload.getLeaveType() +  " for Employee ID: " + empId + " not found."))
-                .getBalanceHours();
+        validateRequestWindow(payload);
+        validateAdvanceNotice(payload);
+        validateNoOvertimeConflict(empId, payload.getStartDateTime(), payload.getEndDateTime());
 
         //throw error if there is a pending/approved leave for your new specified leave request,
         //REGARDLESS of leave type
         Specification<LeaveRequest> spec = Specification.allOf(
-          CommonSpecs.fieldGreaterThanOrEqual("endDateTime", payload.getStartDateTime()),
-          CommonSpecs.fieldLessThanOrEqual("startDateTime", payload.getEndDateTime()),
-          CommonSpecs.fieldEquals("employee", emp),
-          CommonSpecs.fieldNotEquals("requestStatus", Status.CANCELLED),
-          CommonSpecs.fieldNotEquals("requestStatus", Status.REJECTED)
+                CommonSpecs.fieldGreaterThanOrEqual("endDateTime", payload.getStartDateTime()),
+                CommonSpecs.fieldLessThanOrEqual("startDateTime", payload.getEndDateTime()),
+                CommonSpecs.fieldEquals("employee", emp),
+                CommonSpecs.fieldNotEquals("requestStatus", Status.CANCELLED),
+                CommonSpecs.fieldNotEquals("requestStatus", Status.REJECTED)
 
         );
         if (leaveRequestRepository.exists(spec)) {
             throw new OverlappingDatesException("unable to process your request. There is an overlapping pending/approved request");
         }
 
-        List<LeaveWindow> leaveWindows = resolveLeaveWindows(payload, empId);
-        BigDecimal requestHoursTotal = calculateRequestHours(leaveWindows);
+        List<LeaveRequest> requests = new ArrayList<>();
 
-        boolean hasEnoughBalance = requestHoursTotal.compareTo(remainingHours) <= 0;
-        if (hasEnoughBalance) {
-            LeaveRequest request = createLeave(payload, emp, hasEnoughBalance);
+        if (payload.getLeaveType() == LeaveType.EMERGENCY_LEAVE) {
+            LeaveRequest request = createLeave(payload, emp, false);
             requests.add(request);
         } else {
-            LocalDateTime splitPoint = resolvePaidCoverageEnd(payload, leaveWindows, remainingHours);
+            BigDecimal remainingHours = leaveBalanceRepository
+                    .findByLeaveTypeAndEmployee_EmployeeId(payload.getLeaveType(), empId)
+                    .orElseThrow(() -> new BalanceNotFoundException("Balance of Type:  " + payload.getLeaveType() + " for Employee ID: " + empId + " not found."))
+                    .getBalanceHours();
 
-            if (payload.getStartDateTime().isBefore(splitPoint)) {
-                LeaveRequest paidRequest = createLeave(
-                        payload.getStartDateTime(),
-                        splitPoint,
-                        emp,
-                        payload.getLeaveType(),
-                        payload.getReason(),
-                        true
-                );
-                requests.add(paidRequest);
-            }
+            List<LeaveWindow> leaveWindows = resolveLeaveWindows(payload, empId);
+            BigDecimal requestHoursTotal = calculateRequestHours(leaveWindows);
 
-            if (splitPoint.isBefore(payload.getEndDateTime())) {
-                LeaveRequest unpaidRequest = createLeave(
-                        splitPoint,
-                        payload.getEndDateTime(),
-                        emp,
-                        payload.getLeaveType(),
-                        payload.getReason(),
-                        false
-                );
-                requests.add(unpaidRequest);
+            boolean hasEnoughBalance = requestHoursTotal.compareTo(remainingHours) <= 0;
+            if (hasEnoughBalance) {
+                LeaveRequest request = createLeave(payload, emp, hasEnoughBalance);
+                requests.add(request);
+            } else {
+                LocalDateTime splitPoint = resolvePaidCoverageEnd(payload, leaveWindows, remainingHours);
+
+                if (payload.getStartDateTime().isBefore(splitPoint)) {
+                    LeaveRequest paidRequest = createLeave(
+                            payload.getStartDateTime(),
+                            splitPoint,
+                            emp,
+                            payload.getLeaveType(),
+                            payload.getReason(),
+                            true
+                    );
+                    requests.add(paidRequest);
+                }
+
+                LocalDateTime unpaidStart = resolveUnpaidCoverageStart(splitPoint, leaveWindows, payload.getEndDateTime());
+                if (unpaidStart.isBefore(payload.getEndDateTime())) {
+                    LeaveRequest unpaidRequest = createLeave(
+                            unpaidStart,
+                            payload.getEndDateTime(),
+                            emp,
+                            payload.getLeaveType(),
+                            payload.getReason(),
+                            false
+                    );
+                    requests.add(unpaidRequest);
+                }
             }
         }
         if (file != null) {
@@ -271,55 +308,83 @@ public class LeaveService {
             if (file.getSize() > (10*1024*1024)) {
                 throw new FileTooLargeException("File size exceeded 10MB.");
             }
-            localDocumentService.upload(file, emp.getUserAccount().getUsername(), Directories.LEAVE_REQUEST.getDisplayName());
+            documentService.upload(file, emp.getUserAccount().getUsername(), Directories.LEAVE_REQUEST.getDisplayName());
         }
         leaveRequestRepository.saveAll(requests);
+
+        if (emp.getManager() != null) {
+            notifyManager(
+                    emp,
+                    "New team leave request from " + emp.getFirstName() + " " + emp.getLastName()
+                            + " (" + payload.getStartDateTime().toLocalDate() + " to " + payload.getEndDateTime().toLocalDate() + ")"
+            );
+            workflowEmailService.sendLeaveSubmittedToManager(emp, payload);
+        } else {
+            notifyHr("New leave request from " + emp.getFirstName() + " " + emp.getLastName()
+                    + " (" + payload.getStartDateTime().toLocalDate() + " to " + payload.getEndDateTime().toLocalDate() + ") is waiting for HR review.");
+            
+            // Send email to HR for manager-less request
+            if (!requests.isEmpty()) {
+                workflowEmailService.sendLeaveForwardedToHr(requests.get(0));
+            }
+        }
         return requests;
+    }
+
+    private void validateNoOvertimeConflict(Long employeeId, LocalDateTime leaveStart, LocalDateTime leaveEnd) {
+        if (employeeId == null || leaveStart == null || leaveEnd == null) {
+            return;
+        }
+
+        LocalDateTime startOfFirstLeaveDay = leaveStart.toLocalDate().atStartOfDay();
+        LocalDateTime endOfLastLeaveDayExclusive = leaveEnd.toLocalDate().plusDays(1).atStartOfDay();
+
+        boolean hasConflict = overtimeRequestRepository.existsActiveOverlapForEmployee(
+                employeeId,
+                startOfFirstLeaveDay,
+                endOfLastLeaveDayExclusive
+        );
+
+        if (hasConflict) {
+            throw new OverlappingDatesException("Leave and overtime requests cannot be filed on the same day.");
+        }
     }
 
     @Transactional
     @ExecutionTime
-    @Notify(message = "Your Leave Request has been #{#result.requestStatus}", importance = "HIGH", targetEmployee = "#result.employee")
     public LeaveRequest updateLeaveRequest(LeaveRequestDto payload, Long requestId) {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         UserAccount user = userAccountRepository.findByUsername(authentication.getName()).orElseThrow(
                 () -> new AccountNotFoundException(authentication.getName()));
 
-        LeaveRequest request = leaveRequestRepository.findById(requestId).orElseThrow(
+        LeaveRequest request = leaveRequestRepository.findByIdForUpdate(requestId).orElseThrow(
                 () -> new LeaveNotFoundException("Leave Request of Id: " + requestId + " is not found."));
+
 
         Long requestEmpId  = leaveRequestRepository.findEmployeeIdByRequestId(requestId).orElse(null);
         if (requestEmpId == null) {
             throw new IllegalStateException("Employee ID connected to request not found.");
         }
 
-        if (request.getRequestStatus() != Status.PENDING)  {
-            throw new IllegalStateException("This Request has been processed already.");
+        if  (requestEmpId.equals(verifyOwnEmployeeId(authentication.getName()))) {
+            throw new InvalidActionException("You cannot approve your own request.");
         }
 
-        //update leave balance:
-        if (request.getPaid() && payload.getRequestStatus().equals(Status.APPROVED)) {
-            LeaveType leaveType = Optional.ofNullable(request.getLeaveType()).orElse(payload.getLeaveType());
-            if (leaveType == null) {
-                throw new IllegalStateException("Leave type is required before approving this request.");
-            }
-            updateLeaveBalance(requestEmpId,
-                    new UpdateBalanceDto(
-                            calculateRequestHours(request.getStartDateTime(),
-                                    request.getEndDateTime(),
-                                    requestEmpId),
-                            leaveType,
-                            "subtract"));
-        }
+        validateApproverAccess(user, requestEmpId);
 
-        request.setApproverReason(payload.getApproverReason());
-        request.setRequestStatus(payload.getRequestStatus());
-        request.setApprover(user.getEmployee().getLastName() + ", " + user.getEmployee().getFirstName());
-        leaveRequestRepository.save(request);
-        return request;
+        return switch (resolveApproverPosition(user)) {
+            case MANAGER -> handleManagerLeaveReview(request, payload, user);
+            case HR -> handleHrLeaveReview(request, payload, user, requestEmpId);
+            default -> throw new InvalidActionException("Only managers and HR can review leave requests.");
+        };
     }
 
-
+    private Long verifyOwnEmployeeId(String name) {
+        UserAccount userAccount = userAccountRepository.findByUsername(name).orElseThrow((
+                () -> new AccountNotFoundException(name)
+                ));
+        return userAccount.getEmployeeId();
+    }
 
 
     //HELPER METHODS
@@ -351,14 +416,55 @@ public class LeaveService {
             boolean isPaid
     ) {
         LeaveRequest request = new LeaveRequest();
-        request.setRequestStatus(Status.PENDING);
+        request.setRequestStatus(emp.getManager() == null ? Status.PENDING_HR : Status.PENDING_MANAGER);
         request.setStartDateTime(startDateTime);
         request.setEndDateTime(endDateTime);
         request.setEmployee(emp);
         request.setLeaveType(leaveType);
         request.setReason(reason);
         request.setPaid(isPaid);
+        request.setSuggestedPaid(isPaid);
         return request;
+    }
+
+    private void validateAdvanceNotice(LeaveRequestDto payload) {
+        if (payload.getStartDateTime() == null || payload.getLeaveType() == null) {
+            return;
+        }
+
+        LocalDate requestedStartDate = payload.getStartDateTime().toLocalDate();
+        LocalDate today = LocalDate.now(clock);
+
+        if (payload.getLeaveType() == LeaveType.SICK_LEAVE || payload.getLeaveType() == LeaveType.EMERGENCY_LEAVE) {
+            return;
+        }
+
+        LocalDate latestAllowedAdvanceDate = today.plusMonths(MAX_ADVANCE_LEAVE_MONTHS);
+        if (!requestedStartDate.isBefore(latestAllowedAdvanceDate)) {
+            throw new InvalidActionException("Leave requests cannot be filed 2 or more months in advance");
+        }
+
+        LocalDate earliestAllowedDate = today.plusDays(NON_SICK_LEAVE_NOTICE_DAYS);
+        if (requestedStartDate.isBefore(earliestAllowedDate)) {
+            throw new InvalidActionException(
+                    "Non-sick leave requests must be filed at least " + NON_SICK_LEAVE_NOTICE_DAYS + " days before the leave date."
+            );
+        }
+    }
+
+    private void validateRequestWindow(LeaveRequestDto payload) {
+        if (payload.getStartDateTime() == null || payload.getEndDateTime() == null) {
+            throw new InvalidActionException("Leave start and end date-time are required.");
+        }
+
+        if (!payload.getEndDateTime().isAfter(payload.getStartDateTime())) {
+            throw new InvalidActionException("Leave end date-time must be later than the start date-time.");
+        }
+
+        LocalDateTime now = LocalDateTime.now(clock);
+        if (!payload.getStartDateTime().isAfter(now)) {
+            throw new InvalidActionException("Leave cannot be filed for a time window that has already started or passed.");
+        }
     }
 
     private List<LeaveWindow> resolveLeaveWindows(LeaveRequestDto payload, Long empId) {
@@ -439,12 +545,249 @@ public class LeaveService {
         return payload.getEndDateTime();
     }
 
+    private LocalDateTime resolveUnpaidCoverageStart(
+            LocalDateTime splitPoint,
+            List<LeaveWindow> leaveWindows,
+            LocalDateTime fallbackEnd
+    ) {
+        if (splitPoint == null || leaveWindows == null || leaveWindows.isEmpty()) {
+            return splitPoint == null ? fallbackEnd : splitPoint;
+        }
+
+        for (int index = 0; index < leaveWindows.size(); index++) {
+            LeaveWindow window = leaveWindows.get(index);
+
+            if (splitPoint.isBefore(window.startDateTime())) {
+                return window.startDateTime();
+            }
+
+            if (!splitPoint.isBefore(window.startDateTime()) && splitPoint.isBefore(window.endDateTime())) {
+                return splitPoint;
+            }
+
+            if (splitPoint.equals(window.endDateTime())) {
+                if (index + 1 < leaveWindows.size()) {
+                    return leaveWindows.get(index + 1).startDateTime();
+                }
+                return fallbackEnd;
+            }
+        }
+
+        return fallbackEnd;
+    }
+
     private List<Long> resolveHandledEmployeeIds(String username) {
         Long employeeId = userAccountRepository.findEmployeeIdByUsername(username);
         if (employeeId == null) {
             throw new AccountNotFoundException(username);
         }
         return employeeRepository.findHandledEmployeeIds(employeeId);
+    }
+
+    private void validateApproverAccess(UserAccount user, Long requestEmpId) {
+        Position position = Optional.ofNullable(user.getEmployee())
+                .map(Employee::getPosition)
+                .orElse(Position.UNKNOWN);
+
+        if (position == Position.HR) {
+            return;
+        }
+
+        if (position != Position.MANAGER) {
+            throw new InvalidActionException("Only managers and HR can review leave requests.");
+        }
+
+        List<Long> handledEmployeeIds = resolveHandledEmployeeIds(user.getUsername());
+        if (!handledEmployeeIds.contains(requestEmpId)) {
+            throw new InvalidActionException("Managers can only review leave requests from their own team.");
+        }
+    }
+
+    private void notifyManager(Employee employee, String message) {
+        Employee manager = employee.getManager();
+        if (manager == null || manager.getPosition() != Position.MANAGER) {
+            return;
+        }
+        notificationService.createNotification(manager, message, "HIGH");
+    }
+
+    private void notifyHr(String message) {
+        List<Long> hrEmployeeIds = employeeRepository.findEmployeeIdsByPosition(Position.HR, EmploymentStatus.TERMINATED);
+        for (Long employeeId : hrEmployeeIds) {
+            notificationService.createNotification(employeeRepository.getReferenceById(employeeId), message, "HIGH");
+        }
+    }
+
+    private LeaveRequest handleManagerLeaveReview(LeaveRequest request, LeaveRequestDto payload, UserAccount user) {
+        if (request.getRequestStatus() != Status.PENDING_MANAGER && request.getRequestStatus() != Status.PENDING) {
+            throw new IllegalStateException("This leave request is no longer waiting for manager review.");
+        }
+
+        Status decision = validateReviewDecision(payload.getRequestStatus());
+        String reason = validateDecisionReason(payload.getApproverReason(), "Please enter at least 5 characters for the manager review.");
+        String approverName = formatApproverName(user);
+        Instant decisionTime = Instant.now();
+
+        request.setManagerApprover(approverName);
+        request.setManagerApproverReason(reason);
+        request.setManagerApprovedAt(decisionTime);
+
+        if (decision == Status.APPROVED) {
+            request.setRequestStatus(Status.PENDING_HR);
+            request.setApprover(null);
+            request.setApproverReason(null);
+            request.setApprovedAt(null);
+            leaveRequestRepository.save(request);
+
+            String employeeName = NotificationMessageFormatter.formatEmployeeName(request.getEmployee());
+            String leaveDates = NotificationMessageFormatter.formatDateRange(
+                    request.getStartDateTime().toLocalDate(),
+                    request.getEndDateTime().toLocalDate()
+            );
+            notifyHr("Leave request from " + employeeName + " (" + leaveDates + ") is ready for HR review.");
+            notifyEmployee(
+                    request.getEmployee(),
+                    "Your leave request (" + leaveDates + ") was endorsed by your manager and is now waiting for HR review."
+            );
+            workflowEmailService.sendLeaveForwardedToHr(request);
+            workflowEmailService.sendLeaveForwardedToEmployee(request);
+            return request;
+        }
+
+        request.setRequestStatus(Status.REJECTED);
+        request.setApprover(approverName);
+        request.setApproverReason(reason);
+        request.setApprovedAt(decisionTime);
+        leaveRequestRepository.save(request);
+        notifyEmployee(
+                request.getEmployee(),
+                "Your leave request (" + NotificationMessageFormatter.formatDateRange(
+                        request.getStartDateTime().toLocalDate(),
+                        request.getEndDateTime().toLocalDate()
+                ) + ") was denied by your manager."
+        );
+        workflowEmailService.sendLeaveManagerDecisionToEmployee(request);
+        return request;
+    }
+
+    private LeaveRequest handleHrLeaveReview(
+            LeaveRequest request,
+            LeaveRequestDto payload,
+            UserAccount user,
+            Long requestEmpId
+    ) {
+        if (request.getRequestStatus() != Status.PENDING_HR) {
+            throw new IllegalStateException("This leave request is no longer waiting for HR review.");
+        }
+
+        Status decision = validateReviewDecision(payload.getRequestStatus());
+        String reason = validateDecisionReason(payload.getApproverReason(), "Please enter at least 5 characters for the HR decision.");
+        String approverName = formatApproverName(user);
+        Instant decisionTime = Instant.now();
+
+        if (decision == Status.APPROVED) {
+            boolean finalPaid = resolveFinalPaidValue(payload.getPaid(), request.getPaid());
+            boolean paidOverrideApplied = !Boolean.valueOf(finalPaid).equals(request.getSuggestedPaid());
+            String paidOverrideReason = validatePaidOverrideReason(
+                    paidOverrideApplied,
+                    payload.getPaidOverrideReason()
+            );
+
+            if (Boolean.TRUE.equals(request.getSuggestedPaid()) && finalPaid && request.getLeaveType() != LeaveType.EMERGENCY_LEAVE) {
+                LeaveType leaveType = Optional.ofNullable(request.getLeaveType()).orElse(payload.getLeaveType());
+                if (leaveType == null) {
+                    throw new IllegalStateException("Leave type is required before approving this request.");
+                }
+                updateLeaveBalance(requestEmpId,
+                        new UpdateBalanceDto(
+                                calculateRequestHours(request.getStartDateTime(),
+                                        request.getEndDateTime(),
+                                        requestEmpId),
+                                leaveType,
+                                "subtract"));
+            }
+
+            request.setPaid(finalPaid);
+            request.setPaidOverrideReason(paidOverrideReason);
+        }
+
+        request.setApproverReason(reason);
+        request.setRequestStatus(decision);
+        request.setApprover(approverName);
+        request.setApprovedAt(decisionTime);
+        leaveRequestRepository.save(request);
+
+        String leaveDates = NotificationMessageFormatter.formatDateRange(
+                request.getStartDateTime().toLocalDate(),
+                request.getEndDateTime().toLocalDate()
+        );
+        if (decision == Status.APPROVED) {
+            String payLabel = Boolean.TRUE.equals(request.getPaid()) ? "paid" : "unpaid";
+            notifyEmployee(
+                    request.getEmployee(),
+                    "Your leave request (" + leaveDates + ") was approved by HR as " + payLabel + " leave."
+            );
+            workflowEmailService.sendLeaveDecisionToEmployee(request);
+        } else {
+            notifyEmployee(
+                    request.getEmployee(),
+                    "Your leave request (" + leaveDates + ") was denied by HR."
+            );
+            workflowEmailService.sendLeaveDecisionToEmployee(request);
+        }
+        return request;
+    }
+
+    private Position resolveApproverPosition(UserAccount user) {
+        return Optional.ofNullable(user.getEmployee())
+                .map(Employee::getPosition)
+                .orElse(Position.UNKNOWN);
+    }
+
+    private Status validateReviewDecision(Status decision) {
+        if (decision != Status.APPROVED && decision != Status.REJECTED) {
+            throw new InvalidActionException("Only approve or reject decisions are allowed here.");
+        }
+        return decision;
+    }
+
+    private String validateDecisionReason(String reason, String message) {
+        String trimmed = reason == null ? "" : reason.trim();
+        if (trimmed.length() < 5) {
+            throw new InvalidActionException(message);
+        }
+        return trimmed;
+    }
+
+    private String validatePaidOverrideReason(boolean overrideApplied, String reason) {
+        if (!overrideApplied) {
+            return null;
+        }
+        String trimmed = reason == null ? "" : reason.trim();
+        if (trimmed.length() < 5) {
+            throw new InvalidActionException("Please explain why HR is overriding the paid or unpaid leave treatment.");
+        }
+        return trimmed;
+    }
+
+    private boolean resolveFinalPaidValue(Boolean payloadPaid, Boolean currentPaid) {
+        if (payloadPaid != null) {
+            return payloadPaid;
+        }
+        return Boolean.TRUE.equals(currentPaid);
+    }
+
+    private String formatApproverName(UserAccount user) {
+        Employee employee = Optional.ofNullable(user.getEmployee())
+                .orElseThrow(() -> new AccountNotFoundException(user.getUsername()));
+        return employee.getLastName() + ", " + employee.getFirstName();
+    }
+
+    private void notifyEmployee(Employee employee, String message) {
+        if (employee == null) {
+            return;
+        }
+        notificationService.createNotification(employee, message, "HIGH");
     }
 
 

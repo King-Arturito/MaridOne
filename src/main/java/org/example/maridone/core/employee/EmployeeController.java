@@ -3,6 +3,7 @@ package org.example.maridone.core.employee;
 import jakarta.validation.groups.Default;
 import org.example.maridone.annotation.AuditLog;
 import org.example.maridone.core.dto.EmployeeDetailsDto;
+import org.example.maridone.core.dto.EmployeeOptionDto;
 import org.example.maridone.core.dto.EmployeeRequestDto;
 import org.example.maridone.core.dto.EmployeeResponseDto;
 import org.example.maridone.core.filter.EmployeeFilter;
@@ -14,6 +15,7 @@ import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -58,6 +60,12 @@ public class EmployeeController {
         return employeeService.getAllEmployees(employeeFilter,pageable);
     }
 
+    @GetMapping("/options")
+    @PreAuthorize("hasRole('HR')")
+    public List<EmployeeOptionDto> getEmployeeOptions() {
+        return employeeService.getEmployeeOptions();
+    }
+
     @GetMapping("/team")
     @PreAuthorize("hasRole('MANAGER')")
     public List<EmployeeResponseDto> getTeamEmployees(@RequestParam(required = false) Integer page,
@@ -83,8 +91,13 @@ public class EmployeeController {
     @AuditLog
     public ResponseEntity<EmployeeResponseDto> updateEmployee(
             @PathVariable Long id,
+            Authentication authentication,
             @Validated @RequestBody EmployeeRequestDto employeeRequestDto) {
-        EmployeeResponseDto response =  employeeService.updateEmployee(id, employeeRequestDto);
+        boolean isHr = authentication.getAuthorities().stream()
+                .anyMatch(authority -> "ROLE_HR".equals(authority.getAuthority()));
+        EmployeeResponseDto response = isHr
+                ? employeeService.updateEmployee(id, employeeRequestDto)
+                : employeeService.updateSelfEmployeeProfile(id, employeeRequestDto);
         return ResponseEntity.ok(response);
     }
 

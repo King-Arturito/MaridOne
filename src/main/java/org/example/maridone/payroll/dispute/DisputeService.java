@@ -4,14 +4,19 @@ import org.example.maridone.annotation.NotifyRole;
 import org.example.maridone.annotation.ExecutionTime;
 import org.example.maridone.annotation.Notify;
 import org.example.maridone.common.CommonSpecs;
+import org.example.maridone.core.employee.EmployeeRepository;
+import org.example.maridone.core.user.UserAccount;
+import org.example.maridone.core.user.UserAccountRepository;
 import org.example.maridone.document.DocumentPathRepository;
-import org.example.maridone.document.NOCLOUD.LocalDocumentService;
+import org.example.maridone.document.DocumentService;
 import org.example.maridone.document.path.DocumentPath;
 import org.example.maridone.document.spec.DocumentSpecs;
 import org.example.maridone.enums.Directories;
+import org.example.maridone.enums.EmploymentStatus;
 import org.example.maridone.enums.PayrollStatus;
 import org.example.maridone.enums.Position;
 import org.example.maridone.enums.Status;
+import org.example.maridone.exception.notfound.AccountNotFoundException;
 import org.example.maridone.exception.toolarge.FileTooLargeException;
 import org.example.maridone.exception.unauthorized.DuplicateDisputeException;
 import org.example.maridone.exception.unauthorized.InvalidActionException;
@@ -23,6 +28,9 @@ import org.example.maridone.payroll.dto.DisputeActionDto;
 import org.example.maridone.payroll.dto.DisputeRequestDto;
 import org.example.maridone.payroll.dto.DisputeResponseDto;
 import org.example.maridone.payroll.mapper.PayrollMapper;
+import org.example.maridone.notification.NotificationMessageFormatter;
+import org.example.maridone.notification.NotificationService;
+import org.example.maridone.notification.WorkflowEmailService;
 import org.example.maridone.payroll.run.PayrollItemRepository;
 import org.example.maridone.payroll.spec.DisputeSpecs;
 import org.springframework.data.domain.Page;
@@ -40,27 +48,43 @@ import java.time.Instant;
 public class DisputeService {
     private final DisputeRequestRepository disputeRepository;
     private final PayrollItemRepository payrollItemRepository;
+    private final EmployeeRepository employeeRepository;
+    private final UserAccountRepository userAccountRepository;
     private final DocumentPathRepository documentPathRepository;
     //todo: change to cloud
-    private final LocalDocumentService localDocumentService;
+    private final DocumentService documentService;
     private final PayrollMapper payrollMapper;
+    private final NotificationService notificationService;
+    private final WorkflowEmailService workflowEmailService;
     public DisputeService
             (DisputeRequestRepository disputeRepository,
              PayrollItemRepository payrollItemRepository,
+             EmployeeRepository employeeRepository,
+             UserAccountRepository userAccountRepository,
              DocumentPathRepository documentPathRepository,
-             LocalDocumentService localDocumentService,
-             PayrollMapper payrollMapper) {
+             DocumentService documentService,
+             PayrollMapper payrollMapper,
+             NotificationService notificationService,
+             WorkflowEmailService workflowEmailService) {
         this.disputeRepository = disputeRepository;
         this.payrollItemRepository = payrollItemRepository;
+        this.employeeRepository = employeeRepository;
+        this.userAccountRepository = userAccountRepository;
         this.documentPathRepository = documentPathRepository;
-        this.localDocumentService = localDocumentService;
+        this.documentService = documentService;
         this.payrollMapper = payrollMapper;
+        this.notificationService = notificationService;
+        this.workflowEmailService = workflowEmailService;
     }
 
 
     @Transactional
     @ExecutionTime
-    @NotifyRole(message = "Dispute Requested", targetRole = Position.HR, importance = "HIGH")
+    @NotifyRole(
+            message = "New payroll dispute from #{#result.payrollItem.employee.firstName} "
+                    + "#{#result.payrollItem.employee.lastName}: #{#result.subject}",
+            targetRole = Position.HR,
+            importance = "HIGH")
     public DisputeRequest createDisputeRequest(Long itemId, DisputeRequestDto payload, MultipartFile file) {
         PayrollItem item = payrollItemRepository
                 .findByItemIdAndPayrollRun_PayrollStatus(itemId, PayrollStatus.POSTED)
@@ -85,24 +109,46 @@ public class DisputeService {
             if (file.getSize() > (10*1024*1024)) {
                 throw new FileTooLargeException("File exceeds 10MB");
             }
-            localDocumentService.upload(file, item.getEmployee().getUserAccount().getUsername(), Directories.DISPUTE.getDisplayName());
+            documentService.upload(file, item.getEmployee().getUserAccount().getUsername(), Directories.DISPUTE.getDisplayName());
         }
-        return disputeRepository.save(disputeRequest);
+        DisputeRequest savedRequest = disputeRepository.save(disputeRequest);
+        workflowEmailService.sendDisputeSubmittedToHr(savedRequest);
+        return savedRequest;
     }
 
     @Transactional
     @ExecutionTime
-    @Notify(message = "Your Dispute Request has been  #{#result.status}", targetEmployee = "#result.employeeId",importance = "HIGH")
-    public DisputeResponseDto updateDisputeStatus(Long disputeId, DisputeActionDto payload) {
-        DisputeRequest disputeRequest = disputeRepository.findByIdWithEmployee(disputeId)
+    @Notify(
+            message = "Your dispute about #{#result.subject} was #{#result.status}",
+            targetEmployee = "#result.employeeId",
+            importance = "HIGH")
+    public DisputeResponseDto updateDisputeStatus(Long disputeId, DisputeActionDto payload, String approverUsername) {
+        DisputeRequest disputeRequest = disputeRepository.findByIdWithEmployeeForUpdate(disputeId)
                 .orElseThrow(() -> new RequestNotFoundException("Dispute Request",disputeId));
-        if (disputeRequest.getStatus().equals(Status.APPROVED)) {
-            throw new InvalidActionException("Dispute ID: " + disputeId + " has been approved already.");
+
+
+        if (disputeRequest.getStatus() != Status.PENDING) {
+            throw new InvalidActionException("Dispute ID: " + disputeId + " has been processed already.");
+        }
+        UserAccount approver = userAccountRepository.findByUsername(approverUsername)
+                .orElseThrow(() -> new AccountNotFoundException(approverUsername));
+
+        Long empId = disputeRepository.findEmployeeIdByDisputeRequestId(disputeId);
+        if ( empId !=  null && empId.equals(approver.getEmployeeId())) {
+            throw new InvalidActionException("You cannot approve your own request");
         }
         disputeRequest.setStatus(payload.getStatus());
         disputeRequest.setStatusReason(payload.getStatusReason());
+        if (approver.getEmployee() != null) {
+            disputeRequest.setApprover(
+                    approver.getEmployee().getLastName() + ", " + approver.getEmployee().getFirstName()
+            );
+        } else {
+            disputeRequest.setApprover(approverUsername);
+        }
         disputeRequest.setUpdatedAt(Instant.now());
         disputeRepository.save(disputeRequest);
+        workflowEmailService.sendDisputeDecisionToEmployee(disputeRequest);
         return payrollMapper.toResponseDto(disputeRequest);
     }
 
@@ -162,13 +208,24 @@ public class DisputeService {
 
     @ExecutionTime
     @Transactional
-    @NotifyRole(message = "Dispute Request Cancelled.", targetRole = Position.HR)
     public void cancelRequest(Long disputeId) {
-        DisputeRequest disputeRequest = disputeRepository.findById(disputeId).orElseThrow(() -> new RequestNotFoundException("Dispute Request",disputeId));
+        DisputeRequest disputeRequest = disputeRepository.findByIdWithEmployeeForUpdate(disputeId)
+                .orElseThrow(() -> new RequestNotFoundException("Dispute Request",disputeId));
         if (disputeRequest.getStatus().equals(Status.APPROVED)) {
             throw new IllegalStateException("Cannot cancel. Dispute Request has been approved already.");
         }
         disputeRequest.setStatus(Status.CANCELLED);
         disputeRepository.save(disputeRequest);
+        String employeeName = NotificationMessageFormatter.formatEmployeeName(disputeRequest.getPayrollItem().getEmployee());
+        String payrollPeriod = NotificationMessageFormatter.formatPayrollPeriod(
+                disputeRequest.getPayrollItem().getPayrollRun()
+        );
+        notifyHr("Dispute request from " + employeeName + " for " + payrollPeriod + " was cancelled.");
+    }
+
+    private void notifyHr(String message) {
+        for (Long employeeId : employeeRepository.findEmployeeIdsByPosition(Position.HR, EmploymentStatus.TERMINATED)) {
+            notificationService.createNotification(employeeRepository.getReferenceById(employeeId), message, "HIGH");
+        }
     }
 }

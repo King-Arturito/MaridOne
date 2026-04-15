@@ -22,7 +22,7 @@ public class LeaveBalance {
     @JsonIgnore
     private Employee employee;
 
-    @Column(name ="balanceHours", nullable = false)
+    @Column(name ="balance_hours", nullable = false)
     private BigDecimal balanceHours;
 
     @Column(name = "leave_type", nullable = false)
