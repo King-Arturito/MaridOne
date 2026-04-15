@@ -76,7 +76,7 @@ class LeaveServiceTest {
         ReflectionTestUtils.setField(
                 leaveService,
                 "clock",
-                Clock.fixed(Instant.parse("2026-03-16T00:00:00Z"), ZoneOffset.UTC)
+                Clock.fixed(Instant.parse("2026-03-16T12:00:00Z"), ZoneOffset.UTC)
         );
     }
 
@@ -116,6 +116,9 @@ class LeaveServiceTest {
 
         Employee emp = new Employee();
         ReflectionTestUtils.setField(emp, "employeeId", empId);
+        Employee manager = new Employee();
+        manager.setPosition(Position.MANAGER);
+        emp.setManager(manager);
 
         LeaveBalance leaveBalance = new LeaveBalance();
         leaveBalance.setBalanceHours(BigDecimal.valueOf(9));
@@ -187,6 +190,50 @@ class LeaveServiceTest {
     }
 
     @Test
+    void createLeaveRequest_ShouldReject_WhenRequestWindowAlreadyStarted() {
+        Long empId = 1L;
+        LeaveRequestDto dto = new LeaveRequestDto();
+        dto.setStartDateTime(LocalDateTime.of(2026, 3, 16, 8, 0));
+        dto.setEndDateTime(LocalDateTime.of(2026, 3, 16, 17, 0));
+        dto.setReason("Late filing");
+        dto.setLeaveType(LeaveType.SICK_LEAVE);
+
+        Employee emp = new Employee();
+        ReflectionTestUtils.setField(emp, "employeeId", empId);
+
+        when(employeeRepository.findById(empId)).thenReturn(Optional.of(emp));
+
+        InvalidActionException error = Assertions.assertThrows(
+                InvalidActionException.class,
+                () -> leaveService.createLeaveRequest(dto, empId, null)
+        );
+
+        Assertions.assertTrue(error.getMessage().contains("already started or passed"));
+    }
+
+    @Test
+    void createLeaveRequest_ShouldReject_WhenFiledTwoMonthsOrMoreAhead() {
+        Long empId = 1L;
+        LeaveRequestDto dto = new LeaveRequestDto();
+        dto.setStartDateTime(LocalDateTime.of(2026, 5, 16, 8, 0));
+        dto.setEndDateTime(LocalDateTime.of(2026, 5, 16, 17, 0));
+        dto.setReason("Planned vacation");
+        dto.setLeaveType(LeaveType.VACATION_LEAVE);
+
+        Employee emp = new Employee();
+        ReflectionTestUtils.setField(emp, "employeeId", empId);
+
+        when(employeeRepository.findById(empId)).thenReturn(Optional.of(emp));
+
+        InvalidActionException error = Assertions.assertThrows(
+                InvalidActionException.class,
+                () -> leaveService.createLeaveRequest(dto, empId, null)
+        );
+
+        Assertions.assertEquals("Leave requests cannot be filed 2 or more months in advance", error.getMessage());
+    }
+
+    @Test
     void createLeaveRequest_ShouldSplitPaidAndUnpaidUsingShiftCoverage() {
         Long empId = 1L;
         LeaveRequestDto dto = new LeaveRequestDto();
@@ -232,8 +279,8 @@ class LeaveServiceTest {
     void createLeaveRequest_ShouldMoveUnpaidPortionToNextShift_WhenPaidCoverageEndsAtShiftBoundary() {
         Long empId = 1L;
         LeaveRequestDto dto = new LeaveRequestDto();
-        dto.setStartDateTime(LocalDateTime.of(2026, 7, 13, 9, 0));
-        dto.setEndDateTime(LocalDateTime.of(2026, 7, 15, 17, 0));
+        dto.setStartDateTime(LocalDateTime.of(2026, 5, 11, 9, 0));
+        dto.setEndDateTime(LocalDateTime.of(2026, 5, 13, 17, 0));
         dto.setReason("Medical recovery");
         dto.setLeaveType(LeaveType.SICK_LEAVE);
 
@@ -259,13 +306,13 @@ class LeaveServiceTest {
 
         LeaveRequest paid = results.get(0);
         Assertions.assertTrue(paid.getPaid());
-        Assertions.assertEquals(LocalDateTime.of(2026, 7, 13, 9, 0), paid.getStartDateTime());
-        Assertions.assertEquals(LocalDateTime.of(2026, 7, 14, 17, 0), paid.getEndDateTime());
+        Assertions.assertEquals(LocalDateTime.of(2026, 5, 11, 9, 0), paid.getStartDateTime());
+        Assertions.assertEquals(LocalDateTime.of(2026, 5, 12, 17, 0), paid.getEndDateTime());
 
         LeaveRequest unpaid = results.get(1);
         Assertions.assertFalse(unpaid.getPaid());
-        Assertions.assertEquals(LocalDateTime.of(2026, 7, 15, 9, 0), unpaid.getStartDateTime());
-        Assertions.assertEquals(LocalDateTime.of(2026, 7, 15, 17, 0), unpaid.getEndDateTime());
+        Assertions.assertEquals(LocalDateTime.of(2026, 5, 13, 9, 0), unpaid.getStartDateTime());
+        Assertions.assertEquals(LocalDateTime.of(2026, 5, 13, 17, 0), unpaid.getEndDateTime());
     }
 
     @Test

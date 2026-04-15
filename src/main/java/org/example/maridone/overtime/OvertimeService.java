@@ -33,9 +33,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.time.ZoneId;
 import java.util.List;
 
 @Service
@@ -50,6 +52,7 @@ public class OvertimeService {
     private final NotificationService notificationService;
     private final LeaveRequestRepository leaveRequestRepository;
     private final WorkflowEmailService workflowEmailService;
+    private Clock clock = Clock.systemDefaultZone();
 
     public OvertimeService(OvertimeRequestRepository overtimeRequestRepository,
                            OvertimeMapper overtimeMapper,
@@ -393,8 +396,11 @@ public class OvertimeService {
         if (!endTime.isAfter(startTime)) {
             throw new OvertimeException("End date and time must be later than the start date and time.");
         }
-        if (workDate.isBefore(LocalDate.now(defaultConfig.getTimeZone()))) {
+        if (workDate.isBefore(currentDateTime().toLocalDate())) {
             throw new OvertimeException("Overtime cannot be requested for past dates.");
+        }
+        if (!startTime.isAfter(currentDateTime())) {
+            throw new OvertimeException("Overtime cannot be requested for a time window that has already started or passed.");
         }
 
         LocalDate maxEndDate = startTime.toLocalDate().plusDays(1);
@@ -443,5 +449,10 @@ public class OvertimeService {
         if (hasConflict) {
             throw new OverlappingDatesException("Leave and overtime requests cannot be filed on the same day.");
         }
+    }
+
+    private LocalDateTime currentDateTime() {
+        ZoneId zoneId = defaultConfig.getTimeZone();
+        return LocalDateTime.now(clock.withZone(zoneId));
     }
 }

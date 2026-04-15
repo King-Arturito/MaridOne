@@ -1,9 +1,12 @@
 package org.example.maridone.overtime;
 
+import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.util.Optional;
 
 import org.example.maridone.config.DefaultConfig;
@@ -56,6 +59,15 @@ class OvertimeServiceTest {
 
     @InjectMocks
     private OvertimeService overtimeService;
+
+    @org.junit.jupiter.api.BeforeEach
+    void setUpClock() {
+        ReflectionTestUtils.setField(
+                overtimeService,
+                "clock",
+                Clock.fixed(Instant.parse("2026-03-16T12:00:00Z"), ZoneOffset.UTC)
+        );
+    }
 
     @Test
     void createOvertimeRequest_ShouldSave() {
@@ -179,6 +191,30 @@ class OvertimeServiceTest {
         );
 
         Assertions.assertTrue(error.getMessage().contains("same day"));
+    }
+
+    @Test
+    void createOvertimeRequest_ShouldReject_WhenRequestWindowAlreadyStarted() {
+        String username = "niko123";
+        ZoneId zoneId = ZoneId.of("Asia/Manila");
+        LocalDate workDate = LocalDate.of(2026, 3, 16);
+        OvertimeRequestDto dto = new OvertimeRequestDto();
+        dto.setWorkDate(workDate);
+        dto.setStartTime(LocalDateTime.of(workDate, LocalTime.of(17, 0)));
+        dto.setEndTime(LocalDateTime.of(workDate, LocalTime.of(19, 0)));
+
+        Employee emp = new Employee();
+        ReflectionTestUtils.setField(emp, "employeeId", 9L);
+
+        when(employeeRepository.findOne(any(Specification.class))).thenReturn(Optional.of(emp));
+        when(defaultConfig.getTimeZone()).thenReturn(zoneId);
+
+        OvertimeException error = Assertions.assertThrows(
+                OvertimeException.class,
+                () -> overtimeService.createOvertimeRequest(dto, username)
+        );
+
+        Assertions.assertTrue(error.getMessage().contains("already started or passed"));
     }
 
     @Test

@@ -58,6 +58,7 @@ import java.util.stream.Collectors;
 @Service
 public class LeaveService {
     private static final int NON_SICK_LEAVE_NOTICE_DAYS = 7;
+    private static final int MAX_ADVANCE_LEAVE_MONTHS = 2;
 
     private final LeaveBalanceRepository leaveBalanceRepository;
     private final LeaveRequestRepository leaveRequestRepository;
@@ -237,6 +238,7 @@ public class LeaveService {
     @ExecutionTime
     public List<LeaveRequest> createLeaveRequest(LeaveRequestDto payload, Long empId, MultipartFile file) {
         Employee emp =  employeeRepository.findById(empId).orElseThrow(() -> new EmployeeNotFoundException(empId));
+        validateRequestWindow(payload);
         validateAdvanceNotice(payload);
         validateNoOvertimeConflict(empId, payload.getStartDateTime(), payload.getEndDateTime());
 
@@ -426,16 +428,42 @@ public class LeaveService {
     }
 
     private void validateAdvanceNotice(LeaveRequestDto payload) {
-        if (payload.getLeaveType() == null || payload.getLeaveType() == LeaveType.SICK_LEAVE || payload.getLeaveType() == LeaveType.EMERGENCY_LEAVE || payload.getStartDateTime() == null) {
+        if (payload.getStartDateTime() == null || payload.getLeaveType() == null) {
             return;
         }
 
-        LocalDate earliestAllowedDate = LocalDate.now(clock).plusDays(NON_SICK_LEAVE_NOTICE_DAYS);
         LocalDate requestedStartDate = payload.getStartDateTime().toLocalDate();
+        LocalDate today = LocalDate.now(clock);
+
+        if (payload.getLeaveType() == LeaveType.SICK_LEAVE || payload.getLeaveType() == LeaveType.EMERGENCY_LEAVE) {
+            return;
+        }
+
+        LocalDate latestAllowedAdvanceDate = today.plusMonths(MAX_ADVANCE_LEAVE_MONTHS);
+        if (!requestedStartDate.isBefore(latestAllowedAdvanceDate)) {
+            throw new InvalidActionException("Leave requests cannot be filed 2 or more months in advance");
+        }
+
+        LocalDate earliestAllowedDate = today.plusDays(NON_SICK_LEAVE_NOTICE_DAYS);
         if (requestedStartDate.isBefore(earliestAllowedDate)) {
             throw new InvalidActionException(
                     "Non-sick leave requests must be filed at least " + NON_SICK_LEAVE_NOTICE_DAYS + " days before the leave date."
             );
+        }
+    }
+
+    private void validateRequestWindow(LeaveRequestDto payload) {
+        if (payload.getStartDateTime() == null || payload.getEndDateTime() == null) {
+            throw new InvalidActionException("Leave start and end date-time are required.");
+        }
+
+        if (!payload.getEndDateTime().isAfter(payload.getStartDateTime())) {
+            throw new InvalidActionException("Leave end date-time must be later than the start date-time.");
+        }
+
+        LocalDateTime now = LocalDateTime.now(clock);
+        if (!payload.getStartDateTime().isAfter(now)) {
+            throw new InvalidActionException("Leave cannot be filed for a time window that has already started or passed.");
         }
     }
 
