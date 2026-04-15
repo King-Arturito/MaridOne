@@ -435,13 +435,11 @@ public class LeaveService {
         LocalDate requestedStartDate = payload.getStartDateTime().toLocalDate();
         LocalDate today = LocalDate.now(clock);
 
-        if (payload.getLeaveType() == LeaveType.SICK_LEAVE || payload.getLeaveType() == LeaveType.EMERGENCY_LEAVE) {
-            return;
-        }
-
-        LocalDate latestAllowedAdvanceDate = today.plusMonths(MAX_ADVANCE_LEAVE_MONTHS);
-        if (!requestedStartDate.isBefore(latestAllowedAdvanceDate)) {
-            throw new InvalidActionException("Leave requests cannot be filed 2 or more months in advance");
+        if (isAdvanceBookingRestricted(payload.getLeaveType())) {
+            LocalDate latestAllowedAdvanceDate = today.plusMonths(MAX_ADVANCE_LEAVE_MONTHS);
+            if (!requestedStartDate.isBefore(latestAllowedAdvanceDate)) {
+                throw new InvalidActionException("Leave requests cannot be filed 2 or more months in advance for this leave type.");
+            }
         }
 
         LocalDate earliestAllowedDate = today.plusDays(NON_SICK_LEAVE_NOTICE_DAYS);
@@ -450,6 +448,14 @@ public class LeaveService {
                     "Non-sick leave requests must be filed at least " + NON_SICK_LEAVE_NOTICE_DAYS + " days before the leave date."
             );
         }
+    }
+
+    private boolean isAdvanceBookingRestricted(LeaveType leaveType) {
+        return leaveType == LeaveType.SICK_LEAVE ||
+               leaveType == LeaveType.EMERGENCY_LEAVE ||
+               leaveType == LeaveType.MAGNA_CARTA ||
+               leaveType == LeaveType.SOLO_PARENT_LEAVE ||
+               leaveType == LeaveType.RA9262;
     }
 
     private void validateRequestWindow(LeaveRequestDto payload) {
@@ -510,7 +516,8 @@ public class LeaveService {
     private BigDecimal calculateRequestHours(List<LeaveWindow> leaveWindows) {
         BigDecimal hours = BigDecimal.ZERO;
         for (LeaveWindow window : leaveWindows) {
-            hours = hours.add(CommonCalculator.calculateHours(window.startDateTime(), window.endDateTime()));
+            BigDecimal rawHours = CommonCalculator.calculateHours(window.startDateTime(), window.endDateTime());
+            hours = hours.add(CommonCalculator.deductUnpaidLunchHour(rawHours));
         }
         return hours;
     }
@@ -530,16 +537,26 @@ public class LeaveService {
                 .longValue();
 
         for (LeaveWindow window : leaveWindows) {
-            long windowMinutes = Duration.between(window.startDateTime(), window.endDateTime()).toMinutes();
-            if (remainingMinutes >= windowMinutes) {
-                remainingMinutes -= windowMinutes;
+            long rawWindowMinutes = Duration.between(window.startDateTime(), window.endDateTime()).toMinutes();
+            // If the window is > 5 hours, 1 hour (60 mins) is unpaid lunch and doesn't count towards the balance deduction.
+            long deductibleMinutes = rawWindowMinutes > 300 ? rawWindowMinutes - 60 : rawWindowMinutes;
+
+            if (remainingMinutes >= deductibleMinutes) {
+                remainingMinutes -= deductibleMinutes;
                 if (remainingMinutes == 0) {
                     return window.endDateTime();
                 }
                 continue;
             }
 
-            return window.startDateTime().plusMinutes(remainingMinutes);
+            // The remaining balance ends within this window.
+            long minutesToAdd = remainingMinutes;
+            // If the partial leave being consumed in this window exceeds 5 hours, skip the lunch hour.
+            if (minutesToAdd > 300) {
+                minutesToAdd += 60;
+            }
+
+            return window.startDateTime().plusMinutes(minutesToAdd);
         }
 
         return payload.getEndDateTime();
