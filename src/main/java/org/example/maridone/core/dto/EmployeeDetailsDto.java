@@ -7,6 +7,7 @@ import org.example.maridone.embeddable.Address;
 import org.example.maridone.enums.EmploymentStatus;
 import org.example.maridone.enums.ExemptionStatus;
 import org.example.maridone.enums.Position;
+import org.example.maridone.enums.SeparationReason;
 
 public class EmployeeDetailsDto {
 
@@ -30,6 +31,11 @@ public class EmployeeDetailsDto {
     private String managerName;
     private String managerHeadLabel;
     private Address address;
+    private SeparationReason separationReason;
+    private Boolean eligibleForRehire;
+    private String separationNotes;
+    private LocalDate separationEffectiveDate;
+    private String separationProcessedBy;
 
     private String sssNumber;
     private String philhealthNumber;
@@ -174,6 +180,46 @@ public class EmployeeDetailsDto {
 
     public void setAddress(Address address) {
         this.address = address;
+    }
+
+    public SeparationReason getSeparationReason() {
+        return separationReason;
+    }
+
+    public void setSeparationReason(SeparationReason separationReason) {
+        this.separationReason = separationReason;
+    }
+
+    public Boolean getEligibleForRehire() {
+        return eligibleForRehire;
+    }
+
+    public void setEligibleForRehire(Boolean eligibleForRehire) {
+        this.eligibleForRehire = eligibleForRehire;
+    }
+
+    public String getSeparationNotes() {
+        return separationNotes;
+    }
+
+    public void setSeparationNotes(String separationNotes) {
+        this.separationNotes = separationNotes;
+    }
+
+    public LocalDate getSeparationEffectiveDate() {
+        return separationEffectiveDate;
+    }
+
+    public void setSeparationEffectiveDate(LocalDate separationEffectiveDate) {
+        this.separationEffectiveDate = separationEffectiveDate;
+    }
+
+    public String getSeparationProcessedBy() {
+        return separationProcessedBy;
+    }
+
+    public void setSeparationProcessedBy(String separationProcessedBy) {
+        this.separationProcessedBy = separationProcessedBy;
     }
 
     public LocalDate getEmploymentDateEnd() {
