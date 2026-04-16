@@ -20,6 +20,8 @@ public interface AttendanceLogRepository extends JpaRepository<AttendanceLog, Lo
 
     List<AttendanceLog> findByEmployeeIdInAndTimestampBetween(Collection<Long> employeeId, Instant timestamp, Instant timestamp2, Sort sort);
 
+    List<AttendanceLog> findByEmployeeIdAndTimestampBetween(Long employeeId, Instant start, Instant end, Sort sort);
+
     List<AttendanceLog> findByEmployeeIdAndDirectionAndTimestampBetween(
             Long employeeId,
             String direction,
