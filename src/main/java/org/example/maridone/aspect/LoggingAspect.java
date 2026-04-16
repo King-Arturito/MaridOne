@@ -55,6 +55,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.regex.Matcher;
@@ -119,9 +120,10 @@ public class LoggingAspect {
         String requestURI = attributes != null ? attributes.getRequest().getRequestURI() : "unknownURI";
         String username = resolveUsername();
         Activity activity = resolveActivity(httpMethod);
-        String message = buildAuditMessage(username, activity, requestURI, joinPoint.getArgs(), result);
+        AuditContent auditContent = buildAuditContent(username, activity, requestURI, joinPoint.getArgs(), result);
+        String message = auditContent.summary();
         logger.info("Inserting to database: {}", message);
-        activityLogService.activity(new ActivityRequestDto(username, activity, message));
+        activityLogService.activity(new ActivityRequestDto(username, activity, message, auditContent.detailPayload()));
     }
 
     @AfterReturning("auditScheduling()")
@@ -167,7 +169,7 @@ public class LoggingAspect {
         };
     }
 
-    private String buildAuditMessage(String username, Activity activity, String requestURI, Object[] args, Object result) {
+    private AuditContent buildAuditContent(String username, Activity activity, String requestURI, Object[] args, Object result) {
         StringBuilder message = new StringBuilder();
         appendSentence(message, "Username: " + username, false);
         appendSentence(message, "Activity: " + activity, false);
@@ -178,8 +180,10 @@ public class LoggingAspect {
             appendSentence(message, detail, true);
         }
 
+        String detailPayload = buildAuditDetailPayload(username, activity, requestURI, args, result, detail);
         String resolvedMessage = message.toString();
-        return resolvedMessage.length() <= 255 ? resolvedMessage : resolvedMessage.substring(0, 252) + "...";
+        String summary = resolvedMessage.length() <= 255 ? resolvedMessage : resolvedMessage.substring(0, 252) + "...";
+        return new AuditContent(summary, detailPayload);
     }
 
     private String resolveAuditDetail(String requestURI, Object[] args, Object result) {
@@ -231,7 +235,7 @@ public class LoggingAspect {
         if (employeeMatcher.find()) {
             Long employeeId = Long.valueOf(employeeMatcher.group("employeeId"));
             if (requestURI.toLowerCase().startsWith("/api/employees/status/")) {
-                return "Employment status for " + formatEmployeeReference(employeeId, null, null);
+                return describeEmployeeStatusChange(employeeId, extractBody(result, EmployeeResponseDto.class));
             }
             return "Employee record for " + formatEmployeeReference(employeeId, null, null);
         }
@@ -407,6 +411,28 @@ public class LoggingAspect {
         return null;
     }
 
+    private String buildAuditDetailPayload(String username,
+                                           Activity activity,
+                                           String requestURI,
+                                           Object[] args,
+                                           Object result,
+                                           String detailSummary) {
+        List<String> lines = new ArrayList<>();
+        appendDetailLine(lines, "Actor", username);
+        appendDetailLine(lines, "Activity", activity != null ? activity.name() : null);
+        appendDetailLine(lines, "Endpoint", requestURI);
+
+        Matcher employeeMatcher = EMPLOYEE_ENDPOINT_PATTERN.matcher(requestURI == null ? "" : requestURI);
+        if (employeeMatcher.find() && requestURI != null && requestURI.toLowerCase().startsWith("/api/employees/status/")) {
+            Long employeeId = Long.valueOf(employeeMatcher.group("employeeId"));
+            appendEmployeeStatusBreakdown(lines, employeeId, extractBody(result, EmployeeResponseDto.class), detailSummary);
+            return String.join("\n", lines);
+        }
+
+        appendDetailLine(lines, "Summary", detailSummary);
+        return String.join("\n", lines);
+    }
+
     private void appendSentence(StringBuilder message, String segment, boolean preservePunctuation) {
         if (segment == null) {
             return;
@@ -429,6 +455,52 @@ public class LoggingAspect {
 
     private boolean endsWithTerminalPunctuation(String value) {
         return value.endsWith(".") || value.endsWith("!") || value.endsWith("?");
+    }
+
+    private void appendDetailLine(List<String> lines, String label, String value) {
+        if (label == null || value == null) {
+            return;
+        }
+        String normalizedValue = value.replace("\r", " ").replace("\n", " / ").trim();
+        if (normalizedValue.isBlank()) {
+            return;
+        }
+        lines.add(label + ": " + normalizedValue);
+    }
+
+    private void appendEmployeeStatusBreakdown(List<String> lines,
+                                               Long employeeId,
+                                               EmployeeResponseDto response,
+                                               String detailSummary) {
+        String employeeReference = formatEmployeeReference(
+                employeeId,
+                response != null ? response.getFirstName() : null,
+                response != null ? response.getLastName() : null
+        );
+        String currentStatus = formatEmploymentStatusLabel(response != null ? response.getEmploymentStatus() : null);
+
+        appendDetailLine(lines, "Subject", "Employee Status Change");
+        appendDetailLine(lines, "Summary", detailSummary);
+        appendDetailLine(lines, "Employee", employeeReference);
+        appendDetailLine(lines, "Current Status", currentStatus);
+
+        if (response != null && response.getEmploymentStatus() != null && "Employee Released".equals(currentStatus)) {
+            appendDetailLine(lines, "Change", "Employee marked as released");
+            appendDetailLine(lines, "Release Reason", response.getSeparationReason() != null
+                    ? humanizeToken(response.getSeparationReason().name())
+                    : null);
+            appendDetailLine(lines, "Eligible For Rehire", response.getEligibleForRehire() == null
+                    ? null
+                    : Boolean.TRUE.equals(response.getEligibleForRehire()) ? "Yes" : "No");
+            appendDetailLine(lines, "Effective Date", response.getSeparationEffectiveDate() != null
+                    ? AUDIT_DATE_FORMAT.format(response.getSeparationEffectiveDate())
+                    : null);
+            appendDetailLine(lines, "Recorded By", response.getSeparationProcessedBy());
+            appendDetailLine(lines, "Notes", response.getSeparationNotes());
+            return;
+        }
+
+        appendDetailLine(lines, "Change", "Employment status updated");
     }
 
     private String describeUserAccountTarget(String username, Long employeeId, String firstName, String lastName) {
@@ -725,6 +797,42 @@ public class LoggingAspect {
         return detail.toString();
     }
 
+    private String describeEmployeeStatusChange(Long employeeId, EmployeeResponseDto response) {
+        if (response != null && response.getEmploymentStatus() != null) {
+            String employeeReference = formatEmployeeReference(
+                    firstNonNull(response.getId(), employeeId),
+                    response.getFirstName(),
+                    response.getLastName()
+            );
+            String statusLabel = formatEmploymentStatusLabel(response.getEmploymentStatus());
+            if (response.getEmploymentStatus().name().equals("TERMINATED")) {
+                StringBuilder detail = new StringBuilder("Recorded employee release for ");
+                detail.append(employeeReference);
+                detail.append(". Status: ").append(statusLabel);
+
+                if (response.getSeparationReason() != null) {
+                    detail.append(". Reason: ").append(humanizeToken(response.getSeparationReason().name()));
+                }
+                if (response.getEligibleForRehire() != null) {
+                    detail.append(". Rehire: ").append(Boolean.TRUE.equals(response.getEligibleForRehire()) ? "Yes" : "No");
+                }
+                return detail.toString();
+            }
+            return "Updated employment status for " + employeeReference + ". Status: " + statusLabel;
+        }
+        return "Employment status for " + formatEmployeeReference(employeeId, null, null);
+    }
+
+    private String formatEmploymentStatusLabel(Enum<?> status) {
+        if (status == null) {
+            return null;
+        }
+        if ("TERMINATED".equalsIgnoreCase(status.name())) {
+            return "Employee Released";
+        }
+        return humanizeToken(status.name());
+    }
+
     private Employee resolvePayrollItemEmployee(Long itemId) {
         if (itemId == null) {
             return null;
@@ -971,4 +1079,6 @@ public class LoggingAspect {
         }
         return null;
     }
+
+    private record AuditContent(String summary, String detailPayload) {}
 }

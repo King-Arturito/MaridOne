@@ -28,6 +28,7 @@ public class ActivityLogService {
         ActivityLog activityLog = new ActivityLog();
         activityLog.setUsername(payload.getUsername());
         activityLog.setMessage(payload.getMessage());
+        activityLog.setDetailPayload(payload.getDetailPayload());
         activityLog.setActivityType(payload.getActivityType());
         activityLog.setTimestamp(Instant.now());
         activityLogRepository.save(activityLog);

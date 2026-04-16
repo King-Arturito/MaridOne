@@ -22,6 +22,9 @@ public class ActivityLog {
     @Column(name = "message", nullable = false)
     private String message;
 
+    @Column(name = "detail_payload")
+    private String detailPayload;
+
     @Column(name = "timestamp", nullable = false)
     private Instant timestamp;
 
@@ -43,6 +46,14 @@ public class ActivityLog {
 
     public void setMessage(String message) {
         this.message = message;
+    }
+
+    public String getDetailPayload() {
+        return detailPayload;
+    }
+
+    public void setDetailPayload(String detailPayload) {
+        this.detailPayload = detailPayload;
     }
 
     public Activity getActivityType() {

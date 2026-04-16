@@ -15,6 +15,7 @@ import org.example.maridone.enums.ExemptionStatus;
 import org.example.maridone.enums.LeaveType;
 import org.example.maridone.enums.ManagerTitle;
 import org.example.maridone.enums.Position;
+import org.example.maridone.enums.SeparationReason;
 import org.example.maridone.exception.notfound.EmployeeNotFoundException;
 import org.example.maridone.exception.unauthorized.InvalidActionException;
 import org.example.maridone.leave.balance.LeaveBalance;
@@ -34,6 +35,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.Mockito.doAnswer;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
@@ -63,6 +65,9 @@ class EmployeeServiceTest {
 
     @Mock
     private LeaveBalanceRepository leaveBalanceRepository;
+
+    @Mock
+    private EmployeeSeparationRepository employeeSeparationRepository;
 
     @InjectMocks
     private EmployeeService employeeService;
@@ -272,10 +277,81 @@ class EmployeeServiceTest {
 
         InvalidActionException error = Assertions.assertThrows(
                 InvalidActionException.class,
-                () -> employeeService.updateStatus(14L, requestDto)
+                () -> employeeService.updateStatus(14L, requestDto, "hr.user")
         );
 
         Assertions.assertEquals("This employee is already terminated.", error.getMessage());
+        verify(employeeRepository, never()).save(any(Employee.class));
+    }
+
+    @Test
+    void updateStatus_ShouldRecordSeparation_WhenEmployeeIsTerminated() {
+        stubScheduleDependencies();
+        Employee employee = new Employee();
+        ReflectionTestUtils.setField(employee, "employeeId", 35L);
+        employee.setEmploymentStatus(EmploymentStatus.REGULAR);
+
+        EmployeeRequestDto requestDto = new EmployeeRequestDto();
+        requestDto.setEmploymentStatus(EmploymentStatus.TERMINATED);
+        requestDto.setEmploymentDateEnd(java.time.LocalDate.of(2026, 4, 16));
+        requestDto.setSeparationReason(SeparationReason.VOLUNTARY_RESIGNATION);
+        requestDto.setEligibleForRehire(Boolean.TRUE);
+        requestDto.setSeparationNotes("Cleared turnover requirements.");
+
+        EmployeeResponseDto responseDto = new EmployeeResponseDto();
+        responseDto.setId(35L);
+
+        when(employeeRepository.findById(35L)).thenReturn(Optional.of(employee));
+        when(employeeRepository.save(any(Employee.class))).thenReturn(employee);
+        when(coreMapper.toEmployeeResponse(employee)).thenReturn(responseDto);
+        when(userAccountRepository.findUsernameByEmployeeEmployeeId(35L)).thenReturn(Optional.empty());
+
+        final EmployeeSeparation[] savedSeparation = new EmployeeSeparation[1];
+        doAnswer(invocation -> {
+            savedSeparation[0] = invocation.getArgument(0);
+            return savedSeparation[0];
+        }).when(employeeSeparationRepository).save(any(EmployeeSeparation.class));
+        when(employeeSeparationRepository.findTopByEmployee_EmployeeIdOrderByProcessedAtDescSeparationIdDesc(35L))
+                .thenAnswer(invocation -> Optional.ofNullable(savedSeparation[0]));
+
+        EmployeeResponseDto result = employeeService.updateStatus(35L, requestDto, "hr.lead");
+
+        Assertions.assertEquals(EmploymentStatus.TERMINATED, employee.getEmploymentStatus());
+        Assertions.assertEquals(java.time.LocalDate.of(2026, 4, 16), employee.getEmploymentDateEnd());
+        Assertions.assertEquals(SeparationReason.VOLUNTARY_RESIGNATION, result.getSeparationReason());
+        Assertions.assertEquals(Boolean.TRUE, result.getEligibleForRehire());
+        Assertions.assertEquals("Cleared turnover requirements.", result.getSeparationNotes());
+        Assertions.assertEquals(java.time.LocalDate.of(2026, 4, 16), result.getSeparationEffectiveDate());
+        Assertions.assertEquals("hr.lead", result.getSeparationProcessedBy());
+        verify(employeeSeparationRepository).save(argThat(separation ->
+                separation.getEmployee() == employee
+                        && separation.getReason() == SeparationReason.VOLUNTARY_RESIGNATION
+                        && Boolean.TRUE.equals(separation.getEligibleForRehire())
+                        && "Cleared turnover requirements.".equals(separation.getNotes())
+                        && java.time.LocalDate.of(2026, 4, 16).equals(separation.getEffectiveDate())
+                        && "hr.lead".equals(separation.getProcessedBy())
+        ));
+    }
+
+    @Test
+    void updateStatus_ShouldRequireSeparationReason_WhenTerminatingEmployee() {
+        Employee employee = new Employee();
+        ReflectionTestUtils.setField(employee, "employeeId", 36L);
+        employee.setEmploymentStatus(EmploymentStatus.REGULAR);
+
+        EmployeeRequestDto requestDto = new EmployeeRequestDto();
+        requestDto.setEmploymentStatus(EmploymentStatus.TERMINATED);
+        requestDto.setEligibleForRehire(Boolean.FALSE);
+
+        when(employeeRepository.findById(36L)).thenReturn(Optional.of(employee));
+
+        InvalidActionException error = Assertions.assertThrows(
+                InvalidActionException.class,
+                () -> employeeService.updateStatus(36L, requestDto, "hr.user")
+        );
+
+        Assertions.assertEquals("Separation reason is required when terminating an employee.", error.getMessage());
+        verify(employeeSeparationRepository, never()).save(any(EmployeeSeparation.class));
         verify(employeeRepository, never()).save(any(Employee.class));
     }
 

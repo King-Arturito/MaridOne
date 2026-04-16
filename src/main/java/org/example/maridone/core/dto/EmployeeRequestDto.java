@@ -8,6 +8,7 @@ import org.example.maridone.embeddable.Address;
 import org.example.maridone.enums.EmploymentStatus;
 import org.example.maridone.enums.ExemptionStatus;
 import org.example.maridone.enums.Position;
+import org.example.maridone.enums.SeparationReason;
 import org.example.maridone.marker.OnCreate;
 import org.example.maridone.marker.HrUpdate;
 
@@ -49,6 +50,9 @@ public class EmployeeRequestDto {
     private String emergencyContactName;
     private String emergencyContactRelationship;
     private String emergencyContactNumber;
+    private SeparationReason separationReason;
+    private Boolean eligibleForRehire;
+    private String separationNotes;
 
     public String getFirstName() {
         return firstName;
@@ -224,5 +228,29 @@ public class EmployeeRequestDto {
 
     public void setEmergencyContactNumber(String emergencyContactNumber) {
         this.emergencyContactNumber = emergencyContactNumber;
+    }
+
+    public SeparationReason getSeparationReason() {
+        return separationReason;
+    }
+
+    public void setSeparationReason(SeparationReason separationReason) {
+        this.separationReason = separationReason;
+    }
+
+    public Boolean getEligibleForRehire() {
+        return eligibleForRehire;
+    }
+
+    public void setEligibleForRehire(Boolean eligibleForRehire) {
+        this.eligibleForRehire = eligibleForRehire;
+    }
+
+    public String getSeparationNotes() {
+        return separationNotes;
+    }
+
+    public void setSeparationNotes(String separationNotes) {
+        this.separationNotes = separationNotes;
     }
 }

@@ -19,6 +19,7 @@ import org.example.maridone.enums.ExemptionStatus;
 import org.example.maridone.enums.LeaveType;
 import org.example.maridone.enums.ManagerTitle;
 import org.example.maridone.enums.Position;
+import org.example.maridone.enums.SeparationReason;
 import org.example.maridone.leave.balance.LeaveBalance;
 import org.example.maridone.leave.balance.LeaveBalanceRepository;
 import org.example.maridone.schedule.dto.ShiftResponseDto;
@@ -33,6 +34,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
@@ -51,6 +53,7 @@ public class EmployeeService {
     private final ShiftService shiftService;
     private final PayrollConfig payrollConfig;
     private final LeaveBalanceRepository leaveBalanceRepository;
+    private final EmployeeSeparationRepository employeeSeparationRepository;
 
     EmployeeService(EmployeeRepository employeeRepository,
                     CoreMapper coreMapper,
@@ -59,7 +62,8 @@ public class EmployeeService {
                     ScheduleMapper scheduleMapper,
                     ShiftService shiftService,
                     PayrollConfig payrollConfig,
-                    LeaveBalanceRepository leaveBalanceRepository) {
+                    LeaveBalanceRepository leaveBalanceRepository,
+                    EmployeeSeparationRepository employeeSeparationRepository) {
         this.employeeRepository = employeeRepository;
         this.coreMapper = coreMapper;
         this.userAccountRepository = userAccountRepository;
@@ -68,6 +72,7 @@ public class EmployeeService {
         this.shiftService = shiftService;
         this.payrollConfig = payrollConfig;
         this.leaveBalanceRepository = leaveBalanceRepository;
+        this.employeeSeparationRepository = employeeSeparationRepository;
     }
 
 
@@ -238,7 +243,7 @@ public class EmployeeService {
 
     @Transactional
     @ExecutionTime
-    public EmployeeResponseDto updateStatus(Long id, EmployeeRequestDto updated) {
+    public EmployeeResponseDto updateStatus(Long id, EmployeeRequestDto updated, String actorUsername) {
         Employee emp = employeeRepository.findById(id).orElseThrow(() -> new EmployeeNotFoundException(id));
         if (updated.getEmploymentStatus() == null) {
             throw new InvalidActionException("Employment status is required.");
@@ -249,6 +254,9 @@ public class EmployeeService {
         }
 
         emp.setEmploymentStatus(updated.getEmploymentStatus());
+        if (updated.getEmploymentStatus() == EmploymentStatus.TERMINATED) {
+            recordSeparation(emp, updated, actorUsername);
+        }
         employeeRepository.save(emp);
         return toEmployeeResponse(emp);
     }
@@ -274,6 +282,7 @@ public class EmployeeService {
         response.setManagerHeadLabel(resolveManagerHeadLabel(employee));
         response.setUserAccountName(findUsername(employee.getEmployeeId()));
         response.setShiftSchedules(resolveShiftSchedules(employee.getEmployeeId(), schedulesByEmployeeId));
+        applyLatestSeparation(response, employee);
         return response;
     }
 
@@ -303,7 +312,74 @@ public class EmployeeService {
         response.setManagerName(resolveManagerName(employee));
         response.setManagerHeadLabel(resolveManagerHeadLabel(employee));
         response.setUserAccountName(findUsername(employee.getEmployeeId()));
+        applyLatestSeparation(response, employee);
         return response;
+    }
+
+    private void recordSeparation(Employee employee, EmployeeRequestDto request, String actorUsername) {
+        if (request.getSeparationReason() == null) {
+            throw new InvalidActionException("Separation reason is required when terminating an employee.");
+        }
+        if (request.getEligibleForRehire() == null) {
+            throw new InvalidActionException("Eligible for rehire must be specified when terminating an employee.");
+        }
+
+        LocalDate effectiveDate = Optional.ofNullable(request.getEmploymentDateEnd()).orElse(LocalDate.now());
+        employee.setEmploymentDateEnd(effectiveDate);
+
+        EmployeeSeparation separation = new EmployeeSeparation();
+        separation.setEmployee(employee);
+        separation.setReason(request.getSeparationReason());
+        separation.setEligibleForRehire(request.getEligibleForRehire());
+        separation.setNotes(normalizeSeparationNotes(request.getSeparationNotes()));
+        separation.setEffectiveDate(effectiveDate);
+        separation.setProcessedBy(normalizeActorUsername(actorUsername));
+        separation.setProcessedAt(LocalDateTime.now());
+        employeeSeparationRepository.save(separation);
+    }
+
+    private String normalizeSeparationNotes(String notes) {
+        if (notes == null) {
+            return null;
+        }
+        String trimmed = notes.trim();
+        return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    private String normalizeActorUsername(String actorUsername) {
+        if (actorUsername == null) {
+            return null;
+        }
+        String trimmed = actorUsername.trim();
+        return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    private void applyLatestSeparation(EmployeeResponseDto response, Employee employee) {
+        if (employee.getEmploymentStatus() != EmploymentStatus.TERMINATED) {
+            return;
+        }
+        employeeSeparationRepository.findTopByEmployee_EmployeeIdOrderByProcessedAtDescSeparationIdDesc(employee.getEmployeeId())
+                .ifPresent(separation -> {
+                    response.setSeparationReason(separation.getReason());
+                    response.setEligibleForRehire(separation.getEligibleForRehire());
+                    response.setSeparationNotes(separation.getNotes());
+                    response.setSeparationEffectiveDate(separation.getEffectiveDate());
+                    response.setSeparationProcessedBy(separation.getProcessedBy());
+                });
+    }
+
+    private void applyLatestSeparation(EmployeeDetailsDto response, Employee employee) {
+        if (employee.getEmploymentStatus() != EmploymentStatus.TERMINATED) {
+            return;
+        }
+        employeeSeparationRepository.findTopByEmployee_EmployeeIdOrderByProcessedAtDescSeparationIdDesc(employee.getEmployeeId())
+                .ifPresent(separation -> {
+                    response.setSeparationReason(separation.getReason());
+                    response.setEligibleForRehire(separation.getEligibleForRehire());
+                    response.setSeparationNotes(separation.getNotes());
+                    response.setSeparationEffectiveDate(separation.getEffectiveDate());
+                    response.setSeparationProcessedBy(separation.getProcessedBy());
+                });
     }
 
     private String findUsername(Long employeeId) {

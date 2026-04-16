@@ -2,7 +2,6 @@ package org.example.maridone.log.dto;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
 import org.example.maridone.enums.Activity;
 
@@ -18,10 +17,17 @@ public class ActivityRequestDto {
     @Size(max = 255, message = "Message must not exceed 255 characters.")
     private String message;
 
+    private String detailPayload;
+
     public ActivityRequestDto(String username, Activity activityType, String message) {
+        this(username, activityType, message, null);
+    }
+
+    public ActivityRequestDto(String username, Activity activityType, String message, String detailPayload) {
         this.username = username;
         this.activityType = activityType;
         this.message = message;
+        this.detailPayload = detailPayload;
     }
 
     public String getUsername() {
@@ -46,5 +52,13 @@ public class ActivityRequestDto {
 
     public void setMessage(String message) {
         this.message = message;
+    }
+
+    public String getDetailPayload() {
+        return detailPayload;
+    }
+
+    public void setDetailPayload(String detailPayload) {
+        this.detailPayload = detailPayload;
     }
 }

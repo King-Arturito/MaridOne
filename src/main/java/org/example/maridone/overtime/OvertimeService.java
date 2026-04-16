@@ -182,9 +182,11 @@ public class OvertimeService {
     public void cancelRequest(Long overtimeId) {
         OvertimeRequest overtimeRequest = overtimeRequestRepository.findByIdForUpdate(overtimeId)
                 .orElseThrow(() -> new OvertimeException("Overtime Not Found"));
-        if (overtimeRequest.getRequestStatus().equals(Status.APPROVED)) {
-            throw new IllegalStateException("Cannot cancel. Overtime Request has been approved already.");
+
+        if (overtimeRequest.getStartTime().isBefore(currentDateTime().plusHours(1))) {
+            throw new InvalidActionException("Overtime request can only be cancelled at least 1 hour before the start time.");
         }
+
         overtimeRequest.setRequestStatus(Status.CANCELLED);
         overtimeRequestRepository.save(overtimeRequest);
         String employeeName = NotificationMessageFormatter.formatEmployeeName(overtimeRequest.getEmployee());

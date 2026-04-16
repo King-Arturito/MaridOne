@@ -4,6 +4,7 @@ CREATE TABLE activity_log (
     activity_type   VARCHAR(255)    NOT NULL,
     message         VARCHAR(255)    NOT NULL,
     timestamp       TIMESTAMPTZ     NOT NULL,
+    detail_payload  VARCHAR(255),
 
     CONSTRAINT activity_log_activity_type_check CHECK (activity_type IN ('LOG', 'READ', 'MODIFY', 'CREATE', 'DELETE', 'UNKNOWN', 'SYSTEM'))
 );

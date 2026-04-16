@@ -5,6 +5,7 @@ import java.util.List;
 import org.example.maridone.enums.EmploymentStatus;
 import org.example.maridone.enums.ExemptionStatus;
 import org.example.maridone.enums.Position;
+import org.example.maridone.enums.SeparationReason;
 import org.example.maridone.schedule.dto.ShiftResponseDto;
 
 public class EmployeeResponseDto {
@@ -24,6 +25,11 @@ public class EmployeeResponseDto {
     private String managerHeadLabel;
     private String userAccountName;
     private List<ShiftResponseDto> shiftSchedules = List.of();
+    private SeparationReason separationReason;
+    private Boolean eligibleForRehire;
+    private String separationNotes;
+    private LocalDate separationEffectiveDate;
+    private String separationProcessedBy;
 
     private String sssNumber;
     private String philhealthNumber;
@@ -152,6 +158,46 @@ public class EmployeeResponseDto {
 
     public void setShiftSchedules(List<ShiftResponseDto> shiftSchedules) {
         this.shiftSchedules = shiftSchedules;
+    }
+
+    public SeparationReason getSeparationReason() {
+        return separationReason;
+    }
+
+    public void setSeparationReason(SeparationReason separationReason) {
+        this.separationReason = separationReason;
+    }
+
+    public Boolean getEligibleForRehire() {
+        return eligibleForRehire;
+    }
+
+    public void setEligibleForRehire(Boolean eligibleForRehire) {
+        this.eligibleForRehire = eligibleForRehire;
+    }
+
+    public String getSeparationNotes() {
+        return separationNotes;
+    }
+
+    public void setSeparationNotes(String separationNotes) {
+        this.separationNotes = separationNotes;
+    }
+
+    public LocalDate getSeparationEffectiveDate() {
+        return separationEffectiveDate;
+    }
+
+    public void setSeparationEffectiveDate(LocalDate separationEffectiveDate) {
+        this.separationEffectiveDate = separationEffectiveDate;
+    }
+
+    public String getSeparationProcessedBy() {
+        return separationProcessedBy;
+    }
+
+    public void setSeparationProcessedBy(String separationProcessedBy) {
+        this.separationProcessedBy = separationProcessedBy;
     }
 
     public String getSssNumber() {

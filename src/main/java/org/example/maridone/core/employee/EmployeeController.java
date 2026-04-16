@@ -107,7 +107,8 @@ public class EmployeeController {
     @PreAuthorize("hasRole('HR')")
     @AuditLog
     public EmployeeResponseDto updateStatus(@PathVariable Long id,
-                                            @Validated(HrUpdate.class) @RequestBody EmployeeRequestDto employeeRequestDto) {
-        return employeeService.updateStatus(id, employeeRequestDto);
+                                            @Validated(HrUpdate.class) @RequestBody EmployeeRequestDto employeeRequestDto,
+                                            Authentication authentication) {
+        return employeeService.updateStatus(id, employeeRequestDto, authentication != null ? authentication.getName() : null);
     }
 }
