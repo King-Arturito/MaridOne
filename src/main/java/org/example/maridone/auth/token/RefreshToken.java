@@ -17,7 +17,7 @@ public class RefreshToken {
     private String refreshToken;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "username", nullable = false)
+    @JoinColumn(name = "account_id", referencedColumnName = "account_id", nullable = false)
     private UserAccount userAccount;
 
     @Column(name = "expiry_date", nullable = false)

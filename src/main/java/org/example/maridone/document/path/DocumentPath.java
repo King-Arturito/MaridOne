@@ -22,8 +22,8 @@ public class DocumentPath {
     private String fileType;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "username", nullable = false)
-    private UserAccount username;
+    @JoinColumn(name = "account_id", nullable = false)
+    private UserAccount userAccount;
 
     public Long getPathId() {
         return pathId;
@@ -53,11 +53,11 @@ public class DocumentPath {
         this.fileType = fileType;
     }
 
-    public UserAccount getUsername() {
-        return username;
+    public UserAccount getUserAccount() {
+        return userAccount;
     }
 
-    public void setUsername(UserAccount username) {
-        this.username = username;
+    public void setUserAccount(UserAccount userAccount) {
+        this.userAccount = userAccount;
     }
 }

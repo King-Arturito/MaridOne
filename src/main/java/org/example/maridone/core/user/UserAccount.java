@@ -60,7 +60,7 @@ public class UserAccount {
     private Long employeeId;
 
     @JsonIgnore
-    @OneToMany(mappedBy = "username", fetch = FetchType.LAZY, cascade = CascadeType.ALL)
+    @OneToMany(mappedBy = "userAccount", fetch = FetchType.LAZY, cascade = CascadeType.ALL)
     private List<DocumentPath> documentPaths;
 
     public String getUsername() {
@@ -149,6 +149,10 @@ public class UserAccount {
 
     public Long getAccountId() {
         return accountId;
+    }
+
+    public void setAccountId(Long accountId) {
+        this.accountId = accountId;
     }
 
     @Transient
