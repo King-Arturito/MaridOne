@@ -13,6 +13,7 @@ CREATE TABLE employee_separation (
             'TERMINATED',
             'VOLUNTARY_RESIGNATION',
             'INVOLUNTARY_SEPARATION',
+            'END_OF_CONTRACT',
             'DECEASED'
         )
     ),

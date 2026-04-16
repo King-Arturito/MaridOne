@@ -156,9 +156,11 @@ public class LeaveService {
     public void cancelRequest(Long requestId) {
         LeaveRequest request = leaveRequestRepository.findByIdForUpdate(requestId)
                 .orElseThrow(() -> new RequestNotFoundException("Leave Request", requestId));
-        if (request.getRequestStatus().equals(Status.APPROVED)) {
-            throw new IllegalStateException("Cannot cancel. Dispute Request has been approved already.");
+
+        if (request.getStartDateTime().toLocalDate().isBefore(LocalDate.now(clock).plusDays(2))) {
+            throw new InvalidActionException("Leave request can only be cancelled at least 2 days before the start date.");
         }
+
         request.setRequestStatus(Status.CANCELLED);
         leaveRequestRepository.save(request);
         String employeeName = NotificationMessageFormatter.formatEmployeeName(request.getEmployee());
@@ -443,7 +445,7 @@ public class LeaveService {
         }
 
         LocalDate earliestAllowedDate = today.plusDays(NON_SICK_LEAVE_NOTICE_DAYS);
-        if (requestedStartDate.isBefore(earliestAllowedDate)) {
+        if (payload.getLeaveType() != LeaveType.EMERGENCY_LEAVE && requestedStartDate.isBefore(earliestAllowedDate)) {
             throw new InvalidActionException(
                     "Non-sick leave requests must be filed at least " + NON_SICK_LEAVE_NOTICE_DAYS + " days before the leave date."
             );

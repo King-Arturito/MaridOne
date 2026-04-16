@@ -39,7 +39,3 @@ databaseChangeLog:
       file: db/changelog/020-create-refreshToken.sql
   - include:
       file: db/changelog/021-create-employeeSeparation.sql
-  - include:
-      file: db/changelog/022-add-activityLog-detailPayload.sql
-  - include:
-      file: db/changelog/023-expand-employeeSeparation-reasons.sql
