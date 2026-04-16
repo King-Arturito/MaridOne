@@ -28,6 +28,8 @@ import org.example.maridone.notification.NotificationMessageFormatter;
 import org.example.maridone.notification.NotificationService;
 import org.example.maridone.notification.WorkflowEmailService;
 import org.example.maridone.overtime.OvertimeRequestRepository;
+import org.example.maridone.schedule.shift.DailyShiftRepository;
+import org.example.maridone.schedule.shift.DailyShiftSchedule;
 import org.example.maridone.schedule.shift.TemplateShiftRepository;
 import org.example.maridone.schedule.shift.TemplateShiftSchedule;
 import org.springframework.data.domain.Page;
@@ -50,8 +52,10 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
@@ -64,6 +68,7 @@ public class LeaveService {
     private final LeaveRequestRepository leaveRequestRepository;
     private final EmployeeRepository employeeRepository;
     private final UserAccountRepository userAccountRepository;
+    private final DailyShiftRepository dailyShiftRepository;
     private final TemplateShiftRepository templateShiftRepository;
     private final DocumentPathRepository documentPathRepository;
     private final LeaveMapper leaveMapper;
@@ -79,6 +84,7 @@ public class LeaveService {
             LeaveRequestRepository leaveRequestRepository,
             EmployeeRepository employeeRepository,
             UserAccountRepository userAccountRepository,
+            DailyShiftRepository dailyShiftRepository,
             TemplateShiftRepository templateShiftRepository,
             DocumentPathRepository documentPathRepository,
             LeaveMapper leaveMapper,
@@ -91,6 +97,7 @@ public class LeaveService {
         this.leaveRequestRepository = leaveRequestRepository;
         this.employeeRepository = employeeRepository;
         this.userAccountRepository = userAccountRepository;
+        this.dailyShiftRepository = dailyShiftRepository;
         this.templateShiftRepository = templateShiftRepository;
         this.documentPathRepository = documentPathRepository;
         this.leaveMapper = leaveMapper;
@@ -476,33 +483,39 @@ public class LeaveService {
     }
 
     private List<LeaveWindow> resolveLeaveWindows(LeaveRequestDto payload, Long empId) {
+        LocalDate startDate = payload.getStartDateTime().toLocalDate();
+        LocalDate endDate = payload.getEndDateTime().toLocalDate();
         List<TemplateShiftSchedule> shiftSchedules = templateShiftRepository.findAllByEmployeeId(empId);
-        if (shiftSchedules.isEmpty()) {
+        List<DailyShiftSchedule> dailyShifts = Optional.ofNullable(dailyShiftRepository.findAllByEmployeeIdAndPeriod(
+                empId,
+                startDate.atStartOfDay(),
+                endDate.plusDays(1).atStartOfDay()
+        )).orElse(List.of());
+
+        if (shiftSchedules.isEmpty() && dailyShifts.isEmpty()) {
             throw new ShiftsNotFoundException("No Shift Schedule for Employee ID: " + empId);
         }
 
         Map<DayOfWeek, TemplateShiftSchedule> scheduleMap = shiftSchedules.stream()
                 .collect(Collectors.toMap(TemplateShiftSchedule::getDayOfWeek, s -> s));
+        Map<LocalDate, List<DailyShiftSchedule>> dailyShiftMap = dailyShifts.stream()
+                .filter(Objects::nonNull)
+                .filter(shift -> shift.getWorkDate() != null)
+                .collect(Collectors.groupingBy(DailyShiftSchedule::getWorkDate));
 
         List<LeaveWindow> windows = new ArrayList<>();
-        LocalDate current = payload.getStartDateTime().toLocalDate();
-        LocalDate endDate = payload.getEndDateTime().toLocalDate();
+        LocalDate current = startDate;
         LocalDateTime payloadStart = payload.getStartDateTime();
         LocalDateTime payloadEnd = payload.getEndDateTime();
 
         while (!current.isAfter(endDate)) {
-            TemplateShiftSchedule schedule = scheduleMap.get(current.getDayOfWeek());
-
-            if (schedule != null) {
-                LocalDateTime shiftStart = LocalDateTime.of(current, schedule.getStartTime());
-                LocalDateTime shiftEnd = LocalDateTime.of(current, schedule.getEndTime());
-
-                if (!shiftEnd.isAfter(shiftStart)) {
-                    shiftEnd = shiftEnd.plusDays(1);
-                }
-
-                LocalDateTime overlapStart = shiftStart.isBefore(payloadStart) ? payloadStart : shiftStart;
-                LocalDateTime overlapEnd = shiftEnd.isAfter(payloadEnd) ? payloadEnd : shiftEnd;
+            for (LeaveWindow effectiveWindow : resolveEffectiveShiftWindows(current, scheduleMap, dailyShiftMap)) {
+                LocalDateTime overlapStart = effectiveWindow.startDateTime().isBefore(payloadStart)
+                        ? payloadStart
+                        : effectiveWindow.startDateTime();
+                LocalDateTime overlapEnd = effectiveWindow.endDateTime().isAfter(payloadEnd)
+                        ? payloadEnd
+                        : effectiveWindow.endDateTime();
 
                 if (overlapStart.isBefore(overlapEnd)) {
                     windows.add(new LeaveWindow(overlapStart, overlapEnd));
@@ -513,6 +526,55 @@ public class LeaveService {
         }
 
         return windows;
+    }
+
+    private List<LeaveWindow> resolveEffectiveShiftWindows(
+            LocalDate workDate,
+            Map<DayOfWeek, TemplateShiftSchedule> scheduleMap,
+            Map<LocalDate, List<DailyShiftSchedule>> dailyShiftMap
+    ) {
+        List<DailyShiftSchedule> dailyShifts = dailyShiftMap.get(workDate);
+        if (dailyShifts != null && !dailyShifts.isEmpty()) {
+            if (dailyShifts.stream().anyMatch(DailyShiftSchedule::isDayOff)) {
+                return List.of();
+            }
+
+            return dailyShifts.stream()
+                    .map(this::toLeaveWindow)
+                    .filter(Objects::nonNull)
+                    .sorted(Comparator.comparing(LeaveWindow::startDateTime))
+                    .toList();
+        }
+
+        TemplateShiftSchedule schedule = scheduleMap.get(workDate.getDayOfWeek());
+        if (schedule == null) {
+            return List.of();
+        }
+
+        return List.of(toLeaveWindow(workDate, schedule));
+    }
+
+    private LeaveWindow toLeaveWindow(DailyShiftSchedule shift) {
+        if (shift == null || shift.getStartDateTime() == null || shift.getEndDateTime() == null) {
+            return null;
+        }
+
+        if (!shift.getEndDateTime().isAfter(shift.getStartDateTime())) {
+            return null;
+        }
+
+        return new LeaveWindow(shift.getStartDateTime(), shift.getEndDateTime());
+    }
+
+    private LeaveWindow toLeaveWindow(LocalDate workDate, TemplateShiftSchedule schedule) {
+        LocalDateTime shiftStart = LocalDateTime.of(workDate, schedule.getStartTime());
+        LocalDateTime shiftEnd = LocalDateTime.of(workDate, schedule.getEndTime());
+
+        if (!shiftEnd.isAfter(shiftStart)) {
+            shiftEnd = shiftEnd.plusDays(1);
+        }
+
+        return new LeaveWindow(shiftStart, shiftEnd);
     }
 
     private BigDecimal calculateRequestHours(List<LeaveWindow> leaveWindows) {
