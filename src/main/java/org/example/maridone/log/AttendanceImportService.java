@@ -36,6 +36,7 @@ import java.util.Set;
 
 @Service
 public class AttendanceImportService {
+    private static final String SUMMARY_SECTION_MARKER = "attendancesummaryreport";
 
     private static final String HEADER_EMPLOYEE_ID = "employeeid";
     private static final String HEADER_EMPLOYEE_NAME = "employeename";
@@ -96,16 +97,26 @@ public class AttendanceImportService {
             throw new InvalidActionException("Attendance import CSV is empty.");
         }
 
-        Map<String, Integer> headerIndexes = buildHeaderIndexes(csvRows.get(0));
+        int headerRowIndex = findHeaderRowIndex(csvRows);
+        if (headerRowIndex == -1) {
+            throw new InvalidActionException("Attendance import CSV is missing required detail headers.");
+        }
+
+        Map<String, Integer> headerIndexes = buildHeaderIndexes(csvRows.get(headerRowIndex));
         ensureRequiredHeaders(headerIndexes);
 
         List<ParsedAttendanceImportRow> parsedRows = new ArrayList<>();
         List<AttendanceImportIssueDto> issues = new ArrayList<>();
         int totalRows = 0;
-        for (int rowIndex = 1; rowIndex < csvRows.size(); rowIndex++) {
+        for (int rowIndex = headerRowIndex + 1; rowIndex < csvRows.size(); rowIndex++) {
             List<String> cells = csvRows.get(rowIndex);
             if (isRowEmpty(cells)) {
                 continue;
+            }
+            if (isSummarySectionMarker(cells)) {
+                // If summary section follows detail section, we might need to continue or break.
+                // In our new export, summary is at top. If it's at bottom in old format, we stop.
+                break;
             }
             totalRows++;
             try {
@@ -127,7 +138,7 @@ public class AttendanceImportService {
             );
         }
 
-        Map<Long, Employee> employeesById = loadEmployees(parsedRows);
+        Map<Long, org.example.maridone.core.employee.Employee> employeesById = internalLoadEmployees(parsedRows);
         ZoneId zoneId = defaultConfig.getTimeZone();
         Instant now = Instant.now();
         Set<String> pendingEventKeys = new LinkedHashSet<>();
@@ -136,7 +147,7 @@ public class AttendanceImportService {
         int importedLogs = 0;
 
         for (ParsedAttendanceImportRow row : parsedRows) {
-            Employee employee = employeesById.get(row.employeeId());
+            org.example.maridone.core.employee.Employee employee = employeesById.get(row.employeeId());
             if (employee == null) {
                 issues.add(issue(row, "Employee ID " + row.employeeId() + " was not found."));
                 continue;
@@ -183,21 +194,38 @@ public class AttendanceImportService {
         );
     }
 
-    private Map<Long, Employee> loadEmployees(Collection<ParsedAttendanceImportRow> parsedRows) {
+    private int findHeaderRowIndex(List<List<String>> csvRows) {
+        for (int i = 0; i < csvRows.size(); i++) {
+            Map<String, Integer> indexes = buildHeaderIndexes(csvRows.get(i));
+            boolean allFound = true;
+            for (String required : REQUIRED_HEADERS) {
+                if (!indexes.containsKey(required)) {
+                    allFound = false;
+                    break;
+                }
+            }
+            if (allFound) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    private Map<Long, org.example.maridone.core.employee.Employee> internalLoadEmployees(Collection<ParsedAttendanceImportRow> parsedRows) {
         Set<Long> employeeIds = new LinkedHashSet<>();
         for (ParsedAttendanceImportRow row : parsedRows) {
             employeeIds.add(row.employeeId());
         }
 
-        Map<Long, Employee> employeesById = new HashMap<>();
-        for (Employee employee : employeeRepository.findAllById(employeeIds)) {
+        Map<Long, org.example.maridone.core.employee.Employee> employeesById = new HashMap<>();
+        for (org.example.maridone.core.employee.Employee employee : employeeRepository.findAllById(employeeIds)) {
             employeesById.put(employee.getEmployeeId(), employee);
         }
         return employeesById;
     }
 
     private List<PendingAttendanceEvent> buildPendingEvents(ParsedAttendanceImportRow row,
-                                                            Employee employee,
+                                                            org.example.maridone.core.employee.Employee employee,
                                                             ZoneId zoneId,
                                                             Instant now) {
         List<PendingAttendanceEvent> pendingEvents = new ArrayList<>();
@@ -229,7 +257,7 @@ public class AttendanceImportService {
         return pendingEvents;
     }
 
-    private String validateEventTimestamp(Employee employee, LocalDate eventDate) {
+    private String validateEventTimestamp(org.example.maridone.core.employee.Employee employee, LocalDate eventDate) {
         LocalDate employmentStart = employee.getEmploymentDateStart();
         if (employmentStart != null && eventDate.isBefore(employmentStart)) {
             return "The attendance date is earlier than the employee's start date.";
@@ -371,6 +399,15 @@ public class AttendanceImportService {
                 : value.replace("\uFEFF", "")
                 .replaceAll("[^A-Za-z0-9]", "")
                 .toLowerCase(Locale.ENGLISH);
+    }
+
+    private boolean isSummarySectionMarker(List<String> cells) {
+        if (cells == null || cells.isEmpty()) {
+            return false;
+        }
+
+        String firstCell = normalizeHeaderName(cells.get(0));
+        return SUMMARY_SECTION_MARKER.equals(firstCell);
     }
 
     private String displayHeaderName(String value) {
