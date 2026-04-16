@@ -3,6 +3,7 @@ package org.example.maridone.leave;
 import org.example.maridone.annotation.*;
 import org.example.maridone.common.CommonCalculator;
 import org.example.maridone.common.CommonSpecs;
+import org.example.maridone.config.DefaultConfig;
 import org.example.maridone.config.PayrollConfig;
 import org.example.maridone.document.DocumentPathRepository;
 import org.example.maridone.document.DocumentService;
@@ -69,10 +70,10 @@ public class LeaveService {
     private final LeaveMapper leaveMapper;
     private final DocumentService documentService;
     private final PayrollConfig payrollConfig;
+    private final DefaultConfig defaultConfig;
     private final NotificationService notificationService;
     private final OvertimeRequestRepository overtimeRequestRepository;
     private final WorkflowEmailService workflowEmailService;
-    private Clock clock = Clock.systemDefaultZone();
 
     public LeaveService(
             LeaveBalanceRepository leaveBalanceRepository,
@@ -84,6 +85,7 @@ public class LeaveService {
             LeaveMapper leaveMapper,
             DocumentService documentService,
             PayrollConfig payrollConfig,
+            DefaultConfig defaultConfig,
             NotificationService notificationService,
             OvertimeRequestRepository overtimeRequestRepository,
             WorkflowEmailService workflowEmailService) {
@@ -96,6 +98,7 @@ public class LeaveService {
         this.leaveMapper = leaveMapper;
         this.documentService = documentService;
         this.payrollConfig = payrollConfig;
+        this.defaultConfig = defaultConfig;
         this.notificationService = notificationService;
         this.overtimeRequestRepository = overtimeRequestRepository;
         this.workflowEmailService = workflowEmailService;
@@ -157,7 +160,7 @@ public class LeaveService {
         LeaveRequest request = leaveRequestRepository.findByIdForUpdate(requestId)
                 .orElseThrow(() -> new RequestNotFoundException("Leave Request", requestId));
 
-        if (request.getStartDateTime().toLocalDate().isBefore(LocalDate.now(clock).plusDays(2))) {
+        if (request.getStartDateTime().toLocalDate().isBefore(LocalDate.now(defaultConfig.getTimeZone()).plusDays(2))) {
             throw new InvalidActionException("Leave request can only be cancelled at least 2 days before the start date.");
         }
 
@@ -435,7 +438,7 @@ public class LeaveService {
         }
 
         LocalDate requestedStartDate = payload.getStartDateTime().toLocalDate();
-        LocalDate today = LocalDate.now(clock);
+        LocalDate today = LocalDate.now(defaultConfig.getTimeZone());
 
         if (isAdvanceBookingRestricted(payload.getLeaveType())) {
             LocalDate latestAllowedAdvanceDate = today.plusMonths(MAX_ADVANCE_LEAVE_MONTHS);
@@ -469,7 +472,7 @@ public class LeaveService {
             throw new InvalidActionException("Leave end date-time must be later than the start date-time.");
         }
 
-        LocalDateTime now = LocalDateTime.now(clock);
+        LocalDateTime now = LocalDateTime.now(defaultConfig.getTimeZone());
         if (!payload.getStartDateTime().isAfter(now)) {
             throw new InvalidActionException("Leave cannot be filed for a time window that has already started or passed.");
         }
