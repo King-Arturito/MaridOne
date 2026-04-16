@@ -101,7 +101,7 @@ public class EmployeeService {
         Page<Employee> employeePage = employeeRepository.findAll(specs, pageable);
         Map<Long, List<ShiftResponseDto>> schedulesByEmployeeId =
                 findSchedulesByEmployeeId(employeePage.stream().map(Employee::getEmployeeId).toList());
-        return employeePage.map(employee -> toEmployeeResponse(employee, schedulesByEmployeeId));
+        return employeePage.map(employee -> sanitizeSummaryResponse(toEmployeeResponse(employee, schedulesByEmployeeId)));
     }
 
     @ExecutionTime
@@ -122,6 +122,7 @@ public class EmployeeService {
                 )
                 .stream()
                 .map(this::toEmployeeResponse)
+                .map(this::sanitizeSummaryResponse)
                 .toList();
     }
 
@@ -283,6 +284,22 @@ public class EmployeeService {
         response.setUserAccountName(findUsername(employee.getEmployeeId()));
         response.setShiftSchedules(resolveShiftSchedules(employee.getEmployeeId(), schedulesByEmployeeId));
         applyLatestSeparation(response, employee);
+        return response;
+    }
+
+    private EmployeeResponseDto sanitizeSummaryResponse(EmployeeResponseDto response) {
+        response.setSssNumber(null);
+        response.setPhilhealthNumber(null);
+        response.setPagibigNumber(null);
+        response.setTinNumber(null);
+        response.setEmergencyContactName(null);
+        response.setEmergencyContactRelationship(null);
+        response.setEmergencyContactNumber(null);
+        response.setEligibleForRehire(null);
+        response.setSeparationReason(null);
+        response.setSeparationNotes(null);
+        response.setSeparationEffectiveDate(null);
+        response.setSeparationProcessedBy(null);
         return response;
     }
 

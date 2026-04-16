@@ -11,6 +11,8 @@ import org.example.maridone.exception.unauthorized.InvalidActionException;
 import org.example.maridone.leave.request.LeaveRequest;
 import org.example.maridone.leave.request.LeaveRequestRepository;
 import org.example.maridone.log.attendance.AttendanceLog;
+import org.example.maridone.overtime.OvertimeRequest;
+import org.example.maridone.overtime.OvertimeRequestRepository;
 import org.example.maridone.payroll.PayrollCalculator;
 import org.example.maridone.schedule.shift.DailyShiftRepository;
 import org.example.maridone.schedule.shift.DailyShiftSchedule;
@@ -21,6 +23,7 @@ import org.springframework.stereotype.Service;
 
 import java.nio.charset.StandardCharsets;
 import java.time.DayOfWeek;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -42,8 +45,11 @@ import java.util.stream.Stream;
 public class AttendanceReportService {
     private static final DateTimeFormatter DATE_FORMAT = DateTimeFormatter.ISO_LOCAL_DATE;
     private static final DateTimeFormatter TIME_FORMAT = DateTimeFormatter.ofPattern("HH:mm");
-    private static final String CSV_HEADER =
-            "Employee ID,Employee Name,Department,Manager,Manager Head,Work Date,Shift Start,Shift End,Time In,Time Out,Status,Status Color,Late Minutes\n";
+    private static final String CSV_SUMMARY_TITLE = "Attendance Summary Report";
+    private static final String CSV_SUMMARY_HEADER =
+            "Employee ID,Employee Name,Department,Position,Evaluated Days,Present Days,Late Days,Early Out Days,Incomplete Days,Absent Days,Outside Schedule Days,Total Late Minutes,Total Early Out Minutes\n";
+    private static final String CSV_DETAIL_HEADER =
+            "Employee ID,Employee Name,Date,Time In,Time Out,Department,Position,Scheduled Start,Scheduled End,Status,Late,Early Out,Late Minutes,Early Out Minutes\n";
 
     private final EmployeeRepository employeeRepository;
     private final UserAccountRepository userAccountRepository;
@@ -51,6 +57,7 @@ public class AttendanceReportService {
     private final DailyShiftRepository dailyShiftRepository;
     private final TemplateShiftRepository templateShiftRepository;
     private final LeaveRequestRepository leaveRequestRepository;
+    private final OvertimeRequestRepository overtimeRequestRepository;
     private final PayrollCalculator payrollCalculator;
     private final DefaultConfig defaultConfig;
 
@@ -60,6 +67,7 @@ public class AttendanceReportService {
                                    DailyShiftRepository dailyShiftRepository,
                                    TemplateShiftRepository templateShiftRepository,
                                    LeaveRequestRepository leaveRequestRepository,
+                                   OvertimeRequestRepository overtimeRequestRepository,
                                    PayrollCalculator payrollCalculator,
                                    DefaultConfig defaultConfig) {
         this.employeeRepository = employeeRepository;
@@ -68,6 +76,7 @@ public class AttendanceReportService {
         this.dailyShiftRepository = dailyShiftRepository;
         this.templateShiftRepository = templateShiftRepository;
         this.leaveRequestRepository = leaveRequestRepository;
+        this.overtimeRequestRepository = overtimeRequestRepository;
         this.payrollCalculator = payrollCalculator;
         this.defaultConfig = defaultConfig;
     }
@@ -118,7 +127,7 @@ public class AttendanceReportService {
 
     private byte[] buildCsv(LocalDate from, LocalDate to, List<Employee> employees) {
         if (employees == null || employees.isEmpty()) {
-            return CSV_HEADER.getBytes(StandardCharsets.UTF_8);
+            return CSV_DETAIL_HEADER.getBytes(StandardCharsets.UTF_8);
         }
 
         List<Long> employeeIds = employees.stream()
@@ -134,68 +143,394 @@ public class AttendanceReportService {
                 groupAttendanceLogs(employeeIds, from, to);
         Map<Long, List<LeaveRequest>> leavesByEmployee =
                 groupLeavesByEmployee(employeeIds, from, to);
+        Map<Long, List<OvertimeRequest>> overtimeByEmployee =
+                groupOvertimeByEmployee(employeeIds, from, to);
 
-        StringBuilder csv = new StringBuilder(CSV_HEADER);
+        List<DailyAttendanceOutcome> allOutcomes = new ArrayList<>();
         for (Employee employee : employees) {
             for (LocalDate workDate = from; !workDate.isAfter(to); workDate = workDate.plusDays(1)) {
-                AttendanceReportRow row = buildRow(
+                DailyAttendanceOutcome outcome = evaluateDailyAttendance(
                         employee,
                         workDate,
                         dailySchedulesByEmployeeAndDate,
                         templateSchedulesByEmployeeAndDay,
                         attendanceLogsByEmployee.getOrDefault(employee.getEmployeeId(), List.of()),
-                        leavesByEmployee.getOrDefault(employee.getEmployeeId(), List.of())
+                        leavesByEmployee.getOrDefault(employee.getEmployeeId(), List.of()),
+                        overtimeByEmployee.getOrDefault(employee.getEmployeeId(), List.of())
                 );
-                if (row == null) {
-                    continue;
+                if (outcome != null) {
+                    allOutcomes.add(outcome);
                 }
-                appendRow(csv, row);
             }
         }
+
+        StringBuilder csv = new StringBuilder();
+        appendSummarySection(csv, allOutcomes, employees);
+        csv.append("\n");
+        appendDetailSection(csv, allOutcomes);
 
         return csv.toString().getBytes(StandardCharsets.UTF_8);
     }
 
-    private AttendanceReportRow buildRow(Employee employee,
-                                         LocalDate workDate,
-                                         Map<Long, Map<LocalDate, List<DailyShiftSchedule>>> dailySchedulesByEmployeeAndDate,
-                                         Map<Long, Map<DayOfWeek, List<TemplateShiftSchedule>>> templateSchedulesByEmployeeAndDay,
-                                         List<AttendanceLog> attendanceLogs,
-                                         List<LeaveRequest> approvedLeaves) {
+    private DailyAttendanceOutcome evaluateDailyAttendance(Employee employee,
+                                                            LocalDate workDate,
+                                                            Map<Long, Map<LocalDate, List<DailyShiftSchedule>>> dailySchedulesByEmployeeAndDate,
+                                                            Map<Long, Map<DayOfWeek, List<TemplateShiftSchedule>>> templateSchedulesByEmployeeAndDay,
+                                                            List<AttendanceLog> attendanceLogs,
+                                                            List<LeaveRequest> approvedLeaves,
+                                                            List<OvertimeRequest> approvedOvertime) {
+        ZoneId zoneId = defaultConfig.getTimeZone();
         ResolvedShift shift = resolveShift(employee.getEmployeeId(), workDate, dailySchedulesByEmployeeAndDate, templateSchedulesByEmployeeAndDay);
-        if (shift == null) {
+        List<InstantInterval> overtimeWindows = resolveApprovedOvertimeWindows(workDate, approvedOvertime, zoneId);
+        if (shift == null && overtimeWindows.isEmpty()) {
             return null;
         }
 
-        if (hasApprovedLeave(approvedLeaves, workDate, shift)) {
+        if (shift != null && hasApprovedLeave(approvedLeaves, workDate, shift)) {
             return null;
         }
 
-        AttendanceLog inLog = payrollCalculator.findInLogForDate(attendanceLogs, workDate);
-        AttendanceLog outLog = inLog == null ? null : payrollCalculator.findOutLogAfterIn(attendanceLogs, inLog, workDate);
+        List<PayrollCalculator.AttendanceSession> sessions = payrollCalculator.findAttendanceSessionsForDate(attendanceLogs, workDate);
+        LocalTime timeIn = sessions.isEmpty() ? null : toLocalTime(sessions.get(0).inLog());
+        LocalTime timeOut = sessions.isEmpty() ? null : toLocalTime(sessions.get(sessions.size() - 1).outLog());
 
-        AttendanceStatus status = AttendanceStatus.ABSENT;
-        long lateMinutes = 0L;
+        AttendanceStatus status;
+        boolean hasCompletePair = !sessions.isEmpty();
+        boolean hasAnyLog = hasAnyLogForDate(attendanceLogs, workDate);
 
-        if (inLog != null) {
-            lateMinutes = calculateLateMinutes(shift, inLog);
-            status = lateMinutes > 0 ? AttendanceStatus.LATE : AttendanceStatus.PRESENT;
+        List<InstantInterval> scheduleWindows = resolveScheduleWindows(workDate, shift, zoneId);
+        ScheduleCoverage scheduleCoverage = computeScheduleCoverage(scheduleWindows, sessions);
+        boolean hasOutsideScheduleCoverage =
+                hasCompletePair
+                        && overtimeWindows.isEmpty()
+                        && !scheduleWindows.isEmpty()
+                        && scheduleCoverage.relevantIn() == null;
+
+        if (hasCompletePair && !scheduleWindows.isEmpty() && scheduleCoverage.coversFullSchedule()) {
+            status = AttendanceStatus.PRESENT;
+        } else if (hasOutsideScheduleCoverage) {
+            status = AttendanceStatus.OUTSIDE_SCHEDULE;
+        } else if (hasAnyLog) {
+            status = hasCompletePair ? AttendanceStatus.ABSENT : AttendanceStatus.INCOMPLETE;
+        } else {
+            status = AttendanceStatus.ABSENT;
         }
 
-        return new AttendanceReportRow(
-                employee.getEmployeeId(),
-                formatEmployeeName(employee),
-                resolveDepartment(employee),
-                formatEmployeeName(employee.getManager()),
-                resolveManagerHeadLabel(employee.getManager()),
+        boolean late = scheduleCoverage.relevantIn() != null
+                && scheduleCoverage.scheduleStart() != null
+                && scheduleCoverage.relevantIn().isAfter(scheduleCoverage.scheduleStart());
+        boolean earlyOut = scheduleCoverage.relevantOut() != null
+                && scheduleCoverage.scheduleEnd() != null
+                && scheduleCoverage.relevantOut().isBefore(scheduleCoverage.scheduleEnd());
+        long lateMinutes = late ? Duration.between(scheduleCoverage.scheduleStart(), scheduleCoverage.relevantIn()).toMinutes() : 0;
+        long earlyOutMinutes = earlyOut ? Duration.between(scheduleCoverage.relevantOut(), scheduleCoverage.scheduleEnd()).toMinutes() : 0;
+        LocalTime displayStart = shift != null ? shift.startTime() : resolveWindowStartTime(overtimeWindows, zoneId);
+        LocalTime displayEnd = shift != null ? shift.endTime() : resolveWindowEndTime(overtimeWindows, zoneId);
+
+        return new DailyAttendanceOutcome(
+                employee,
                 workDate,
-                shift.startTime(),
-                shift.endTime(),
-                toLocalTime(inLog),
-                toLocalTime(outLog),
+                displayStart,
+                displayEnd,
+                timeIn,
+                timeOut,
                 status,
-                lateMinutes
+                late,
+                earlyOut,
+                lateMinutes,
+                earlyOutMinutes
         );
+    }
+
+    private List<InstantInterval> resolveScheduleWindows(LocalDate workDate, ResolvedShift shift, ZoneId zoneId) {
+        if (shift == null || workDate == null || zoneId == null) {
+            return List.of();
+        }
+
+        if (shift.dailySchedules() != null && !shift.dailySchedules().isEmpty()) {
+            return shift.dailySchedules().stream()
+                    .map(schedule -> toScheduleInterval(schedule, zoneId))
+                    .flatMap(Optional::stream)
+                    .sorted(Comparator.comparing(InstantInterval::start))
+                    .toList();
+        }
+
+        if (shift.startTime() == null || shift.endTime() == null) {
+            return List.of();
+        }
+
+        LocalDateTime start = LocalDateTime.of(workDate, shift.startTime());
+        LocalDateTime end = LocalDateTime.of(workDate, shift.endTime());
+        if (!end.isAfter(start)) {
+            end = end.plusDays(1);
+        }
+
+        return List.of(new InstantInterval(start.atZone(zoneId).toInstant(), end.atZone(zoneId).toInstant()));
+    }
+
+    private List<InstantInterval> resolveApprovedOvertimeWindows(LocalDate workDate, List<OvertimeRequest> approvedOvertime, ZoneId zoneId) {
+        if (workDate == null || zoneId == null || approvedOvertime == null || approvedOvertime.isEmpty()) {
+            return List.of();
+        }
+
+        return approvedOvertime.stream()
+                .filter(request -> workDate.equals(request.getWorkDate()))
+                .map(request -> toOvertimeInterval(request, zoneId))
+                .flatMap(Optional::stream)
+                .sorted(Comparator.comparing(InstantInterval::start))
+                .toList();
+    }
+
+    private Optional<InstantInterval> toOvertimeInterval(OvertimeRequest request, ZoneId zoneId) {
+        if (request == null || zoneId == null || request.getStartTime() == null || request.getEndTime() == null) {
+            return Optional.empty();
+        }
+
+        Instant start = request.getStartTime().atZone(zoneId).toInstant();
+        Instant end = request.getEndTime().atZone(zoneId).toInstant();
+        if (!end.isAfter(start)) {
+            end = end.plus(Duration.ofDays(1));
+        }
+
+        return end.isAfter(start) ? Optional.of(new InstantInterval(start, end)) : Optional.empty();
+    }
+
+    private LocalTime resolveWindowStartTime(List<InstantInterval> windows, ZoneId zoneId) {
+        if (windows == null || windows.isEmpty() || zoneId == null) {
+            return null;
+        }
+
+        Instant start = windows.stream().map(InstantInterval::start).min(Instant::compareTo).orElse(null);
+        return start == null ? null : start.atZone(zoneId).toLocalTime();
+    }
+
+    private LocalTime resolveWindowEndTime(List<InstantInterval> windows, ZoneId zoneId) {
+        if (windows == null || windows.isEmpty() || zoneId == null) {
+            return null;
+        }
+
+        Instant end = windows.stream().map(InstantInterval::end).max(Instant::compareTo).orElse(null);
+        return end == null ? null : end.atZone(zoneId).toLocalTime();
+    }
+
+    private Optional<InstantInterval> toScheduleInterval(DailyShiftSchedule schedule, ZoneId zoneId) {
+        if (schedule == null || zoneId == null || schedule.getStartDateTime() == null || schedule.getEndDateTime() == null) {
+            return Optional.empty();
+        }
+
+        Instant start = schedule.getStartDateTime().atZone(zoneId).toInstant();
+        Instant end = schedule.getEndDateTime().atZone(zoneId).toInstant();
+        if (!end.isAfter(start)) {
+            end = end.plus(Duration.ofDays(1));
+        }
+
+        return end.isAfter(start) ? Optional.of(new InstantInterval(start, end)) : Optional.empty();
+    }
+
+    private ScheduleCoverage computeScheduleCoverage(
+            List<InstantInterval> scheduleWindows,
+            List<PayrollCalculator.AttendanceSession> sessions
+    ) {
+        if (scheduleWindows == null || scheduleWindows.isEmpty() || sessions == null || sessions.isEmpty()) {
+            Instant scheduleStart = scheduleWindows == null || scheduleWindows.isEmpty()
+                    ? null
+                    : scheduleWindows.stream().map(InstantInterval::start).min(Instant::compareTo).orElse(null);
+            Instant scheduleEnd = scheduleWindows == null || scheduleWindows.isEmpty()
+                    ? null
+                    : scheduleWindows.stream().map(InstantInterval::end).max(Instant::compareTo).orElse(null);
+            return new ScheduleCoverage(false, scheduleStart, scheduleEnd, null, null);
+        }
+
+        Instant scheduleStart = scheduleWindows.stream().map(InstantInterval::start).min(Instant::compareTo).orElse(null);
+        Instant scheduleEnd = scheduleWindows.stream().map(InstantInterval::end).max(Instant::compareTo).orElse(null);
+
+        boolean coversFull = true;
+        Instant relevantIn = null;
+        Instant relevantOut = null;
+
+        for (InstantInterval window : scheduleWindows) {
+            long requiredMinutes = Duration.between(window.start(), window.end()).toMinutes();
+            if (requiredMinutes <= 0) {
+                continue;
+            }
+
+            List<InstantInterval> overlaps = new ArrayList<>();
+            for (PayrollCalculator.AttendanceSession session : sessions) {
+                if (session == null || session.inLog() == null || session.outLog() == null) continue;
+                Instant in = session.inLog().getTimestamp();
+                Instant out = session.outLog().getTimestamp();
+                if (in == null || out == null || !out.isAfter(in)) continue;
+                InstantInterval sessionInterval = new InstantInterval(in, out);
+                intersect(sessionInterval, window).ifPresent(overlaps::add);
+            }
+
+            List<InstantInterval> merged = mergeIntervals(overlaps);
+            long coveredMinutes = merged.stream()
+                    .mapToLong(interval -> Duration.between(interval.start(), interval.end()).toMinutes())
+                    .sum();
+
+            if (coveredMinutes < requiredMinutes) {
+                coversFull = false;
+            }
+
+            for (InstantInterval interval : merged) {
+                if (relevantIn == null || interval.start().isBefore(relevantIn)) {
+                    relevantIn = interval.start();
+                }
+                if (relevantOut == null || interval.end().isAfter(relevantOut)) {
+                    relevantOut = interval.end();
+                }
+            }
+        }
+
+        return new ScheduleCoverage(coversFull, scheduleStart, scheduleEnd, relevantIn, relevantOut);
+    }
+
+    private Optional<InstantInterval> intersect(InstantInterval a, InstantInterval b) {
+        if (a == null || b == null) {
+            return Optional.empty();
+        }
+        Instant start = a.start().isAfter(b.start()) ? a.start() : b.start();
+        Instant end = a.end().isBefore(b.end()) ? a.end() : b.end();
+        return end.isAfter(start) ? Optional.of(new InstantInterval(start, end)) : Optional.empty();
+    }
+
+    private List<InstantInterval> mergeIntervals(List<InstantInterval> intervals) {
+        if (intervals == null || intervals.isEmpty()) {
+            return List.of();
+        }
+
+        List<InstantInterval> sorted = intervals.stream()
+                .filter(Objects::nonNull)
+                .sorted(Comparator.comparing(InstantInterval::start).thenComparing(InstantInterval::end))
+                .toList();
+
+        List<InstantInterval> merged = new ArrayList<>();
+        for (InstantInterval current : sorted) {
+            if (merged.isEmpty()) {
+                merged.add(current);
+                continue;
+            }
+
+            InstantInterval last = merged.get(merged.size() - 1);
+            if (current.start().isAfter(last.end())) {
+                merged.add(current);
+                continue;
+            }
+
+            Instant end = current.end().isAfter(last.end()) ? current.end() : last.end();
+            merged.set(merged.size() - 1, new InstantInterval(last.start(), end));
+        }
+
+        return merged;
+    }
+
+    private record InstantInterval(Instant start, Instant end) {}
+
+    private record ScheduleCoverage(
+            boolean coversFullSchedule,
+            Instant scheduleStart,
+            Instant scheduleEnd,
+            Instant relevantIn,
+            Instant relevantOut
+    ) {}
+
+    private boolean hasAnyLogForDate(List<AttendanceLog> logs, LocalDate date) {
+        return logs.stream().anyMatch(log -> toLocalDate(log).equals(date));
+    }
+
+    private LocalDate toLocalDate(AttendanceLog log) {
+        return log.getTimestamp().atZone(defaultConfig.getTimeZone()).toLocalDate();
+    }
+
+    private Map<Long, List<OvertimeRequest>> groupOvertimeByEmployee(List<Long> employeeIds, LocalDate from, LocalDate to) {
+        return overtimeRequestRepository.findApprovedOvertimeForPeriod(employeeIds, from, to).stream()
+                .collect(Collectors.groupingBy(OvertimeRequest::getEmployeeId, LinkedHashMap::new, Collectors.toList()));
+    }
+
+    private void appendSummarySection(StringBuilder csv, List<DailyAttendanceOutcome> outcomes, List<Employee> employees) {
+        csv.append(csv(CSV_SUMMARY_TITLE)).append("\n");
+        csv.append(CSV_SUMMARY_HEADER);
+
+        Map<Long, List<DailyAttendanceOutcome>> outcomesByEmployee = outcomes.stream()
+                .collect(Collectors.groupingBy(o -> o.employee().getEmployeeId()));
+
+        long totalEvaluated = 0, totalPresent = 0, totalLate = 0, totalEarlyOut = 0, totalIncomplete = 0,
+                totalAbsent = 0, totalOutsideSchedule = 0, totalLateMin = 0, totalEarlyOutMin = 0;
+
+        for (Employee employee : employees) {
+            List<DailyAttendanceOutcome> empOutcomes = outcomesByEmployee.getOrDefault(employee.getEmployeeId(), List.of());
+            if (empOutcomes.isEmpty()) continue;
+
+            long evaluated = empOutcomes.size();
+            long present = empOutcomes.stream().filter(o -> o.status() == AttendanceStatus.PRESENT).count();
+            long lateCount = empOutcomes.stream().filter(o -> o.status() == AttendanceStatus.PRESENT && o.late()).count();
+            long earlyOutCount = empOutcomes.stream().filter(o -> o.status() == AttendanceStatus.PRESENT && o.earlyOut()).count();
+            long incomplete = empOutcomes.stream().filter(o -> o.status() == AttendanceStatus.INCOMPLETE).count();
+            long absent = empOutcomes.stream().filter(o -> o.status() == AttendanceStatus.ABSENT).count();
+            long outsideSchedule = empOutcomes.stream().filter(o -> o.status() == AttendanceStatus.OUTSIDE_SCHEDULE).count();
+            long lateMin = empOutcomes.stream().filter(o -> o.status() == AttendanceStatus.PRESENT).mapToLong(DailyAttendanceOutcome::lateMinutes).sum();
+            long earlyOutMin = empOutcomes.stream().filter(o -> o.status() == AttendanceStatus.PRESENT).mapToLong(DailyAttendanceOutcome::earlyOutMinutes).sum();
+
+            csv.append(csv(employee.getEmployeeId()))
+                    .append(',').append(csv(formatEmployeeName(employee)))
+                    .append(',').append(csv(resolveDepartment(employee)))
+                    .append(',').append(csv(employee.getPosition()))
+                    .append(',').append(csv(evaluated))
+                    .append(',').append(csv(present))
+                    .append(',').append(csv(lateCount))
+                    .append(',').append(csv(earlyOutCount))
+                    .append(',').append(csv(incomplete))
+                    .append(',').append(csv(absent))
+                    .append(',').append(csv(outsideSchedule))
+                    .append(',').append(csv(lateMin))
+                    .append(',').append(csv(earlyOutMin))
+                    .append('\n');
+
+            totalEvaluated += evaluated;
+            totalPresent += present;
+            totalLate += lateCount;
+            totalEarlyOut += earlyOutCount;
+            totalIncomplete += incomplete;
+            totalAbsent += absent;
+            totalOutsideSchedule += outsideSchedule;
+            totalLateMin += lateMin;
+            totalEarlyOutMin += earlyOutMin;
+        }
+
+        csv.append(csv("TOTALS"))
+                .append(",,,,")
+                .append(csv(totalEvaluated))
+                .append(',').append(csv(totalPresent))
+                .append(',').append(csv(totalLate))
+                .append(',').append(csv(totalEarlyOut))
+                .append(',').append(csv(totalIncomplete))
+                .append(',').append(csv(totalAbsent))
+                .append(',').append(csv(totalOutsideSchedule))
+                .append(',').append(csv(totalLateMin))
+                .append(',').append(csv(totalEarlyOutMin))
+                .append('\n');
+    }
+
+    private void appendDetailSection(StringBuilder csv, List<DailyAttendanceOutcome> outcomes) {
+        csv.append(CSV_DETAIL_HEADER);
+        for (DailyAttendanceOutcome o : outcomes) {
+            csv.append(csv(o.employee().getEmployeeId()))
+                    .append(',').append(csv(formatEmployeeName(o.employee())))
+                    .append(',').append(csv(formatDate(o.workDate())))
+                    .append(',').append(csv(formatTime(o.timeIn())))
+                    .append(',').append(csv(formatTime(o.timeOut())))
+                    .append(',').append(csv(resolveDepartment(o.employee())))
+                    .append(',').append(csv(o.employee().getPosition()))
+                    .append(',').append(csv(formatTime(o.shiftStart())))
+                    .append(',').append(csv(formatTime(o.shiftEnd())))
+                    .append(',').append(csv(o.status().name()))
+                    .append(',').append(csv(o.late() ? "YES" : "NO"))
+                    .append(',').append(csv(o.earlyOut() ? "YES" : "NO"))
+                    .append(',').append(csv(o.lateMinutes()))
+                    .append(',').append(csv(o.earlyOutMinutes()))
+                    .append('\n');
+        }
     }
 
     private Map<Long, Map<LocalDate, List<DailyShiftSchedule>>> groupDailySchedulesByEmployeeAndDate(List<Long> employeeIds,
@@ -292,41 +627,11 @@ public class AttendanceReportService {
                 && leave.getEndDateTime().isAfter(schedule.getStartDateTime());
     }
 
-    private long calculateLateMinutes(ResolvedShift shift, AttendanceLog inLog) {
-        if (shift == null || inLog == null || shift.startTime() == null) {
-            return 0L;
-        }
-
-        LocalTime actualIn = toLocalTime(inLog);
-        if (actualIn == null || !actualIn.isAfter(shift.startTime())) {
-            return 0L;
-        }
-
-        return java.time.Duration.between(shift.startTime(), actualIn).toMinutes();
-    }
-
     private LocalTime toLocalTime(AttendanceLog attendanceLog) {
         if (attendanceLog == null || attendanceLog.getTimestamp() == null) {
             return null;
         }
         return attendanceLog.getTimestamp().atZone(defaultConfig.getTimeZone()).toLocalTime();
-    }
-
-    private void appendRow(StringBuilder csv, AttendanceReportRow row) {
-        csv.append(csv(row.employeeId()))
-                .append(',').append(csv(row.employeeName()))
-                .append(',').append(csv(row.department()))
-                .append(',').append(csv(row.managerName()))
-                .append(',').append(csv(row.managerHeadLabel()))
-                .append(',').append(csv(formatDate(row.workDate())))
-                .append(',').append(csv(formatTime(row.shiftStart())))
-                .append(',').append(csv(formatTime(row.shiftEnd())))
-                .append(',').append(csv(formatTime(row.timeIn())))
-                .append(',').append(csv(formatTime(row.timeOut())))
-                .append(',').append(csv(row.status().name()))
-                .append(',').append(csv(row.status().color()))
-                .append(',').append(csv(row.lateMinutes() > 0 ? String.valueOf(row.lateMinutes()) : "0"))
-                .append('\n');
     }
 
     private String csv(Object value) {
@@ -364,29 +669,6 @@ public class AttendanceReportService {
         return null;
     }
 
-    private String resolveManagerHeadLabel(Employee manager) {
-        if (manager == null) {
-            return null;
-        }
-
-        if (manager.getEmpTitle() != null) {
-            return formatEnumLabel(manager.getEmpTitle().name());
-        }
-
-        return manager.getPosition() == null ? null : formatEnumLabel(manager.getPosition().name());
-    }
-
-    private String formatEnumLabel(String raw) {
-        if (raw == null || raw.isBlank()) {
-            return null;
-        }
-
-        return Stream.of(raw.trim().split("_+"))
-                .filter(part -> !part.isBlank())
-                .map(part -> part.substring(0, 1) + part.substring(1).toLowerCase())
-                .collect(Collectors.joining(" "));
-    }
-
     private void validateDateRange(LocalDate from, LocalDate to) {
         if (from == null || to == null) {
             throw new InvalidActionException("Attendance report date range is required.");
@@ -398,32 +680,24 @@ public class AttendanceReportService {
 
     private record ResolvedShift(LocalTime startTime, LocalTime endTime, List<DailyShiftSchedule> dailySchedules) {}
 
-    private record AttendanceReportRow(Long employeeId,
-                                       String employeeName,
-                                       String department,
-                                       String managerName,
-                                       String managerHeadLabel,
-                                       LocalDate workDate,
-                                       LocalTime shiftStart,
-                                       LocalTime shiftEnd,
-                                       LocalTime timeIn,
-                                       LocalTime timeOut,
-                                       AttendanceStatus status,
-                                       long lateMinutes) {}
+    private record DailyAttendanceOutcome(
+            Employee employee,
+            LocalDate workDate,
+            LocalTime shiftStart,
+            LocalTime shiftEnd,
+            LocalTime timeIn,
+            LocalTime timeOut,
+            AttendanceStatus status,
+            boolean late,
+            boolean earlyOut,
+            long lateMinutes,
+            long earlyOutMinutes
+    ) {}
 
     private enum AttendanceStatus {
-        PRESENT("GREEN"),
-        LATE("YELLOW"),
-        ABSENT("RED");
-
-        private final String color;
-
-        AttendanceStatus(String color) {
-            this.color = color;
-        }
-
-        public String color() {
-            return color;
-        }
+        PRESENT,
+        INCOMPLETE,
+        ABSENT,
+        OUTSIDE_SCHEDULE
     }
 }

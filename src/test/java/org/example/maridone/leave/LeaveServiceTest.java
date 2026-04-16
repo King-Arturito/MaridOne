@@ -29,6 +29,8 @@ import org.example.maridone.leave.request.LeaveRequestRepository;
 import org.example.maridone.notification.NotificationService;
 import org.example.maridone.notification.WorkflowEmailService;
 import org.example.maridone.overtime.OvertimeRequestRepository;
+import org.example.maridone.schedule.shift.DailyShiftRepository;
+import org.example.maridone.schedule.shift.DailyShiftSchedule;
 import org.example.maridone.schedule.shift.TemplateShiftRepository;
 import org.example.maridone.schedule.shift.TemplateShiftSchedule;
 import org.junit.jupiter.api.AfterEach;
@@ -63,6 +65,7 @@ class LeaveServiceTest {
     @Mock private LeaveRequestRepository leaveRequestRepository;
     @Mock private EmployeeRepository employeeRepository;
     @Mock private UserAccountRepository userAccountRepository;
+    @Mock private DailyShiftRepository dailyShiftRepository;
     @Mock private TemplateShiftRepository templateShiftRepository;
     @Mock private LeaveMapper leaveMapper;
     @Mock private PayrollConfig payrollConfig;
@@ -468,6 +471,27 @@ class LeaveServiceTest {
         return schedule;
     }
 
+    private DailyShiftSchedule createDailyShift(
+            LocalDateTime start,
+            LocalDateTime end,
+            boolean dayOff,
+            Employee employee
+    ) {
+        TemplateShiftSchedule schedule = createSchedule(
+                start.toLocalDate().getDayOfWeek(),
+                start.toLocalTime(),
+                end.toLocalTime(),
+                employee
+        );
+
+        DailyShiftSchedule shift = new DailyShiftSchedule();
+        shift.setTemplateShiftSchedule(schedule);
+        shift.setStartDateTime(start);
+        shift.setEndDateTime(end);
+        shift.setDayOff(dayOff);
+        return shift;
+    }
+
     @Test
     void getTeamLeaveRequests_ShouldReturnHandledEmployeesOnly() {
         String username = "manager1";
@@ -484,6 +508,121 @@ class LeaveServiceTest {
                 leaveService.getTeamLeaveRequests(new LeaveFilter(null, null, null, null, null), username, Pageable.ofSize(20));
 
         Assertions.assertEquals(1, result.getTotalElements());
+    }
+
+    @Test
+    void createLeaveRequest_ShouldUseDailyOverridesWhenSplittingPaidAndUnpaid() {
+        Long empId = 1L;
+        LeaveRequestDto dto = new LeaveRequestDto();
+        dto.setStartDateTime(LocalDateTime.of(2026, 3, 23, 9, 0));
+        dto.setEndDateTime(LocalDateTime.of(2026, 3, 25, 13, 0));
+        dto.setReason("Vacation");
+        dto.setLeaveType(LeaveType.VACATION_LEAVE);
+
+        Employee emp = new Employee();
+        ReflectionTestUtils.setField(emp, "employeeId", empId);
+
+        LeaveBalance leaveBalance = new LeaveBalance();
+        leaveBalance.setBalanceHours(BigDecimal.valueOf(6));
+
+        when(employeeRepository.findById(empId)).thenReturn(Optional.of(emp));
+        when(leaveBalanceRepository.findByLeaveTypeAndEmployee_EmployeeId(LeaveType.VACATION_LEAVE, empId))
+                .thenReturn(Optional.of(leaveBalance));
+        when(overtimeRequestRepository.existsActiveOverlapForEmployee(any(), any(), any())).thenReturn(false);
+        when(templateShiftRepository.findAllByEmployeeId(empId)).thenReturn(List.of(
+                createSchedule(DayOfWeek.MONDAY, LocalTime.of(9, 0), LocalTime.of(13, 0), emp),
+                createSchedule(DayOfWeek.TUESDAY, LocalTime.of(9, 0), LocalTime.of(13, 0), emp),
+                createSchedule(DayOfWeek.WEDNESDAY, LocalTime.of(9, 0), LocalTime.of(13, 0), emp)
+        ));
+        when(dailyShiftRepository.findAllByEmployeeIdAndPeriod(any(), any(), any())).thenReturn(List.of(
+                createDailyShift(
+                        LocalDateTime.of(2026, 3, 24, 0, 0),
+                        LocalDateTime.of(2026, 3, 24, 0, 0),
+                        true,
+                        emp
+                )
+        ));
+
+        List<LeaveRequest> results = leaveService.createLeaveRequest(dto, empId, null);
+
+        Assertions.assertEquals(2, results.size());
+
+        LeaveRequest paid = results.get(0);
+        Assertions.assertTrue(paid.getPaid());
+        Assertions.assertEquals(LocalDateTime.of(2026, 3, 23, 9, 0), paid.getStartDateTime());
+        Assertions.assertEquals(LocalDateTime.of(2026, 3, 25, 11, 0), paid.getEndDateTime());
+
+        LeaveRequest unpaid = results.get(1);
+        Assertions.assertFalse(unpaid.getPaid());
+        Assertions.assertEquals(LocalDateTime.of(2026, 3, 25, 11, 0), unpaid.getStartDateTime());
+        Assertions.assertEquals(LocalDateTime.of(2026, 3, 25, 13, 0), unpaid.getEndDateTime());
+    }
+
+    @Test
+    void updateLeaveRequest_ShouldDeductOnlyShiftCoveredHoursUsingDailyOverrides() {
+        Employee requestEmployee = new Employee();
+        ReflectionTestUtils.setField(requestEmployee, "employeeId", 3L);
+
+        LeaveRequest request = new LeaveRequest();
+        request.setEmployee(requestEmployee);
+        request.setRequestStatus(Status.PENDING_HR);
+        request.setLeaveType(LeaveType.SICK_LEAVE);
+        request.setPaid(true);
+        request.setSuggestedPaid(true);
+        request.setStartDateTime(LocalDateTime.of(2026, 3, 23, 9, 0));
+        request.setEndDateTime(LocalDateTime.of(2026, 3, 24, 13, 0));
+
+        Employee hrEmployee = new Employee();
+        ReflectionTestUtils.setField(hrEmployee, "employeeId", 2L);
+        hrEmployee.setFirstName("Pat");
+        hrEmployee.setLastName("Reyes");
+        hrEmployee.setPosition(Position.HR);
+
+        UserAccount hrAccount = new UserAccount();
+        hrAccount.setUsername("hr1");
+        hrAccount.setEmployee(hrEmployee);
+
+        LeaveBalance leaveBalance = new LeaveBalance();
+        leaveBalance.setLeaveType(LeaveType.SICK_LEAVE);
+        leaveBalance.setBalanceHours(BigDecimal.valueOf(10));
+
+        LeaveRequestDto payload = new LeaveRequestDto();
+        payload.setLeaveType(LeaveType.SICK_LEAVE);
+        payload.setRequestStatus(Status.APPROVED);
+        payload.setApproverReason("Approved after checking the schedule.");
+        payload.setPaid(true);
+
+        Authentication authentication = org.mockito.Mockito.mock(Authentication.class);
+        SecurityContext securityContext = org.mockito.Mockito.mock(SecurityContext.class);
+
+        when(authentication.getName()).thenReturn("hr1");
+        when(securityContext.getAuthentication()).thenReturn(authentication);
+        SecurityContextHolder.setContext(securityContext);
+
+        when(userAccountRepository.findByUsername("hr1")).thenReturn(Optional.of(hrAccount));
+        when(userAccountRepository.findEmployeeIdByUsername("hr1")).thenReturn(2L);
+        when(leaveRequestRepository.findByIdForUpdate(21L)).thenReturn(Optional.of(request));
+        when(leaveRequestRepository.findEmployeeIdByRequestId(21L)).thenReturn(Optional.of(3L));
+        when(templateShiftRepository.findAllByEmployeeId(3L)).thenReturn(List.of(
+                createSchedule(DayOfWeek.MONDAY, LocalTime.of(9, 0), LocalTime.of(13, 0), requestEmployee),
+                createSchedule(DayOfWeek.TUESDAY, LocalTime.of(9, 0), LocalTime.of(13, 0), requestEmployee)
+        ));
+        when(dailyShiftRepository.findAllByEmployeeIdAndPeriod(any(), any(), any())).thenReturn(List.of(
+                createDailyShift(
+                        LocalDateTime.of(2026, 3, 24, 10, 0),
+                        LocalDateTime.of(2026, 3, 24, 12, 0),
+                        false,
+                        requestEmployee
+                )
+        ));
+        when(leaveBalanceRepository.findOne(any(Specification.class))).thenReturn(Optional.of(leaveBalance));
+        when(leaveRequestRepository.save(any(LeaveRequest.class))).thenReturn(request);
+
+        LeaveRequest result = leaveService.updateLeaveRequest(payload, 21L);
+
+        Assertions.assertEquals(Status.APPROVED, result.getRequestStatus());
+        Assertions.assertEquals(new BigDecimal("4.00"), leaveBalance.getBalanceHours());
+        SecurityContextHolder.clearContext();
     }
 
     @Test

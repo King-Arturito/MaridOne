@@ -1,5 +1,6 @@
 package org.example.maridone.document;
 
+import org.example.maridone.auth.sensitive.SensitiveAccessService;
 import org.example.maridone.document.dto.DocumentResponseDto;
 import org.springframework.core.io.Resource;
 import org.springframework.http.HttpHeaders;
@@ -15,14 +16,18 @@ import org.springframework.web.multipart.MultipartFile;
 public class DocumentController {
 
     private final DocumentService documentService;
+    private final SensitiveAccessService sensitiveAccessService;
 
-    public DocumentController(DocumentService documentService) {
+    public DocumentController(DocumentService documentService,
+                              SensitiveAccessService sensitiveAccessService) {
         this.documentService = documentService;
+        this.sensitiveAccessService = sensitiveAccessService;
     }
 
     @GetMapping("/{pathId}/view")
-    @PreAuthorize("@documentOwnerCheck.isSelf(#pathId, authentication.name)")
-    public ResponseEntity<Resource> view(@PathVariable Long pathId) {
+    @PreAuthorize("hasRole('HR') or @documentOwnerCheck.isSelf(#pathId, authentication.name)")
+    public ResponseEntity<Resource> view(@PathVariable Long pathId, Authentication authentication) {
+        sensitiveAccessService.assertHrSensitiveAccess(authentication);
         DocumentViewResult result = documentService.view(pathId);
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + result.fileName() + "\"")

@@ -46,15 +46,68 @@ class AttendanceImportServiceTest {
     private AttendanceImportService attendanceImportService;
 
     @Test
-    void importAttendanceCsv_ShouldImportSummaryRowsAndSplitOvernightTimeout() {
+    void importAttendanceCsv_ShouldImportOldDetailFirstCsvWithExtraColumnsAndIgnoreSummarySection() {
         Employee employee = buildEmployee(18L, EmploymentStatus.REGULAR, LocalDate.of(2020, 1, 1), null);
         MockMultipartFile file = new MockMultipartFile(
                 "file",
                 "attendance-report-2024-01.csv",
                 "text/csv",
                 """
-                Employee ID,Employee Name,Date,Time In,Time Out
-                18,Jane Doe,2024-01-10,21:30,05:15
+                Employee ID,Employee Name,Date,Time In,Time Out,Department,Position,Scheduled Start,Scheduled End,Status,Status Flag,Indicator Color,Late Minutes
+                18,Jane Doe,2024-01-10,21:30,05:15,HR,Employee,21:00,05:00,LATE,LATE,YELLOW,30
+
+                Attendance Summary Report
+                Employee ID,Employee Name,Department,Position,Evaluated Days,Present Days,Late Days,Incomplete Days,Absent Days,Total Late Minutes
+                18,Jane Doe,HR,Employee,1,0,1,0,0,30
+                """.getBytes(StandardCharsets.UTF_8)
+        );
+
+        when(defaultConfig.getTimeZone()).thenReturn(ZoneId.of("UTC"));
+        when(employeeRepository.findAllById(any())).thenReturn(List.of(employee));
+        when(attendanceLogRepository.existsByEmployeeIdAndTimestampAndDirection(anyLong(), any(), anyString()))
+                .thenReturn(false);
+
+        AttendanceImportSummaryDto summary = attendanceImportService.importAttendanceCsv(file);
+
+        Assertions.assertEquals(1, summary.totalRows());
+        Assertions.assertEquals(1, summary.importedRows());
+        Assertions.assertEquals(0, summary.skippedRows());
+        Assertions.assertEquals(2, summary.importedLogs());
+        Assertions.assertEquals(0, summary.issueCount());
+
+        ArgumentCaptor<Iterable<AttendanceLog>> savedLogsCaptor = ArgumentCaptor.forClass(Iterable.class);
+        verify(attendanceLogRepository).saveAll(savedLogsCaptor.capture());
+        List<AttendanceLog> savedLogs = new ArrayList<>();
+        savedLogsCaptor.getValue().forEach(savedLogs::add);
+
+        Assertions.assertEquals(2, savedLogs.size());
+        AttendanceLog timeIn = savedLogs.stream()
+                .filter(log -> "IN".equals(log.getDirection()))
+                .findFirst()
+                .orElseThrow();
+        AttendanceLog timeOut = savedLogs.stream()
+                .filter(log -> "OUT".equals(log.getDirection()))
+                .findFirst()
+                .orElseThrow();
+
+        Assertions.assertEquals(Instant.parse("2024-01-10T21:30:00Z"), timeIn.getTimestamp());
+        Assertions.assertEquals(Instant.parse("2024-01-11T05:15:00Z"), timeOut.getTimestamp());
+    }
+
+    @Test
+    void importAttendanceCsv_ShouldImportNewSummaryFirstCsvWithoutLegacyStatusColumns() {
+        Employee employee = buildEmployee(18L, EmploymentStatus.REGULAR, LocalDate.of(2020, 1, 1), null);
+        MockMultipartFile file = new MockMultipartFile(
+                "file",
+                "attendance-report-2024-01.csv",
+                "text/csv",
+                """
+                Attendance Summary Report
+                Employee ID,Employee Name,Department,Position,Evaluated Days,Present Days,Late Days,Early Out Days,Incomplete Days,Absent Days,Total Late Minutes,Total Early Out Minutes
+                18,Jane Doe,HR,Employee,1,1,0,0,0,0,0,0
+
+                Employee ID,Employee Name,Date,Time In,Time Out,Department,Position,Scheduled Start,Scheduled End,Status,Late,Early Out,Late Minutes,Early Out Minutes
+                18,Jane Doe,2024-01-10,21:30,05:15,HR,Employee,21:00,05:00,PRESENT,NO,NO,0,0
                 """.getBytes(StandardCharsets.UTF_8)
         );
 

@@ -42,8 +42,10 @@ public interface DisputeRequestRepository extends JpaRepository<DisputeRequest, 
 """)
     Optional<DisputeRequest> findByIdWithEmployeeForUpdate(@Param("disputeId") Long disputeId);
 
+    @EntityGraph(attributePaths = {"payrollItem", "payrollItem.employee"})
     Page<DisputeRequest> findAllByPayrollItem_Employee_EmployeeIdAndStatus(Long employeeId, Status status, Pageable pageable);
 
+    @EntityGraph(attributePaths = {"payrollItem", "payrollItem.employee"})
     Page<DisputeRequest> findAllByPayrollItem_Employee_EmployeeId(Long employeeId, Pageable pageable);
 
     Page<DisputeRequest> findByPayrollItem_ItemId(Long itemId, Pageable pageable);

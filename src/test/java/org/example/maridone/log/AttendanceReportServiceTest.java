@@ -10,6 +10,8 @@ import org.example.maridone.enums.Position;
 import org.example.maridone.leave.request.LeaveRequest;
 import org.example.maridone.leave.request.LeaveRequestRepository;
 import org.example.maridone.log.attendance.AttendanceLog;
+import org.example.maridone.overtime.OvertimeRequest;
+import org.example.maridone.overtime.OvertimeRequestRepository;
 import org.example.maridone.payroll.PayrollCalculator;
 import org.example.maridone.schedule.shift.DailyShiftRepository;
 import org.example.maridone.schedule.shift.DailyShiftSchedule;
@@ -58,6 +60,9 @@ class AttendanceReportServiceTest {
     private LeaveRequestRepository leaveRequestRepository;
 
     @Mock
+    private OvertimeRequestRepository overtimeRequestRepository;
+
+    @Mock
     private PayrollCalculator payrollCalculator;
 
     private DefaultConfig defaultConfig;
@@ -75,13 +80,14 @@ class AttendanceReportServiceTest {
                 dailyShiftRepository,
                 templateShiftRepository,
                 leaveRequestRepository,
+                overtimeRequestRepository,
                 payrollCalculator,
                 defaultConfig
         );
     }
 
     @Test
-    void exportAttendanceReport_ShouldIncludeLateStatusAndManagerLabels() {
+    void exportAttendanceReport_ShouldMarkAbsentWhenScheduledWindowNotFullyCovered() {
         LocalDate workDate = LocalDate.of(2026, 4, 14);
         Employee manager = employee(7L, "Mina", "Santos", Position.MANAGER, EmploymentStatus.REGULAR);
         manager.setEmpTitle(ManagerTitle.HEAD_OF_PEOPLE_OPERATIONS);
@@ -108,19 +114,53 @@ class AttendanceReportServiceTest {
                 .thenReturn(List.of(inLog, outLog));
         when(leaveRequestRepository.findApprovedLeavesForPeriod(eq(List.of(employee.getEmployeeId())), any(), any()))
                 .thenReturn(List.of());
-        when(payrollCalculator.findInLogForDate(List.of(inLog, outLog), workDate)).thenReturn(inLog);
-        when(payrollCalculator.findOutLogAfterIn(List.of(inLog, outLog), inLog, workDate)).thenReturn(outLog);
+        when(overtimeRequestRepository.findApprovedOvertimeForPeriod(eq(List.of(employee.getEmployeeId())), any(), any()))
+                .thenReturn(List.of());
+        when(payrollCalculator.findAttendanceSessionsForDate(List.of(inLog, outLog), workDate))
+                .thenReturn(List.of(new PayrollCalculator.AttendanceSession(inLog, outLog)));
 
         String csv = new String(attendanceReportService.exportAttendanceReport(workDate, workDate, employee.getEmployeeId()), StandardCharsets.UTF_8);
 
-        Assertions.assertTrue(csv.contains("\"LATE\",\"YELLOW\",\"20\""));
+        Assertions.assertTrue(csv.contains("Attendance Summary Report"));
         Assertions.assertTrue(csv.contains("\"People Operations Department\""));
-        Assertions.assertTrue(csv.contains("\"Mina Santos\""));
-        Assertions.assertTrue(csv.contains("\"Head Of People Operations\""));
+        Assertions.assertTrue(csv.contains("\"2026-04-14\""));
+        Assertions.assertTrue(csv.contains("\"ABSENT\",\"YES\",\"NO\",\"20\",\"0\""));
     }
 
     @Test
-    void exportAttendanceReport_ShouldSkipApprovedLeaveDays() {
+    void exportAttendanceReport_ShouldMarkPresentWhenScheduledWindowFullyCovered() {
+        LocalDate workDate = LocalDate.of(2026, 4, 14);
+        Employee employee = employee(19L, "Ana", "Reyes", Position.EMPLOYEE, EmploymentStatus.REGULAR);
+
+        DailyShiftSchedule shift = new DailyShiftSchedule();
+        shift.setStartDateTime(LocalDateTime.of(2026, 4, 14, 8, 0));
+        shift.setEndDateTime(LocalDateTime.of(2026, 4, 14, 17, 0));
+        ReflectionTestUtils.setField(shift, "templateShiftSchedule", templateShiftFor(employee));
+
+        AttendanceLog inLog = attendanceLog(employee.getEmployeeId(), "IN", "2026-04-13T23:00:00Z"); // 07:00 Manila
+        AttendanceLog outLog = attendanceLog(employee.getEmployeeId(), "OUT", "2026-04-14T09:00:00Z"); // 17:00 Manila
+
+        when(employeeRepository.findById(employee.getEmployeeId())).thenReturn(Optional.of(employee));
+        when(dailyShiftRepository.findAllByEmployeeIdsAndPeriod(eq(List.of(employee.getEmployeeId())), any(), any()))
+                .thenReturn(List.of(shift));
+        when(templateShiftRepository.findAllByEmployeeIdIn(List.of(employee.getEmployeeId()))).thenReturn(List.of());
+        when(attendanceLogRepository.findByEmployeeIdInAndTimestampBetween(eq(List.of(employee.getEmployeeId())), any(), any(), any(Sort.class)))
+                .thenReturn(List.of(inLog, outLog));
+        when(leaveRequestRepository.findApprovedLeavesForPeriod(eq(List.of(employee.getEmployeeId())), any(), any()))
+                .thenReturn(List.of());
+        when(overtimeRequestRepository.findApprovedOvertimeForPeriod(eq(List.of(employee.getEmployeeId())), any(), any()))
+                .thenReturn(List.of());
+        when(payrollCalculator.findAttendanceSessionsForDate(List.of(inLog, outLog), workDate))
+                .thenReturn(List.of(new PayrollCalculator.AttendanceSession(inLog, outLog)));
+
+        String csv = new String(attendanceReportService.exportAttendanceReport(workDate, workDate, employee.getEmployeeId()), StandardCharsets.UTF_8);
+
+        Assertions.assertTrue(csv.contains("\"2026-04-14\""));
+        Assertions.assertTrue(csv.contains("\"PRESENT\",\"NO\",\"NO\",\"0\",\"0\""));
+    }
+
+    @Test
+    void exportAttendanceReport_ShouldMarkIncompleteWhenNoCompleteSessionExists() {
         LocalDate workDate = LocalDate.of(2026, 4, 15);
         Employee employee = employee(19L, "Ana", "Reyes", Position.EMPLOYEE, EmploymentStatus.REGULAR);
 
@@ -129,10 +169,111 @@ class AttendanceReportServiceTest {
         shift.setEndDateTime(LocalDateTime.of(2026, 4, 15, 17, 0));
         ReflectionTestUtils.setField(shift, "templateShiftSchedule", templateShiftFor(employee));
 
+        AttendanceLog inOnly = attendanceLog(employee.getEmployeeId(), "IN", "2026-04-15T00:00:00Z"); // 08:00 Manila
+
+        when(employeeRepository.findById(employee.getEmployeeId())).thenReturn(Optional.of(employee));
+        when(dailyShiftRepository.findAllByEmployeeIdsAndPeriod(eq(List.of(employee.getEmployeeId())), any(), any()))
+                .thenReturn(List.of(shift));
+        when(templateShiftRepository.findAllByEmployeeIdIn(List.of(employee.getEmployeeId()))).thenReturn(List.of());
+        when(attendanceLogRepository.findByEmployeeIdInAndTimestampBetween(eq(List.of(employee.getEmployeeId())), any(), any(), any(Sort.class)))
+                .thenReturn(List.of(inOnly));
+        when(leaveRequestRepository.findApprovedLeavesForPeriod(eq(List.of(employee.getEmployeeId())), any(), any()))
+                .thenReturn(List.of());
+        when(overtimeRequestRepository.findApprovedOvertimeForPeriod(eq(List.of(employee.getEmployeeId())), any(), any()))
+                .thenReturn(List.of());
+        when(payrollCalculator.findAttendanceSessionsForDate(List.of(inOnly), workDate))
+                .thenReturn(List.of());
+
+        String csv = new String(attendanceReportService.exportAttendanceReport(workDate, workDate, employee.getEmployeeId()), StandardCharsets.UTF_8);
+
+        Assertions.assertTrue(csv.contains("\"2026-04-15\""));
+        Assertions.assertTrue(csv.contains("\"INCOMPLETE\",\"NO\",\"NO\",\"0\",\"0\""));
+    }
+
+    @Test
+    void exportAttendanceReport_ShouldMarkOutsideScheduleWhenLogsAreFullyOutsideShiftWithoutApprovedOvertime() {
+        LocalDate workDate = LocalDate.of(2026, 4, 18);
+        Employee employee = employee(21L, "Marco", "Tan", Position.EMPLOYEE, EmploymentStatus.REGULAR);
+
+        DailyShiftSchedule shift = new DailyShiftSchedule();
+        shift.setStartDateTime(LocalDateTime.of(2026, 4, 18, 8, 0));
+        shift.setEndDateTime(LocalDateTime.of(2026, 4, 18, 17, 0));
+        ReflectionTestUtils.setField(shift, "templateShiftSchedule", templateShiftFor(employee));
+
+        AttendanceLog inLog = attendanceLog(employee.getEmployeeId(), "IN", "2026-04-18T10:00:00Z");
+        AttendanceLog outLog = attendanceLog(employee.getEmployeeId(), "OUT", "2026-04-18T12:00:00Z");
+
+        when(employeeRepository.findById(employee.getEmployeeId())).thenReturn(Optional.of(employee));
+        when(dailyShiftRepository.findAllByEmployeeIdsAndPeriod(eq(List.of(employee.getEmployeeId())), any(), any()))
+                .thenReturn(List.of(shift));
+        when(templateShiftRepository.findAllByEmployeeIdIn(List.of(employee.getEmployeeId()))).thenReturn(List.of());
+        when(attendanceLogRepository.findByEmployeeIdInAndTimestampBetween(eq(List.of(employee.getEmployeeId())), any(), any(), any(Sort.class)))
+                .thenReturn(List.of(inLog, outLog));
+        when(leaveRequestRepository.findApprovedLeavesForPeriod(eq(List.of(employee.getEmployeeId())), any(), any()))
+                .thenReturn(List.of());
+        when(overtimeRequestRepository.findApprovedOvertimeForPeriod(eq(List.of(employee.getEmployeeId())), any(), any()))
+                .thenReturn(List.of());
+        when(payrollCalculator.findAttendanceSessionsForDate(List.of(inLog, outLog), workDate))
+                .thenReturn(List.of(new PayrollCalculator.AttendanceSession(inLog, outLog)));
+
+        String csv = new String(attendanceReportService.exportAttendanceReport(workDate, workDate, employee.getEmployeeId()), StandardCharsets.UTF_8);
+
+        Assertions.assertTrue(csv.contains("Outside Schedule Days"));
+        Assertions.assertTrue(csv.contains("\"2026-04-18\""));
+        Assertions.assertTrue(csv.contains("\"08:00\",\"17:00\",\"OUTSIDE_SCHEDULE\",\"NO\",\"NO\",\"0\",\"0\""));
+        Assertions.assertTrue(csv.contains("\"1\",\"0\",\"0\",\"0\",\"0\",\"0\",\"1\",\"0\",\"0\""));
+    }
+
+    @Test
+    void exportAttendanceReport_ShouldNotMarkOutsideScheduleWhenApprovedOvertimeExistsForThatDate() {
+        LocalDate workDate = LocalDate.of(2026, 4, 18);
+        Employee employee = employee(21L, "Marco", "Tan", Position.EMPLOYEE, EmploymentStatus.REGULAR);
+
+        DailyShiftSchedule shift = new DailyShiftSchedule();
+        shift.setStartDateTime(LocalDateTime.of(2026, 4, 18, 8, 0));
+        shift.setEndDateTime(LocalDateTime.of(2026, 4, 18, 17, 0));
+        ReflectionTestUtils.setField(shift, "templateShiftSchedule", templateShiftFor(employee));
+
+        AttendanceLog inLog = attendanceLog(employee.getEmployeeId(), "IN", "2026-04-18T10:00:00Z");
+        AttendanceLog outLog = attendanceLog(employee.getEmployeeId(), "OUT", "2026-04-18T12:00:00Z");
+        OvertimeRequest overtimeRequest = approvedOvertime(employee, workDate,
+                LocalDateTime.of(2026, 4, 18, 18, 0),
+                LocalDateTime.of(2026, 4, 18, 20, 0));
+
+        when(employeeRepository.findById(employee.getEmployeeId())).thenReturn(Optional.of(employee));
+        when(dailyShiftRepository.findAllByEmployeeIdsAndPeriod(eq(List.of(employee.getEmployeeId())), any(), any()))
+                .thenReturn(List.of(shift));
+        when(templateShiftRepository.findAllByEmployeeIdIn(List.of(employee.getEmployeeId()))).thenReturn(List.of());
+        when(attendanceLogRepository.findByEmployeeIdInAndTimestampBetween(eq(List.of(employee.getEmployeeId())), any(), any(), any(Sort.class)))
+                .thenReturn(List.of(inLog, outLog));
+        when(leaveRequestRepository.findApprovedLeavesForPeriod(eq(List.of(employee.getEmployeeId())), any(), any()))
+                .thenReturn(List.of());
+        when(overtimeRequestRepository.findApprovedOvertimeForPeriod(eq(List.of(employee.getEmployeeId())), any(), any()))
+                .thenReturn(List.of(overtimeRequest));
+        when(payrollCalculator.findAttendanceSessionsForDate(List.of(inLog, outLog), workDate))
+                .thenReturn(List.of(new PayrollCalculator.AttendanceSession(inLog, outLog)));
+
+        String csv = new String(attendanceReportService.exportAttendanceReport(workDate, workDate, employee.getEmployeeId()), StandardCharsets.UTF_8);
+
+        Assertions.assertTrue(csv.contains("\"2026-04-18\""));
+        Assertions.assertTrue(csv.contains("\"08:00\",\"17:00\",\"ABSENT\",\"NO\",\"NO\",\"0\",\"0\""));
+        Assertions.assertTrue(csv.contains("\"1\",\"0\",\"0\",\"0\",\"0\",\"1\",\"0\",\"0\",\"0\""));
+    }
+
+    @Test
+    void exportAttendanceReport_ShouldSkipApprovedLeaveDays() {
+        LocalDate workDate = LocalDate.of(2026, 4, 16);
+        Employee employee = employee(20L, "Luis", "Lim", Position.EMPLOYEE, EmploymentStatus.REGULAR);
+
+        DailyShiftSchedule shift = new DailyShiftSchedule();
+        shift.setStartDateTime(LocalDateTime.of(2026, 4, 16, 8, 0));
+        shift.setEndDateTime(LocalDateTime.of(2026, 4, 16, 17, 0));
+        ReflectionTestUtils.setField(shift, "templateShiftSchedule", templateShiftFor(employee));
+
         LeaveRequest leave = new LeaveRequest();
         leave.setEmployee(employee);
-        leave.setStartDateTime(LocalDateTime.of(2026, 4, 15, 0, 0));
-        leave.setEndDateTime(LocalDateTime.of(2026, 4, 16, 0, 0));
+        leave.setStartDateTime(LocalDateTime.of(2026, 4, 16, 0, 0));
+        leave.setEndDateTime(LocalDateTime.of(2026, 4, 17, 0, 0));
 
         when(employeeRepository.findById(employee.getEmployeeId())).thenReturn(Optional.of(employee));
         when(dailyShiftRepository.findAllByEmployeeIdsAndPeriod(eq(List.of(employee.getEmployeeId())), any(), any()))
@@ -142,10 +283,14 @@ class AttendanceReportServiceTest {
                 .thenReturn(List.of());
         when(leaveRequestRepository.findApprovedLeavesForPeriod(eq(List.of(employee.getEmployeeId())), any(), any()))
                 .thenReturn(List.of(leave));
+        when(overtimeRequestRepository.findApprovedOvertimeForPeriod(eq(List.of(employee.getEmployeeId())), any(), any()))
+                .thenReturn(List.of());
 
         String csv = new String(attendanceReportService.exportAttendanceReport(workDate, workDate, employee.getEmployeeId()), StandardCharsets.UTF_8);
 
-        Assertions.assertEquals("Employee ID,Employee Name,Department,Manager,Manager Head,Work Date,Shift Start,Shift End,Time In,Time Out,Status,Status Color,Late Minutes\n", csv);
+        Assertions.assertTrue(csv.contains("Attendance Summary Report"));
+        Assertions.assertTrue(csv.contains("Employee ID,Employee Name,Date,Time In,Time Out,Department,Position,Scheduled Start,Scheduled End,Status,Late,Early Out,Late Minutes,Early Out Minutes"));
+        Assertions.assertFalse(csv.contains("\"" + employee.getEmployeeId() + "\""));
     }
 
     private Employee employee(Long id, String firstName, String lastName, Position position, EmploymentStatus status) {
@@ -168,6 +313,15 @@ class AttendanceReportServiceTest {
         shift.setEndTime(java.time.LocalTime.of(17, 0));
         shift.setDayOfWeek(java.time.DayOfWeek.TUESDAY);
         return shift;
+    }
+
+    private OvertimeRequest approvedOvertime(Employee employee, LocalDate workDate, LocalDateTime start, LocalDateTime end) {
+        OvertimeRequest request = new OvertimeRequest();
+        request.setEmployee(employee);
+        request.setWorkDate(workDate);
+        request.setStartTime(start);
+        request.setEndTime(end);
+        return request;
     }
 
     private AttendanceLog attendanceLog(Long employeeId, String direction, String timestamp) {

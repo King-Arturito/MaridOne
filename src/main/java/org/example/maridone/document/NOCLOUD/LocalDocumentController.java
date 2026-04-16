@@ -1,5 +1,6 @@
 package org.example.maridone.document.NOCLOUD;
 
+import org.example.maridone.auth.sensitive.SensitiveAccessService;
 import org.example.maridone.document.DocumentViewResult;
 import org.example.maridone.document.DocumentService;
 import org.example.maridone.document.dto.DocumentResponseDto;
@@ -21,14 +22,18 @@ import java.util.List;
 public class LocalDocumentController {
 
     private final DocumentService documentService;
+    private final SensitiveAccessService sensitiveAccessService;
 
-    public LocalDocumentController(DocumentService documentService) {
+    public LocalDocumentController(DocumentService documentService,
+                                   SensitiveAccessService sensitiveAccessService) {
         this.documentService = documentService;
+        this.sensitiveAccessService = sensitiveAccessService;
     }
 
     @GetMapping("/{pathId}/view")
-    @PreAuthorize("@documentOwnerCheck.isSelf(#pathId, authentication.name)")
-    public ResponseEntity<Resource> view(@PathVariable Long pathId) {
+    @PreAuthorize("hasRole('HR') or @documentOwnerCheck.isSelf(#pathId, authentication.name)")
+    public ResponseEntity<Resource> view(@PathVariable Long pathId, Authentication authentication) {
+        sensitiveAccessService.assertHrSensitiveAccess(authentication);
         DocumentViewResult result = documentService.view(pathId);
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + result.fileName() + "\"")
