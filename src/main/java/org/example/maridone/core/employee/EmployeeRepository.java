@@ -11,6 +11,7 @@ import org.springframework.stereotype.Repository;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
 
 @Repository
 public interface EmployeeRepository extends JpaRepository<Employee, Long>, JpaSpecificationExecutor<Employee> {
@@ -37,6 +38,12 @@ public interface EmployeeRepository extends JpaRepository<Employee, Long>, JpaSp
 
     List<Employee> findByManager_EmployeeIdAndEmploymentStatusNotOrderByLastNameAscFirstNameAsc(
             Long managerId,
+            EmploymentStatus employmentStatus
+    );
+
+    Optional<Employee> findFirstByEmpTitleAndPositionAndEmploymentStatusNot(
+            org.example.maridone.enums.ManagerTitle empTitle,
+            Position position,
             EmploymentStatus employmentStatus
     );
 

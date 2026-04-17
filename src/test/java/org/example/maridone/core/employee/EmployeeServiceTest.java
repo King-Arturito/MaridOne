@@ -20,6 +20,10 @@ import org.example.maridone.exception.notfound.EmployeeNotFoundException;
 import org.example.maridone.exception.unauthorized.InvalidActionException;
 import org.example.maridone.leave.balance.LeaveBalance;
 import org.example.maridone.leave.balance.LeaveBalanceRepository;
+import org.example.maridone.leave.request.LeaveRequest;
+import org.example.maridone.leave.request.LeaveRequestRepository;
+import org.example.maridone.overtime.OvertimeRequest;
+import org.example.maridone.overtime.OvertimeRequestRepository;
 import org.example.maridone.schedule.mapper.ScheduleMapper;
 import org.example.maridone.schedule.shift.ShiftService;
 import org.example.maridone.schedule.shift.TemplateShiftRepository;
@@ -68,6 +72,12 @@ class EmployeeServiceTest {
 
     @Mock
     private EmployeeSeparationRepository employeeSeparationRepository;
+
+    @Mock
+    private LeaveRequestRepository leaveRequestRepository;
+
+    @Mock
+    private OvertimeRequestRepository overtimeRequestRepository;
 
     @InjectMocks
     private EmployeeService employeeService;
@@ -407,6 +417,142 @@ class EmployeeServiceTest {
         employeeService.updateEmployee(30L, requestDto);
 
         Assertions.assertNull(employee.getEmpTitle());
+    }
+
+    @Test
+    void updateEmployee_ShouldReroutePendingRequests_WhenManagerChanges() {
+        stubScheduleDependencies();
+        Employee employee = new Employee();
+        ReflectionTestUtils.setField(employee, "employeeId", 44L);
+        employee.setPosition(Position.EMPLOYEE);
+
+        Employee oldManager = new Employee();
+        ReflectionTestUtils.setField(oldManager, "employeeId", 4L);
+        oldManager.setPosition(Position.MANAGER);
+        employee.setManager(oldManager);
+
+        Employee newManager = new Employee();
+        ReflectionTestUtils.setField(newManager, "employeeId", 8L);
+        newManager.setPosition(Position.MANAGER);
+
+        LeaveRequest pendingLeave = new LeaveRequest();
+        pendingLeave.setRequestStatus(org.example.maridone.enums.Status.PENDING_HR);
+
+        OvertimeRequest pendingOvertime = new OvertimeRequest();
+        pendingOvertime.setRequestStatus(org.example.maridone.enums.Status.PENDING_HR);
+
+        EmployeeRequestDto requestDto = new EmployeeRequestDto();
+        requestDto.setManagerId(8L);
+
+        when(employeeRepository.findById(44L)).thenReturn(Optional.of(employee));
+        when(employeeRepository.findById(8L)).thenReturn(Optional.of(newManager));
+        when(employeeRepository.save(any(Employee.class))).thenReturn(employee);
+        when(coreMapper.toEmployeeResponse(any(Employee.class))).thenReturn(new EmployeeResponseDto());
+        when(userAccountRepository.findUsernameByEmployeeEmployeeId(anyLong())).thenReturn(Optional.empty());
+        when(leaveRequestRepository.findByEmployee_EmployeeIdAndRequestStatusIn(eq(44L), any()))
+                .thenReturn(List.of(pendingLeave));
+        when(overtimeRequestRepository.findByEmployee_EmployeeIdAndRequestStatusIn(eq(44L), any()))
+                .thenReturn(List.of(pendingOvertime));
+
+        employeeService.updateEmployee(44L, requestDto);
+
+        Assertions.assertSame(newManager, employee.getManager());
+        Assertions.assertEquals(org.example.maridone.enums.Status.PENDING_MANAGER, pendingLeave.getRequestStatus());
+        Assertions.assertEquals(org.example.maridone.enums.Status.PENDING_MANAGER, pendingOvertime.getRequestStatus());
+        verify(leaveRequestRepository).saveAll(List.of(pendingLeave));
+        verify(overtimeRequestRepository).saveAll(List.of(pendingOvertime));
+    }
+
+    @Test
+    void updateEmployee_ShouldResolveManagerFromDepartmentAndReroutePendingRequests() {
+        stubScheduleDependencies();
+        Employee employee = new Employee();
+        ReflectionTestUtils.setField(employee, "employeeId", 52L);
+        employee.setPosition(Position.EMPLOYEE);
+
+        Employee oldManager = new Employee();
+        ReflectionTestUtils.setField(oldManager, "employeeId", 5L);
+        oldManager.setPosition(Position.MANAGER);
+        employee.setManager(oldManager);
+
+        Employee departmentManager = new Employee();
+        ReflectionTestUtils.setField(departmentManager, "employeeId", 10L);
+        departmentManager.setPosition(Position.MANAGER);
+        departmentManager.setEmpTitle(ManagerTitle.HEAD_OF_PROCUREMENT);
+
+        LeaveRequest pendingLeave = new LeaveRequest();
+        pendingLeave.setRequestStatus(org.example.maridone.enums.Status.PENDING_MANAGER);
+
+        OvertimeRequest pendingOvertime = new OvertimeRequest();
+        pendingOvertime.setRequestStatus(org.example.maridone.enums.Status.PENDING_MANAGER);
+
+        EmployeeRequestDto requestDto = new EmployeeRequestDto();
+        requestDto.setDepartment("Procurements Department");
+
+        when(employeeRepository.findById(52L)).thenReturn(Optional.of(employee));
+        when(employeeRepository.findFirstByEmpTitleAndPositionAndEmploymentStatusNot(
+                ManagerTitle.HEAD_OF_PROCUREMENT,
+                Position.MANAGER,
+                EmploymentStatus.TERMINATED
+        )).thenReturn(Optional.of(departmentManager));
+        when(employeeRepository.save(any(Employee.class))).thenReturn(employee);
+        when(coreMapper.toEmployeeResponse(any(Employee.class))).thenReturn(new EmployeeResponseDto());
+        when(userAccountRepository.findUsernameByEmployeeEmployeeId(anyLong())).thenReturn(Optional.empty());
+        when(leaveRequestRepository.findByEmployee_EmployeeIdAndRequestStatusIn(eq(52L), any()))
+                .thenReturn(List.of(pendingLeave));
+        when(overtimeRequestRepository.findByEmployee_EmployeeIdAndRequestStatusIn(eq(52L), any()))
+                .thenReturn(List.of(pendingOvertime));
+
+        employeeService.updateEmployee(52L, requestDto);
+
+        Assertions.assertSame(departmentManager, employee.getManager());
+        Assertions.assertEquals(org.example.maridone.enums.Status.PENDING_MANAGER, pendingLeave.getRequestStatus());
+        Assertions.assertEquals(org.example.maridone.enums.Status.PENDING_MANAGER, pendingOvertime.getRequestStatus());
+        verify(leaveRequestRepository).saveAll(List.of(pendingLeave));
+        verify(overtimeRequestRepository).saveAll(List.of(pendingOvertime));
+    }
+
+    @Test
+    void updateEmployee_ShouldNotRerouteRequestsAlreadyApprovedByManager() {
+        stubScheduleDependencies();
+        Employee employee = new Employee();
+        ReflectionTestUtils.setField(employee, "employeeId", 46L);
+        employee.setPosition(Position.EMPLOYEE);
+
+        Employee oldManager = new Employee();
+        ReflectionTestUtils.setField(oldManager, "employeeId", 6L);
+        oldManager.setPosition(Position.MANAGER);
+        employee.setManager(oldManager);
+
+        Employee newManager = new Employee();
+        ReflectionTestUtils.setField(newManager, "employeeId", 9L);
+        newManager.setPosition(Position.MANAGER);
+
+        LeaveRequest forwardedLeave = new LeaveRequest();
+        forwardedLeave.setRequestStatus(org.example.maridone.enums.Status.PENDING_HR);
+        forwardedLeave.setManagerApprovedAt(java.time.Instant.now());
+
+        OvertimeRequest forwardedOvertime = new OvertimeRequest();
+        forwardedOvertime.setRequestStatus(org.example.maridone.enums.Status.PENDING_HR);
+        forwardedOvertime.setManagerApprovedAt(java.time.Instant.now());
+
+        EmployeeRequestDto requestDto = new EmployeeRequestDto();
+        requestDto.setManagerId(9L);
+
+        when(employeeRepository.findById(46L)).thenReturn(Optional.of(employee));
+        when(employeeRepository.findById(9L)).thenReturn(Optional.of(newManager));
+        when(employeeRepository.save(any(Employee.class))).thenReturn(employee);
+        when(coreMapper.toEmployeeResponse(any(Employee.class))).thenReturn(new EmployeeResponseDto());
+        when(userAccountRepository.findUsernameByEmployeeEmployeeId(anyLong())).thenReturn(Optional.empty());
+        when(leaveRequestRepository.findByEmployee_EmployeeIdAndRequestStatusIn(eq(46L), any()))
+                .thenReturn(List.of(forwardedLeave));
+        when(overtimeRequestRepository.findByEmployee_EmployeeIdAndRequestStatusIn(eq(46L), any()))
+                .thenReturn(List.of(forwardedOvertime));
+
+        employeeService.updateEmployee(46L, requestDto);
+
+        Assertions.assertEquals(org.example.maridone.enums.Status.PENDING_HR, forwardedLeave.getRequestStatus());
+        Assertions.assertEquals(org.example.maridone.enums.Status.PENDING_HR, forwardedOvertime.getRequestStatus());
     }
 
     @Test

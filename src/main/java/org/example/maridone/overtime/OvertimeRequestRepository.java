@@ -2,6 +2,9 @@ package org.example.maridone.overtime;
 
 import jakarta.persistence.LockModeType;
 import java.time.LocalDateTime;
+import java.util.List;
+
+import org.example.maridone.enums.Status;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
@@ -63,4 +66,6 @@ public interface OvertimeRequestRepository extends JpaRepository<OvertimeRequest
             @Param("startDate") java.time.LocalDate startDate,
             @Param("endDate") java.time.LocalDate endDate
     );
+
+    List<OvertimeRequest> findByEmployee_EmployeeIdAndRequestStatusIn(Long employeeId, List<Status> statuses);
 }

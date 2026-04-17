@@ -22,6 +22,11 @@ import org.example.maridone.enums.Position;
 import org.example.maridone.enums.SeparationReason;
 import org.example.maridone.leave.balance.LeaveBalance;
 import org.example.maridone.leave.balance.LeaveBalanceRepository;
+import org.example.maridone.leave.request.LeaveRequest;
+import org.example.maridone.leave.request.LeaveRequestRepository;
+import org.example.maridone.enums.Status;
+import org.example.maridone.overtime.OvertimeRequest;
+import org.example.maridone.overtime.OvertimeRequestRepository;
 import org.example.maridone.schedule.dto.ShiftResponseDto;
 import org.example.maridone.schedule.mapper.ScheduleMapper;
 import org.example.maridone.schedule.shift.ShiftService;
@@ -39,6 +44,7 @@ import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -55,6 +61,8 @@ public class EmployeeService {
     private final PayrollConfig payrollConfig;
     private final LeaveBalanceRepository leaveBalanceRepository;
     private final EmployeeSeparationRepository employeeSeparationRepository;
+    private final LeaveRequestRepository leaveRequestRepository;
+    private final OvertimeRequestRepository overtimeRequestRepository;
 
     EmployeeService(EmployeeRepository employeeRepository,
                     CoreMapper coreMapper,
@@ -64,7 +72,9 @@ public class EmployeeService {
                     ShiftService shiftService,
                     PayrollConfig payrollConfig,
                     LeaveBalanceRepository leaveBalanceRepository,
-                    EmployeeSeparationRepository employeeSeparationRepository) {
+                    EmployeeSeparationRepository employeeSeparationRepository,
+                    LeaveRequestRepository leaveRequestRepository,
+                    OvertimeRequestRepository overtimeRequestRepository) {
         this.employeeRepository = employeeRepository;
         this.coreMapper = coreMapper;
         this.userAccountRepository = userAccountRepository;
@@ -74,6 +84,8 @@ public class EmployeeService {
         this.payrollConfig = payrollConfig;
         this.leaveBalanceRepository = leaveBalanceRepository;
         this.employeeSeparationRepository = employeeSeparationRepository;
+        this.leaveRequestRepository = leaveRequestRepository;
+        this.overtimeRequestRepository = overtimeRequestRepository;
     }
 
 
@@ -89,7 +101,7 @@ public class EmployeeService {
         employee.setExemptionStatus(Optional.ofNullable(employeeRequestDto.getExemptionStatus()).orElse(resolveExemptionStatus(employee.getPosition())));
         employee.setYearlySalary(Optional.ofNullable(employee.getYearlySalary()).orElse(BigDecimal.ZERO));
         applyDepartmentAssignment(employee, employeeRequestDto);
-        employee.setManager(resolveManager(employeeRequestDto.getManagerId(), null));
+        employee.setManager(resolveAssignedManager(employee, employeeRequestDto, null));
         employeeRepository.save(employee);
         shiftService.createShifts(employee);
         seedDefaultLeaveBalances(employee);
@@ -196,9 +208,13 @@ public class EmployeeService {
                 .filter(v -> !v.equals(emp.getYearlySalary()))
                 .ifPresent(emp::setYearlySalary);
 
-        Optional.ofNullable(updated.getManagerId())
-                .filter(v -> emp.getManager() == null || !v.equals(emp.getManager().getEmployeeId()))
-                .ifPresent(managerId -> emp.setManager(resolveManager(managerId, id)));
+        Long previousManagerId = Optional.ofNullable(emp.getManager()).map(Employee::getEmployeeId).orElse(null);
+        Employee resolvedManager = resolveAssignedManager(emp, updated, id);
+        Long nextManagerId = Optional.ofNullable(resolvedManager).map(Employee::getEmployeeId).orElse(null);
+        boolean managerChanged = !Objects.equals(previousManagerId, nextManagerId);
+        if (managerChanged) {
+            emp.setManager(resolvedManager);
+        }
 
         Optional.ofNullable(updated.getAddress()).ifPresent(newAddr -> updateAddress(emp, newAddr));
 
@@ -210,6 +226,10 @@ public class EmployeeService {
         Optional.ofNullable(updated.getEmergencyContactName()).ifPresent(emp::setEmergencyContactName);
         Optional.ofNullable(updated.getEmergencyContactRelationship()).ifPresent(emp::setEmergencyContactRelationship);
         Optional.ofNullable(updated.getEmergencyContactNumber()).ifPresent(emp::setEmergencyContactNumber);
+
+        if (managerChanged) {
+            reroutePendingApprovals(emp);
+        }
 
         employeeRepository.save(emp);
 
@@ -356,6 +376,63 @@ public class EmployeeService {
         separation.setProcessedBy(normalizeActorUsername(actorUsername));
         separation.setProcessedAt(LocalDateTime.now());
         employeeSeparationRepository.save(separation);
+    }
+
+    private void reroutePendingApprovals(Employee employee) {
+        if (employee == null || employee.getEmployeeId() == null) {
+            return;
+        }
+
+        Status targetStatus = employee.getManager() == null ? Status.PENDING_HR : Status.PENDING_MANAGER;
+
+        reroutePendingLeaveRequests(employee.getEmployeeId(), targetStatus);
+        reroutePendingOvertimeRequests(employee.getEmployeeId(), targetStatus);
+    }
+
+    private void reroutePendingLeaveRequests(Long employeeId, Status targetStatus) {
+        List<LeaveRequest> pendingRequests = leaveRequestRepository.findByEmployee_EmployeeIdAndRequestStatusIn(
+                employeeId,
+                List.of(Status.PENDING, Status.PENDING_MANAGER, Status.PENDING_HR)
+        );
+
+        for (LeaveRequest request : pendingRequests) {
+            if (request.getManagerApprovedAt() != null) {
+                continue;
+            }
+            if (request.getRequestStatus() == targetStatus) {
+                continue;
+            }
+
+            request.setRequestStatus(targetStatus);
+            request.setManagerApprover(null);
+            request.setManagerApproverReason(null);
+            request.setManagerApprovedAt(null);
+        }
+
+        leaveRequestRepository.saveAll(pendingRequests);
+    }
+
+    private void reroutePendingOvertimeRequests(Long employeeId, Status targetStatus) {
+        List<OvertimeRequest> pendingRequests = overtimeRequestRepository.findByEmployee_EmployeeIdAndRequestStatusIn(
+                employeeId,
+                List.of(Status.PENDING, Status.PENDING_MANAGER, Status.PENDING_HR)
+        );
+
+        for (OvertimeRequest request : pendingRequests) {
+            if (request.getManagerApprovedAt() != null) {
+                continue;
+            }
+            if (request.getRequestStatus() == targetStatus) {
+                continue;
+            }
+
+            request.setRequestStatus(targetStatus);
+            request.setManagerApprover(null);
+            request.setManagerApproveReason(null);
+            request.setManagerApprovedAt(null);
+        }
+
+        overtimeRequestRepository.saveAll(pendingRequests);
     }
 
     private String normalizeSeparationNotes(String notes) {
@@ -556,6 +633,41 @@ public class EmployeeService {
         if (request.getPosition() != null) {
             employee.setEmpTitle(null);
         }
+    }
+
+    private Employee resolveAssignedManager(Employee employee, EmployeeRequestDto request, Long employeeId) {
+        Position effectivePosition = Optional.ofNullable(request.getPosition()).orElse(employee.getPosition());
+
+        if (effectivePosition == Position.MANAGER) {
+            return resolveManager(request.getManagerId(), employeeId);
+        }
+
+        if (request.getDepartment() != null && !request.getDepartment().isBlank()) {
+            return resolveDepartmentManager(request.getDepartment(), employeeId);
+        }
+
+        if (request.getManagerId() != null) {
+            return resolveManager(request.getManagerId(), employeeId);
+        }
+
+        return employee == null ? null : employee.getManager();
+    }
+
+    private Employee resolveDepartmentManager(String department, Long employeeId) {
+        ManagerTitle departmentTitle = ManagerTitle.fromDepartmentLabel(department);
+        Employee manager = employeeRepository
+                .findFirstByEmpTitleAndPositionAndEmploymentStatusNot(
+                        departmentTitle,
+                        Position.MANAGER,
+                        EmploymentStatus.TERMINATED
+                )
+                .orElseThrow(() -> new IllegalArgumentException("No active manager is assigned to the selected department."));
+
+        if (employeeId != null && employeeId.equals(manager.getEmployeeId())) {
+            throw new IllegalArgumentException("Employee cannot be their own manager.");
+        }
+
+        return manager;
     }
 
     private Employee resolveManager(Long managerId, Long employeeId) {

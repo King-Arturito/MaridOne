@@ -5,6 +5,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
+import org.example.maridone.enums.Status;
 import org.example.maridone.leave.dto.LeaveDetails;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -104,4 +105,6 @@ public interface LeaveRequestRepository extends JpaRepository<LeaveRequest,Long>
     WHERE lr.requestId = :requestId
 """)
     LeaveDetails getLeaveRequestDetails(@Param("requestId") Long requestId);
+
+    List<LeaveRequest> findByEmployee_EmployeeIdAndRequestStatusIn(Long employeeId, List<Status> statuses);
 }
