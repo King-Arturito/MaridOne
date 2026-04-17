@@ -1,5 +1,6 @@
 package org.example.maridone.notification;
 
+import org.example.maridone.annotation.ExecutionTime;
 import org.example.maridone.auth.email.EmailService;
 import org.example.maridone.config.DefaultConfig;
 import org.example.maridone.core.employee.Employee;
@@ -12,6 +13,7 @@ import org.example.maridone.overtime.OvertimeRequest;
 import org.example.maridone.payroll.dispute.DisputeRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
@@ -22,6 +24,7 @@ import java.util.Collection;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
+import static java.util.concurrent.CompletableFuture.runAsync;
 
 @Service
 public class WorkflowEmailService {
@@ -86,6 +89,7 @@ public class WorkflowEmailService {
         sendAfterCommit(resolveHrEmails(), subject, body);
     }
 
+    @Async
     public void sendLeaveForwardedToEmployee(LeaveRequest request) {
         if (request == null || request.getEmployee() == null) {
             return;
@@ -102,6 +106,7 @@ public class WorkflowEmailService {
         sendAfterCommit(List.of(request.getEmployee().getEmail()), subject, body + portalFooter("Please log in to MaridOne for details."));
     }
 
+    @Async
     public void sendLeaveManagerDecisionToEmployee(LeaveRequest request) {
         if (request == null || request.getEmployee() == null) {
             return;
@@ -282,6 +287,7 @@ public class WorkflowEmailService {
                 .toList();
     }
 
+    @ExecutionTime
     private void sendAfterCommit(Collection<String> recipients, String subject, String body) {
         Set<String> emails = recipients == null
                 ? Set.of()
@@ -299,12 +305,12 @@ public class WorkflowEmailService {
             TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
                 @Override
                 public void afterCommit() {
-                    sendTask.run();
+                    runAsync(sendTask).thenRun(() -> logger.info("processed email/s for {} recipient/s.", emails.size()));
                 }
             });
             return;
         }
-        sendTask.run();
+        runAsync(sendTask).thenRun(() -> logger.info("no synchronous task detected. processed email for {} recipient/s.", emails.size()));;
     }
 
     private void sendSafe(String email, String subject, String body) {
