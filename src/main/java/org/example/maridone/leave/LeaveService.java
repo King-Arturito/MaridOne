@@ -455,7 +455,7 @@ public class LeaveService {
         }
 
         LocalDate earliestAllowedDate = today.plusDays(NON_SICK_LEAVE_NOTICE_DAYS);
-        if (payload.getLeaveType() != LeaveType.EMERGENCY_LEAVE && requestedStartDate.isBefore(earliestAllowedDate)) {
+        if (payload.getLeaveType() != LeaveType.EMERGENCY_LEAVE && payload.getLeaveType() != LeaveType.SICK_LEAVE && requestedStartDate.isBefore(earliestAllowedDate)) {
             throw new InvalidActionException(
                     "Non-sick leave requests must be filed at least " + NON_SICK_LEAVE_NOTICE_DAYS + " days before the leave date."
             );

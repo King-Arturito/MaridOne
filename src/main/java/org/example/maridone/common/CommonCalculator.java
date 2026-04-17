@@ -15,6 +15,10 @@ public class CommonCalculator {
         return value.setScale(2, RoundingMode.HALF_UP);
     }
 
+    public static BigDecimal normalizeNonNegative(BigDecimal value) {
+        return normalize(value).max(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
+    }
+
     public static BigDecimal calculateHours(LocalDateTime start, LocalDateTime end) {
         long minutes = end.isBefore(start)
                 ? Duration.between(start, end).toMinutes() + (24 * 60) // overnight

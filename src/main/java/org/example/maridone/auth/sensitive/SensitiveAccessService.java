@@ -86,6 +86,13 @@ public class SensitiveAccessService {
         assertSensitiveAccessToken(authentication.getName());
     }
 
+    public void assertPayrollReportSensitiveAccess(Authentication authentication) {
+        if (!hasAuthority(authentication, "ROLE_HR") && !hasAuthority(authentication, "ROLE_MANAGEMENT")) {
+            return;
+        }
+        assertSensitiveAccessToken(authentication.getName());
+    }
+
     public void assertHrSensitiveAccessForEmployee(Authentication authentication, Long employeeId) {
         if (!hasAuthority(authentication, "ROLE_HR")) {
             return;

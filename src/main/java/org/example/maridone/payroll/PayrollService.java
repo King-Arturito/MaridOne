@@ -20,6 +20,7 @@ import java.util.stream.Collectors;
 import org.example.maridone.annotation.ExecutionTime;
 import org.example.maridone.annotation.GeneratePayslip;
 import org.example.maridone.annotation.NotifyPayRun;
+import org.example.maridone.common.CommonCalculator;
 import org.example.maridone.common.CommonSpecs;
 import org.example.maridone.config.DefaultConfig;
 import org.example.maridone.config.PayrollConfig;
@@ -29,6 +30,7 @@ import org.example.maridone.enums.EarningsType;
 import org.example.maridone.enums.EmploymentStatus;
 import org.example.maridone.enums.ExemptionStatus;
 import org.example.maridone.enums.PayrollStatus;
+import org.example.maridone.enums.Position;
 import org.example.maridone.enums.RunType;
 import org.example.maridone.enums.Status;
 import org.example.maridone.exception.notfound.RunNotFoundException;
@@ -301,7 +303,7 @@ public class PayrollService {
                     );
                     item.setDeductions(deductions);
                     BigDecimal totalDeductions = sumDeductionAmounts(deductions);
-                    item.setNetPay(semiMonthlySalary.subtract(totalDeductions).setScale(2, RoundingMode.HALF_UP));
+                    item.setNetPay(CommonCalculator.normalizeNonNegative(semiMonthlySalary.subtract(totalDeductions)));
                     return item;
                 })
                 .toList();
@@ -611,7 +613,7 @@ public class PayrollService {
 
             BigDecimal deductionsTotal = sumDeductionAmounts(item.getDeductions());
 
-            BigDecimal netPay = grossPay.subtract(deductionsTotal).setScale(2, RoundingMode.HALF_UP);
+            BigDecimal netPay = CommonCalculator.normalizeNonNegative(grossPay.subtract(deductionsTotal));
             item.setNetPay(netPay);
 
             items.add(item);
@@ -731,7 +733,9 @@ public class PayrollService {
                 run.getPeriodStart(),
                 run.getPeriodEnd(),
                 EmploymentStatus.TERMINATED
-        );
+        ).stream()
+                .filter(employee -> employee != null && employee.getPosition() != Position.ACCOUNTING)
+                .toList();
     }
 
     private List<Employee> filterEmployeesWithPayrollInputs(PayrollRun run, List<Employee> employees) {

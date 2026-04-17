@@ -78,7 +78,7 @@ public class PayrollItemTotalsService {
                 .reduce(BigDecimal.ZERO.setScale(2), BigDecimal::add);
 
         item.setGrossPay(CommonCalculator.normalize(totalEarnings));
-        item.setNetPay(CommonCalculator.normalize(totalEarnings.subtract(totalDeductions)));
+        item.setNetPay(CommonCalculator.normalizeNonNegative(totalEarnings.subtract(totalDeductions)));
         payrollItemRepository.save(item);
     }
 

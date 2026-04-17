@@ -126,4 +126,33 @@ class PayrollItemTotalsServiceTest {
                         && new BigDecimal("1200.00").compareTo(line.getAmount()) == 0
         ));
     }
+
+    @Test
+    void refreshItem_ShouldCapNetPayAtZeroWhenDeductionsExceedEarnings() {
+        PayrollRun run = new PayrollRun();
+        run.setRunType(RunType.ADJUSTMENT);
+
+        PayrollItem item = new PayrollItem();
+        ReflectionTestUtils.setField(item, "itemId", 602L);
+        item.setPayrollRun(run);
+
+        EarningsLine earningLine = new EarningsLine();
+        earningLine.setAmount(new BigDecimal("500.00"));
+        earningLine.setEarningsType(EarningsType.FIXED);
+        earningLine.setTaxableAmount(new BigDecimal("500.00"));
+        earningLine.setNonTaxableAmount(BigDecimal.ZERO.setScale(2));
+
+        DeductionsLine manualDeduction = new DeductionsLine();
+        manualDeduction.setDeductionType(DeductionType.MANUAL_ADJUSTMENT);
+        manualDeduction.setAmount(new BigDecimal("650.00"));
+
+        when(earningsRepository.findByPayrollItem_ItemId(602L)).thenReturn(List.of(earningLine));
+        when(deductionsRepository.findByPayrollItem_ItemId(602L)).thenReturn(List.of(manualDeduction));
+        when(payrollItemRepository.save(any(PayrollItem.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        payrollItemTotalsService.refreshItem(item);
+
+        Assertions.assertEquals(new BigDecimal("500.00"), item.getGrossPay());
+        Assertions.assertEquals(new BigDecimal("0.00"), item.getNetPay());
+    }
 }

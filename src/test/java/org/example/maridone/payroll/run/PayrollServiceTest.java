@@ -18,6 +18,7 @@ import org.example.maridone.enums.DeductionType;
 import org.example.maridone.enums.EarningsType;
 import org.example.maridone.enums.ExemptionStatus;
 import org.example.maridone.enums.PayrollStatus;
+import org.example.maridone.enums.Position;
 import org.example.maridone.enums.RunType;
 import org.example.maridone.enums.Status;
 import org.example.maridone.exception.unauthorized.InvalidActionException;
@@ -684,6 +685,68 @@ class PayrollServiceTest {
     }
 
     @Test
+    void processPayroll_ShouldExcludeAccountingEmployeesEvenWhenTheyHavePayrollInputs() {
+        LocalDate periodStart = LocalDate.of(2026, 4, 6);
+        LocalDate periodEnd = LocalDate.of(2026, 4, 6);
+        RunCreateDto payload = buildRunPayload(periodStart, periodEnd, RunType.REGULAR);
+        PayrollRunViewDto viewDto = new PayrollRunViewDto(
+                81L,
+                periodStart,
+                periodEnd,
+                periodEnd,
+                "Test run",
+                PayrollStatus.IN_PROGRESS,
+                RunType.REGULAR,
+                1L
+        );
+        Employee regularEmployee = buildEmployee(21L, ExemptionStatus.NON_EXEMPT, "624000.00");
+        Employee accountingEmployee = buildEmployee(22L, ExemptionStatus.NON_EXEMPT, "624000.00");
+        accountingEmployee.setPosition(Position.ACCOUNTING);
+
+        DailyShiftSchedule regularShift = buildDailyShift(regularEmployee, periodStart, LocalTime.of(8, 0), LocalTime.of(17, 0));
+        DailyShiftSchedule accountingShift = buildDailyShift(accountingEmployee, periodStart, LocalTime.of(8, 0), LocalTime.of(17, 0));
+
+        when(payrollRunRepository.existsByPeriodStartAndPeriodEndAndRunType(periodStart, periodEnd, RunType.REGULAR))
+                .thenReturn(false);
+        when(payrollRunRepository.save(any(PayrollRun.class))).thenAnswer(invocation -> {
+            PayrollRun run = invocation.getArgument(0);
+            ReflectionTestUtils.setField(run, "payId", 81L);
+            return run;
+        });
+        when(employeeRepository.findPayrollEligibleEmployees(
+                periodStart,
+                periodEnd,
+                org.example.maridone.enums.EmploymentStatus.TERMINATED
+        )).thenReturn(List.of(regularEmployee, accountingEmployee));
+        when(defaultConfig.getTimeZone()).thenReturn(ZONE);
+        when(attendanceLogRepository.findByEmployeeIdInAndTimestampBetween(anyList(), any(Instant.class), any(Instant.class), any()))
+                .thenReturn(List.of());
+        when(overtimeRequestRepository.findAll(any(Specification.class))).thenReturn(List.of());
+        when(dailyShiftRepository.findAllByEmployeeIdsAndPeriod(anyList(), any(LocalDateTime.class), any(LocalDateTime.class)))
+                .thenReturn(List.of(regularShift, accountingShift));
+        when(leaveRequestRepository.findApprovedLeavesForPeriod(anyList(), any(LocalDateTime.class), any(LocalDateTime.class)))
+                .thenReturn(List.of());
+        when(holidayService.getHolidayLookup(periodStart, periodEnd)).thenReturn(HolidayLookup.empty());
+        when(payrollItemRepository.saveAll(anyList())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(payrollRunRepository.findRunViewByPayId(81L)).thenReturn(java.util.Optional.of(viewDto));
+
+        PayrollRunViewDto result = payrollService.processPayroll(payload);
+
+        Assertions.assertEquals(81L, result.getPayId());
+        ArgumentCaptor<Iterable<PayrollItem>> savedItemsCaptor = ArgumentCaptor.forClass(Iterable.class);
+        verify(payrollItemRepository).saveAll(savedItemsCaptor.capture());
+
+        List<PayrollItem> savedItems = new ArrayList<>();
+        savedItemsCaptor.getValue().forEach(savedItems::add);
+        Assertions.assertEquals(1, savedItems.size());
+        Assertions.assertEquals(regularEmployee.getEmployeeId(), savedItems.get(0).getEmployee().getEmployeeId());
+        Assertions.assertTrue(savedItems.stream().noneMatch(item ->
+                item.getEmployee() != null
+                        && item.getEmployee().getEmployeeId().equals(accountingEmployee.getEmployeeId())
+        ));
+    }
+
+    @Test
     void processPayroll_ShouldKeepEmployeeWithPaidLeaveEvenWithoutDailyShifts() {
         LocalDate periodStart = LocalDate.of(2026, 4, 5);
         LocalDate periodEnd = LocalDate.of(2026, 4, 5);
@@ -844,6 +907,7 @@ class PayrollServiceTest {
         employee.setExemptionStatus(exemptionStatus);
         employee.setYearlySalary(new BigDecimal(yearlySalary));
         employee.setEmploymentDateStart(LocalDate.of(2026, 1, 1));
+        employee.setPosition(Position.EMPLOYEE);
         return employee;
     }
 

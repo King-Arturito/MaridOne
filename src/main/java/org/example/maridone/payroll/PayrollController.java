@@ -58,6 +58,7 @@ public class PayrollController {
                                          Authentication authentication,
                                          Pageable pageable) {
         assertCanViewPayrollReports(authentication);
+        sensitiveAccessService.assertPayrollReportSensitiveAccess(authentication);
         return payrollItemService.getRunItems(payId, filter, pageable);
     }
 
@@ -78,6 +79,7 @@ public class PayrollController {
             Pageable pageable
     ) {
         assertCanViewPayrollReports(authentication);
+        sensitiveAccessService.assertPayrollReportSensitiveAccess(authentication);
         return payrollItemService.getReportItemsByDateRange(from, to, filter, pageable);
     }
 

@@ -11,6 +11,7 @@ import org.example.maridone.core.dto.EmployeeResponseDto;
 import org.example.maridone.core.employee.Employee;
 import org.example.maridone.core.employee.EmployeeRepository;
 import org.example.maridone.core.user.UserAccount;
+import org.example.maridone.core.user.UserAccountRepository;
 import org.example.maridone.enums.Activity;
 import org.example.maridone.enums.Status;
 import org.example.maridone.leave.dto.LeaveRequestDto;
@@ -83,6 +84,7 @@ public class LoggingAspect {
     private final ActivityLogService activityLogService;
     private final DefaultConfig defaultConfig;
     private final EmployeeRepository employeeRepository;
+    private final UserAccountRepository userAccountRepository;
     private final OvertimeRequestRepository overtimeRequestRepository;
     private final LeaveRequestRepository leaveRequestRepository;
     private final DisputeRequestRepository disputeRequestRepository;
@@ -92,6 +94,7 @@ public class LoggingAspect {
     public LoggingAspect(ActivityLogService activityLogService,
                          DefaultConfig defaultConfig,
                          EmployeeRepository employeeRepository,
+                         UserAccountRepository userAccountRepository,
                          OvertimeRequestRepository overtimeRequestRepository,
                          LeaveRequestRepository leaveRequestRepository,
                          DisputeRequestRepository disputeRequestRepository,
@@ -100,6 +103,7 @@ public class LoggingAspect {
         this.activityLogService = activityLogService;
         this.defaultConfig = defaultConfig;
         this.employeeRepository = employeeRepository;
+        this.userAccountRepository = userAccountRepository;
         this.overtimeRequestRepository = overtimeRequestRepository;
         this.leaveRequestRepository = leaveRequestRepository;
         this.disputeRequestRepository = disputeRequestRepository;
@@ -176,11 +180,20 @@ public class LoggingAspect {
         appendSentence(message, "Endpoint: " + requestURI, false);
 
         String detail = resolveAuditDetail(requestURI, args, result);
-        if (detail != null && !detail.isBlank()) {
-            appendSentence(message, detail, true);
+        String resolvedSummary = resolveAuditSummary(activity, requestURI, detail);
+        if (resolvedSummary != null && !resolvedSummary.isBlank()) {
+            appendSentence(message, resolvedSummary, true);
         }
 
-        String detailPayload = buildAuditDetailPayload(username, activity, requestURI, args, result, detail);
+        String detailPayload = buildAuditDetailPayload(
+                resolveActorName(username),
+                username,
+                activity,
+                requestURI,
+                args,
+                result,
+                resolvedSummary
+        );
         String resolvedMessage = message.toString();
         String summary = resolvedMessage.length() <= 255 ? resolvedMessage : resolvedMessage.substring(0, 252) + "...";
         return new AuditContent(summary, detailPayload);
@@ -411,14 +424,16 @@ public class LoggingAspect {
         return null;
     }
 
-    private String buildAuditDetailPayload(String username,
+    private String buildAuditDetailPayload(String actorName,
+                                           String username,
                                            Activity activity,
                                            String requestURI,
                                            Object[] args,
                                            Object result,
                                            String detailSummary) {
         List<String> lines = new ArrayList<>();
-        appendDetailLine(lines, "Actor", username);
+        appendDetailLine(lines, "Name", actorName);
+        appendDetailLine(lines, "Username", username);
         appendDetailLine(lines, "Activity", activity != null ? activity.name() : null);
         appendDetailLine(lines, "Endpoint", requestURI);
 
@@ -431,6 +446,71 @@ public class LoggingAspect {
 
         appendDetailLine(lines, "Summary", detailSummary);
         return String.join("\n", lines);
+    }
+
+    private String resolveAuditSummary(Activity activity, String requestURI, String detail) {
+        if (detail != null && !detail.isBlank()) {
+            return detail;
+        }
+
+        String resource = describeAuditResource(requestURI);
+        if (activity == null) {
+            return resource == null ? null : "Updated " + resource;
+        }
+
+        return switch (activity) {
+            case CREATE -> "Created " + resource;
+            case MODIFY -> "Updated " + resource;
+            case DELETE -> "Deleted " + resource;
+            case READ -> "Viewed " + resource;
+            default -> resource == null ? null : "Updated " + resource;
+        };
+    }
+
+    private String describeAuditResource(String requestURI) {
+        if (requestURI == null || requestURI.isBlank()) {
+            return "record";
+        }
+
+        String cleaned = requestURI.replaceFirst("^/api/", "");
+        if (cleaned.isBlank()) {
+            return "record";
+        }
+
+        List<String> parts = new ArrayList<>();
+        for (String token : cleaned.split("/")) {
+            String normalized = token == null ? "" : token.trim();
+            if (normalized.isBlank() || normalized.matches("\\d+")) {
+                continue;
+            }
+
+            String lower = normalized.toLowerCase();
+            if (lower.matches("create|update|delete|cancel|process|post|summary|report|verify")) {
+                continue;
+            }
+
+            parts.add(humanizeToken(normalized).toLowerCase());
+            if (parts.size() == 2) {
+                break;
+            }
+        }
+
+        return parts.isEmpty() ? "record" : String.join(" ", parts);
+    }
+
+    private String resolveActorName(String username) {
+        if (username == null || username.isBlank() || "unknownUser".equalsIgnoreCase(username)) {
+            return null;
+        }
+
+        Long employeeId = userAccountRepository.findEmployeeIdByUsername(username);
+        if (employeeId == null) {
+            return null;
+        }
+
+        return employeeRepository.findById(employeeId)
+                .map(this::formatEmployeeName)
+                .orElse(null);
     }
 
     private void appendSentence(StringBuilder message, String segment, boolean preservePunctuation) {
@@ -878,6 +958,22 @@ public class LoggingAspect {
             return "Employee #" + employeeId;
         }
         return "employee";
+    }
+
+    private String formatEmployeeName(Employee employee) {
+        if (employee == null) {
+            return null;
+        }
+        return formatEmployeeName(employee.getFirstName(), employee.getMiddleName(), employee.getLastName());
+    }
+
+    private String formatEmployeeName(String firstName, String middleName, String lastName) {
+        String fullName = String.join(" ",
+                firstName == null ? "" : firstName.trim(),
+                middleName == null ? "" : middleName.trim(),
+                lastName == null ? "" : lastName.trim()
+        ).trim().replaceAll("\\s{2,}", " ");
+        return fullName.isBlank() ? null : fullName;
     }
 
     private String formatDateRange(LocalDate startDate, LocalDate endDate) {

@@ -474,7 +474,7 @@ public class PayrollItemService {
         BigDecimal grossPay = sumEarnings(itemView.getItemId());
         BigDecimal totalDeductions = sumDeductions(itemView.getItemId());
         itemView.setGrossPay(CommonCalculator.normalize(grossPay));
-        itemView.setNetPay(CommonCalculator.normalize(grossPay.subtract(totalDeductions)));
+        itemView.setNetPay(CommonCalculator.normalizeNonNegative(grossPay.subtract(totalDeductions)));
         return itemView;
     }
 
@@ -483,7 +483,7 @@ public class PayrollItemService {
         BigDecimal grossPay = sumEarnings(item.getItemId());
         BigDecimal totalDeductions = sumDeductions(item.getItemId());
         dto.setGrossPay(CommonCalculator.normalize(grossPay));
-        dto.setNetPay(CommonCalculator.normalize(grossPay.subtract(totalDeductions)));
+        dto.setNetPay(CommonCalculator.normalizeNonNegative(grossPay.subtract(totalDeductions)));
         return dto;
     }
 

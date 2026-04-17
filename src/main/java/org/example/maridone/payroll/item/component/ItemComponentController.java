@@ -41,16 +41,16 @@ public class ItemComponentController {
     }
 
     @GetMapping("/earnings/{itemId}")
-    @PreAuthorize("hasAnyRole('HR', 'ACCOUNTING') or @itemOwnerCheck.isSelf(#itemId, authentication.getName())")
+    @PreAuthorize("hasAnyRole('HR', 'ACCOUNTING', 'MANAGEMENT') or @itemOwnerCheck.isSelf(#itemId, authentication.getName())")
     public List<EarningsDto> getEarnings(@PathVariable Long itemId, Authentication authentication) {
-        sensitiveAccessService.assertHrSensitiveAccess(authentication);
+        sensitiveAccessService.assertPayrollReportSensitiveAccess(authentication);
         return earningsService.getEarnings(itemId);
     }
 
     @GetMapping("/deductions/{itemId}")
-    @PreAuthorize("hasAnyRole('HR', 'ACCOUNTING') or @itemOwnerCheck.isSelf(#itemId, authentication.getName())")
+    @PreAuthorize("hasAnyRole('HR', 'ACCOUNTING', 'MANAGEMENT') or @itemOwnerCheck.isSelf(#itemId, authentication.getName())")
     public List<DeductionsDto> getDeductions(@PathVariable Long itemId, Authentication authentication) {
-        sensitiveAccessService.assertHrSensitiveAccess(authentication);
+        sensitiveAccessService.assertPayrollReportSensitiveAccess(authentication);
         return deductionsService.getDeductions(itemId);
     }
 
