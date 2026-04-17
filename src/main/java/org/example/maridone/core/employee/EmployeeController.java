@@ -2,6 +2,7 @@ package org.example.maridone.core.employee;
 
 import jakarta.validation.groups.Default;
 import org.example.maridone.annotation.AuditLog;
+import org.example.maridone.auth.sensitive.SensitiveAccessService;
 import org.example.maridone.core.dto.EmployeeDetailsDto;
 import org.example.maridone.core.dto.EmployeeOptionDto;
 import org.example.maridone.core.dto.EmployeeRequestDto;
@@ -30,9 +31,11 @@ import java.util.List;
 public class EmployeeController {
 
     private final EmployeeService employeeService;
+    private final SensitiveAccessService sensitiveAccessService;
 
-    public EmployeeController(EmployeeService employeeService) {
+    public EmployeeController(EmployeeService employeeService, SensitiveAccessService sensitiveAccessService) {
         this.employeeService = employeeService;
+        this.sensitiveAccessService = sensitiveAccessService;
     }
 
     // ENDPOINT: /api/employees/create
@@ -79,7 +82,8 @@ public class EmployeeController {
     // for personal details check only
     @GetMapping("/{id}")
     @PreAuthorize("hasRole('HR') or @userCheck.isSelf(#id, authentication.getName())")
-    public EmployeeDetailsDto getSelfEmployee(@PathVariable Long id) {
+    public EmployeeDetailsDto getSelfEmployee(@PathVariable Long id, Authentication authentication) {
+        sensitiveAccessService.assertHrSensitiveAccessForEmployee(authentication, id);
         return employeeService.getSelfEmployee(id);
     }
 
@@ -95,6 +99,9 @@ public class EmployeeController {
             @Validated @RequestBody EmployeeRequestDto employeeRequestDto) {
         boolean isHr = authentication.getAuthorities().stream()
                 .anyMatch(authority -> "ROLE_HR".equals(authority.getAuthority()));
+        if (isHr) {
+            sensitiveAccessService.assertHrSensitiveAccessForEmployee(authentication, id);
+        }
         EmployeeResponseDto response = isHr
                 ? employeeService.updateEmployee(id, employeeRequestDto)
                 : employeeService.updateSelfEmployeeProfile(id, employeeRequestDto);
@@ -107,7 +114,9 @@ public class EmployeeController {
     @PreAuthorize("hasRole('HR')")
     @AuditLog
     public EmployeeResponseDto updateStatus(@PathVariable Long id,
-                                            @Validated(HrUpdate.class) @RequestBody EmployeeRequestDto employeeRequestDto) {
-        return employeeService.updateStatus(id, employeeRequestDto);
+                                            @Validated(HrUpdate.class) @RequestBody EmployeeRequestDto employeeRequestDto,
+                                            Authentication authentication) {
+        sensitiveAccessService.assertHrSensitiveAccessForEmployee(authentication, id);
+        return employeeService.updateStatus(id, employeeRequestDto, authentication != null ? authentication.getName() : null);
     }
 }

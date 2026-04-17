@@ -4,6 +4,8 @@ import org.example.maridone.core.employee.Employee;
 import org.example.maridone.enums.LeaveType;
 import org.example.maridone.exception.notfound.ShiftsNotFoundException;
 import org.example.maridone.leave.dto.LeaveRequestDto;
+import org.example.maridone.schedule.shift.DailyShiftRepository;
+import org.example.maridone.schedule.shift.DailyShiftSchedule;
 import org.example.maridone.schedule.shift.TemplateShiftRepository;
 import org.example.maridone.schedule.shift.TemplateShiftSchedule;
 import org.junit.jupiter.api.BeforeEach;
@@ -21,6 +23,8 @@ import java.util.Collections;
 import java.util.List;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -28,6 +32,9 @@ class HoursCalculatorTest {
 
     @Mock
     private TemplateShiftRepository templateShiftRepository;
+
+    @Mock
+    private DailyShiftRepository dailyShiftRepository;
 
 
     @InjectMocks
@@ -70,10 +77,27 @@ class HoursCalculatorTest {
         );
     }
 
+    private DailyShiftSchedule createDailyShift(LocalDateTime start, LocalDateTime end, boolean dayOff, Employee employee) {
+        TemplateShiftSchedule template = new TemplateShiftSchedule();
+        template.setEmployee(employee);
+        template.setDayOfWeek(start.toLocalDate().getDayOfWeek());
+        template.setStartTime(start.toLocalTime());
+        template.setEndTime(end.toLocalTime());
+
+        DailyShiftSchedule shift = new DailyShiftSchedule();
+        shift.setTemplateShiftSchedule(template);
+        shift.setStartDateTime(start);
+        shift.setEndDateTime(end);
+        shift.setDayOff(dayOff);
+        return shift;
+    }
+
 
     @Test
     void testNoShifts_ThrowsException() {
         when(templateShiftRepository.findAllByEmployeeId(empId)).thenReturn(Collections.emptyList());
+        when(dailyShiftRepository.findAllByEmployeeIdAndPeriod(eq(empId), any(LocalDateTime.class), any(LocalDateTime.class)))
+                .thenReturn(Collections.emptyList());
         LeaveRequestDto payload = createPayload(LocalDateTime.now(), LocalDateTime.now().plusDays(1));
 
         ShiftsNotFoundException exception = assertThrows(ShiftsNotFoundException.class, () -> {
@@ -163,5 +187,88 @@ class HoursCalculatorTest {
         BigDecimal hours = leaveService.calculateRequestHours(payload, empId);
 
         assertEquals(new BigDecimal("24.00"), hours);
+    }
+
+    @Test
+    void testMultipleDays_UsesDailyOverrideInsteadOfTemplate() {
+        when(templateShiftRepository.findAllByEmployeeId(empId)).thenReturn(List.of(
+                createSchedule(DayOfWeek.MONDAY, LocalTime.of(9, 0), LocalTime.of(13, 0), dummyEmployee),
+                createSchedule(DayOfWeek.TUESDAY, LocalTime.of(9, 0), LocalTime.of(13, 0), dummyEmployee)
+        ));
+        when(dailyShiftRepository.findAllByEmployeeIdAndPeriod(eq(empId), any(LocalDateTime.class), any(LocalDateTime.class)))
+                .thenReturn(List.of(
+                        createDailyShift(
+                                LocalDateTime.of(2026, 3, 24, 10, 0),
+                                LocalDateTime.of(2026, 3, 24, 12, 0),
+                                false,
+                                dummyEmployee
+                        )
+                ));
+
+        LeaveRequestDto payload = createPayload(
+                LocalDateTime.of(2026, 3, 23, 9, 0),
+                LocalDateTime.of(2026, 3, 24, 13, 0)
+        );
+
+        BigDecimal hours = leaveService.calculateRequestHours(payload, empId);
+
+        assertEquals(new BigDecimal("6.00"), hours);
+    }
+
+    @Test
+    void testDayOffOverride_ProducesZeroHoursForThatDate() {
+        when(templateShiftRepository.findAllByEmployeeId(empId)).thenReturn(List.of(
+                createSchedule(DayOfWeek.MONDAY, LocalTime.of(9, 0), LocalTime.of(13, 0), dummyEmployee),
+                createSchedule(DayOfWeek.TUESDAY, LocalTime.of(9, 0), LocalTime.of(13, 0), dummyEmployee)
+        ));
+        when(dailyShiftRepository.findAllByEmployeeIdAndPeriod(eq(empId), any(LocalDateTime.class), any(LocalDateTime.class)))
+                .thenReturn(List.of(
+                        createDailyShift(
+                                LocalDateTime.of(2026, 3, 24, 0, 0),
+                                LocalDateTime.of(2026, 3, 24, 0, 0),
+                                true,
+                                dummyEmployee
+                        )
+                ));
+
+        LeaveRequestDto payload = createPayload(
+                LocalDateTime.of(2026, 3, 23, 9, 0),
+                LocalDateTime.of(2026, 3, 24, 13, 0)
+        );
+
+        BigDecimal hours = leaveService.calculateRequestHours(payload, empId);
+
+        assertEquals(new BigDecimal("4.00"), hours);
+    }
+
+    @Test
+    void testMultipleDailyWindows_AreSummedForTheSameDate() {
+        when(templateShiftRepository.findAllByEmployeeId(empId)).thenReturn(List.of(
+                createSchedule(DayOfWeek.MONDAY, LocalTime.of(9, 0), LocalTime.of(17, 0), dummyEmployee)
+        ));
+        when(dailyShiftRepository.findAllByEmployeeIdAndPeriod(eq(empId), any(LocalDateTime.class), any(LocalDateTime.class)))
+                .thenReturn(List.of(
+                        createDailyShift(
+                                LocalDateTime.of(2026, 3, 23, 9, 0),
+                                LocalDateTime.of(2026, 3, 23, 11, 0),
+                                false,
+                                dummyEmployee
+                        ),
+                        createDailyShift(
+                                LocalDateTime.of(2026, 3, 23, 14, 0),
+                                LocalDateTime.of(2026, 3, 23, 16, 0),
+                                false,
+                                dummyEmployee
+                        )
+                ));
+
+        LeaveRequestDto payload = createPayload(
+                LocalDateTime.of(2026, 3, 23, 8, 0),
+                LocalDateTime.of(2026, 3, 23, 17, 0)
+        );
+
+        BigDecimal hours = leaveService.calculateRequestHours(payload, empId);
+
+        assertEquals(new BigDecimal("4.00"), hours);
     }
 }

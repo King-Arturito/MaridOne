@@ -1,5 +1,6 @@
 package org.example.maridone.exception;
 
+import org.example.maridone.auth.sensitive.SensitiveAccessRequiredException;
 import org.example.maridone.exception.badrequest.BadCredentialsException;
 import org.example.maridone.exception.badrequest.InvalidRefreshTokenException;
 import org.example.maridone.exception.badrequest.NoRoleAssignedException;
@@ -93,6 +94,12 @@ public class GlobalExceptionHandler {
     public ResponseEntity<Map<String, String>> handleMultipartExceptions(Exception ex) {
         return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE)
                 .body(Map.of("error", "File size exceeded 10MB."));
+    }
+
+    @ExceptionHandler(SensitiveAccessRequiredException.class)
+    public ResponseEntity<Map<String, String>> handleSensitiveAccessRequired(SensitiveAccessRequiredException ex) {
+        return ResponseEntity.status(HttpStatus.PRECONDITION_REQUIRED)
+                .body(Map.of("error", ex.getMessage()));
     }
 
     @ExceptionHandler(Exception.class)

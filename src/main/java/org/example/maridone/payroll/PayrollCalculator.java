@@ -380,18 +380,7 @@ public class PayrollCalculator {
     }
 
     public BigDecimal deductUnpaidLunchHour(BigDecimal rawHours) {
-        if (rawHours == null) {
-            return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
-        }
-        if (rawHours.compareTo(BigDecimal.valueOf(5)) <= 0) {
-            return rawHours.setScale(2, RoundingMode.HALF_UP);
-        }
-
-        BigDecimal adjusted = rawHours.subtract(BigDecimal.ONE);
-        if (adjusted.compareTo(BigDecimal.ZERO) < 0) {
-            adjusted = BigDecimal.ZERO;
-        }
-        return adjusted.setScale(2, RoundingMode.HALF_UP);
+        return CommonCalculator.deductUnpaidLunchHour(rawHours);
     }
 
     public BigDecimal calculateExpectedShiftHours(List<DailyShiftSchedule> schedules) {

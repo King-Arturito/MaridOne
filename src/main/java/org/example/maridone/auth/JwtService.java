@@ -10,6 +10,7 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Service;
 
 import javax.crypto.SecretKey;
+import java.time.Instant;
 import java.security.Key;
 import java.util.Date;
 import java.util.HashMap;
@@ -129,5 +130,30 @@ public class JwtService {
         claims.put("scope", "email_verification");
         //1 day
         return buildToken(claims, username, 86400000L);
+    }
+
+    public String generateSensitiveAccessToken(String username, long expirationMs, String verificationMethod) {
+        Map<String, Object> claims = new HashMap<>();
+        claims.put("scope", "sensitive_access");
+        claims.put("verificationMethod", verificationMethod);
+        return buildToken(claims, username, expirationMs);
+    }
+
+    public boolean isValidSensitiveAccessToken(String token, String username) {
+        try {
+            Claims claims = extractAllClaims(token);
+            String scope = claims.get("scope", String.class);
+            String subject = claims.getSubject();
+            return "sensitive_access".equals(scope)
+                    && username != null
+                    && username.equals(subject)
+                    && !claims.getExpiration().before(new Date());
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    public Instant extractExpirationInstant(String token) {
+        return extractAllClaims(token).getExpiration().toInstant();
     }
 }

@@ -37,4 +37,16 @@ public interface OvertimeRequestRepository extends JpaRepository<OvertimeRequest
             @Param("startDateTime") LocalDateTime startDateTime,
             @Param("endDateTime") LocalDateTime endDateTime
     );
+
+    @Query("""
+        SELECT o from OvertimeRequest o
+        where o.requestStatus = 'APPROVED'
+        and o.employee.employeeId IN :employeeIds
+        and o.workDate >= :startDate
+        and o.workDate <= :endDate""")
+    java.util.List<OvertimeRequest> findApprovedOvertimeForPeriod(
+            @Param("employeeIds") java.util.List<Long> employeeIds,
+            @Param("startDate") java.time.LocalDate startDate,
+            @Param("endDate") java.time.LocalDate endDate
+    );
 }

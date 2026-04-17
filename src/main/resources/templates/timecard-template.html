@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="en">
+<head>
+    <meta charset="UTF-8"/>
+    <title>Employee Timecard</title>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        @page {
+            size: A4 portrait; /* PORTRAIT for multi-day logs */
+            margin: 10mm;
+        }
+
+        body {
+            margin: 0;
+            font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+            font-size: 13px;
+            color: #1a1a1a;
+            background: #ffffff;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .header-table,
+        .info-table {
+            table-layout: fixed;
+        }
+
+        .sheet {
+            width: 100%;
+            height: 270mm; /* Adjusted height for A4 portrait with padding/margins */
+            border: 2px solid #1a1a1a;
+            border-radius: 0;
+            padding: 24px 28px 24px;
+            overflow: hidden;
+        }
+
+        .page-layout {
+            height: 100%;
+            table-layout: fixed;
+        }
+
+        .page-layout > tbody > tr > td {
+            padding: 0;
+            vertical-align: top;
+        }
+
+        /* HEADER &amp; BRANDING - Pure reuse from Payslip */
+        .header-table td {
+            vertical-align: top;
+            padding: 0;
+        }
+
+        .company-brand {
+            width: auto;
+        }
+
+        .company-brand td {
+            padding: 0;
+            vertical-align: top;
+        }
+
+        .company-logo-cell {
+            width: 68px;
+            padding-right: 10px;
+        }
+
+        .company-logo {
+            width: 54px;
+            height: auto;
+            display: block;
+        }
+
+        .company-copy {
+            display: block;
+        }
+
+        .company-name {
+            margin: 0;
+            font-size: 16px;
+            font-weight: 700;
+            color: #1a1a1a;
+        }
+
+        .company-meta {
+            margin: 0;
+            font-size: 12px;
+            line-height: 1.5;
+            color: #555555;
+        }
+
+        .title-cell {
+            width: 35%; /* Balanced for portrait */
+            text-align: right;
+        }
+
+        .title {
+            margin: 0;
+            font-family: Georgia, "Times New Roman", serif;
+            font-size: 28px; /* Slightly smaller for portrait balance */
+            font-weight: 900;
+            letter-spacing: 2px;
+            color: #1a1a1a;
+        }
+
+        .section-rule {
+            border-top: 2px solid #1a1a1a;
+            margin: 20px 0 18px;
+        }
+
+        /* EMPLOYEE &amp; PERIOD INFO - Reuse of layout style from Payslip */
+        .info-layout {
+            table-layout: fixed;
+            width: 100%;
+            margin-bottom: 24px; /* More space for the main data */
+        }
+
+        .info-table {
+            width: 100%;
+            table-layout: fixed;
+        }
+
+        .info-table td {
+            padding: 3px 0;
+            vertical-align: baseline;
+        }
+
+        .info-table tr {
+            height: 36px;
+        }
+
+        .info-label {
+            width: 112px;
+            font-size: 12px;
+            font-weight: 500;
+            color: #444444;
+            white-space: nowrap;
+        }
+
+        .info-label-empty,
+        .info-value-empty {
+            color: transparent;
+            border-bottom: none;
+        }
+
+        .info-value {
+            font-size: 13px;
+            color: #1a1a1a;
+            border-bottom: 1px solid #cccccc;
+            padding: 0 0 2px 0;
+            white-space: nowrap;
+            font-weight: 500;
+            line-height: 1.3;
+        }
+
+        /* THE MAIN TIMECARD TABLE - Synthesis of style and structure */
+        .timecard-table {
+            table-layout: fixed;
+        }
+
+        .timecard-table th {
+            background: #e0e0e0; /* Grey header from payslip financials */
+            border-bottom: none;
+            padding: 10px 10px;
+            font-size: 12px;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+            color: #1a1a1a;
+            text-transform: uppercase;
+            text-align: left;
+        }
+
+        /* Column specific widths for clean conversion */
+        .date-cell { width: 15%; }
+        .in-cell { width: 10%; }
+        .out-cell { width: 10%; }
+        .breaks-cell { width: 15%; }
+        .reg-cell { width: 15%; }
+        .ot-cell { width: 15%; }
+        .total-cell { width: 20%; }
+
+        .timecard-table th,
+        .timecard-table td {
+            text-align: left; /* Left align text columns */
+        }
+
+        .timecard-table th.breaks-cell,
+        .timecard-table th.reg-cell,
+        .timecard-table th.ot-cell,
+        .timecard-table th.total-cell,
+        .timecard-table td.breaks-cell,
+        .timecard-table td.reg-cell,
+        .timecard-table td.ot-cell,
+        .timecard-table td.total-cell {
+            text-align: right;
+        }
+
+        .timecard-table th.in-cell,
+        .timecard-table th.out-cell,
+        .timecard-table td.in-cell,
+        .timecard-table td.out-cell {
+            text-align: left;
+        }
+
+        .timecard-table td {
+            padding: 8px 10px;
+            font-size: 12px;
+            color: #1a1a1a;
+            border-top: none;
+            border-bottom: 1px solid #eeeeee;
+        }
+
+        .timecard-table tr:last-child td {
+            border-bottom: none;
+        }
+
+        /* Final Total Row Style - port from payslip financials */
+        .total-row td {
+            background: #f5f5f5;
+            border-top: none;
+            padding: 12px 10px;
+            font-size: 13px;
+            font-weight: 700;
+            color: #1a1a1a;
+        }
+
+        .total-row td:first-child {
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        /* FOOTER SIGNATURES - Adapted to match image structure with payslip clean styling */
+        .footer-rule {
+            border-top: 1px solid #999999;
+            margin: 40px 0 0;
+        }
+
+        .signatures-table td {
+            width: 50%;
+            padding: 24px 0 0;
+            text-align: left; /* Image style is left-aligned text blocks */
+            vertical-align: top;
+        }
+
+        .signatures-table td:first-child {
+            padding-right: 12px;
+        }
+
+        .signatures-table td:last-child {
+            padding-left: 12px;
+            text-align: left; /* Left align the date column */
+        }
+
+        .signature-text-label {
+            font-size: 12px;
+            font-weight: 600;
+            margin-bottom: 50px; /* Creates more space for signing */
+            color: #1a1a1a;
+        }
+
+        .signature-line {
+            border-top: 1px solid #999999;
+            margin: 0 0 6px;
+            width: 100%;
+        }
+
+        .signature-line-text {
+            font-size: 11px;
+            color: #666666;
+            font-style: italic;
+            margin-top: 8px; /* More space to the line below signature */
+            text-align: center; /* Centered the printed name text */
+        }
+
+    </style>
+</head>
+<body>
+<div class="sheet">
+    <table class="page-layout">
+        <tr>
+            <td>
+                <table class="header-table">
+                    <tr>
+                        <td>
+                            <table class="company-brand">
+                                <tr>
+                                    <td class="company-logo-cell">
+                                        <img th:if="${companyDetails.logoUrl != null and !#strings.isEmpty(companyDetails.logoUrl)}" th:src="${companyDetails.logoUrl}" class="company-logo" alt="Marid logo"/>
+                                    </td>
+                                    <td class="company-copy">
+                                        <p class="company-name" th:text="${companyDetails.name}">Marid Industries Corporation</p>
+                                        <p class="company-meta" th:text="${companyDetails.addressLine1}">Address</p>
+                                        <p class="company-meta" th:text="${companyDetails.email}">marid@marid.com</p>
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                        <td class="title-cell">
+                            <p class="title">EMPLOYEE TIMECARD</p>
+                        </td>
+                    </tr>
+                </table>
+
+                <div class="section-rule"></div>
+
+                <table class="info-layout">
+                    <tr>
+                        <td>
+                            <table class="info-table">
+                                <tr>
+                                    <td class="info-label">Employee Name</td>
+                                    <td class="info-value" th:text="${employeeCard.name}">Richard Moore</td>
+                                    <td class="info-label">Manager</td>
+                                    <td class="info-value" th:text="${employeeCard.manager}">Jane Doe</td>
+                                </tr>
+                                <tr>
+                                    <td class="info-label">Department</td>
+                                    <td class="info-value" th:text="${employeeCard.department}">Product Development</td>
+                                    <td class="info-label">Dates</td>
+                                    <td class="info-value">
+                                        <span th:text="${#temporals.format(employeeCard.periodStart, 'MMMM d')}">August 1</span> -
+                                        <span th:text="${#temporals.format(employeeCard.periodEnd, 'MMMM d, yyyy')}">August 15, 2026</span>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td class="info-label">Designation</td>
+                                    <td class="info-value" th:text="${employeeCard.designation}">Software Engineer</td>
+                                    <td class="info-label info-label-empty">&#160;</td>
+                                    <td class="info-value info-value-empty">&#160;</td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+                </table>
+
+                <table class="timecard-table">
+                    <thead>
+                        <tr>
+                            <th class="date-cell">Date</th>
+                            <th class="in-cell">In</th>
+                            <th class="out-cell">Out</th>
+                            <th class="breaks-cell">Breaks</th>
+                            <th class="reg-cell">Reg. Hours</th>
+                            <th class="ot-cell">OT Hours</th>
+                            <th class="total-cell">Total Hours</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr th:each="log : ${employeeCard.dailyLogsList}">
+                            <td class="date-cell" th:text="${#temporals.format(log.date, 'EEE, MMMM d')}">Mon, August 1</td>
+                            <td class="in-cell" th:text="${log.timeIn != null ? #temporals.format(log.timeIn, 'H:mm') : '-'}">8:00</td>
+                            <td class="out-cell" th:text="${log.timeOut != null ? #temporals.format(log.timeOut, 'H:mm') : '-'}">17:00</td>
+                            <td class="breaks-cell" th:text="${#numbers.formatDecimal(log.breaksHours, 1, 'COMMA', 2, 'POINT')}">1.00</td>
+                            <td class="reg-cell" th:text="${#numbers.formatDecimal(log.regularHours, 1, 'COMMA', 2, 'POINT')}">8.00</td>
+                            <td class="ot-cell" th:text="${#numbers.formatDecimal(log.overtimeHours, 1, 'COMMA', 2, 'POINT')}">0.00</td>
+                            <td class="total-cell" th:text="${#numbers.formatDecimal(log.totalHours, 1, 'COMMA', 2, 'POINT')}">8.00</td>
+                        </tr>
+                        <tr th:if="${#lists.isEmpty(employeeCard.dailyLogsList)}">
+                            <td colspan="7" style="text-align: center; padding: 18px 10px;">No timecard rows available for this period.</td>
+                        </tr>
+                    </tbody>
+                    <tfoot>
+                        <tr class="total-row">
+                            <td colspan="3">Total</td>
+                            <td class="breaks-cell" th:text="${#numbers.formatDecimal(employeeCard.totalBreakHours, 1, 'COMMA', 2, 'POINT')}">2.00</td>
+                            <td class="reg-cell" th:text="${#numbers.formatDecimal(employeeCard.totalRegularHours, 1, 'COMMA', 2, 'POINT')}">16.00</td>
+                            <td class="ot-cell" th:text="${#numbers.formatDecimal(employeeCard.totalOvertimeHours, 1, 'COMMA', 2, 'POINT')}">0.00</td>
+                            <td class="total-cell" th:text="${#numbers.formatDecimal(employeeCard.totalOverallHours, 1, 'COMMA', 2, 'POINT')}">16.00</td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </td>
+        </tr>
+
+        <tr>
+            <td>
+                <div class="footer-rule"></div>
+                <table class="signatures-table">
+                    <tr>
+                        <td>
+                            <div class="signature-text-label">Employee Signature:</div>
+                            <div class="signature-line"></div>
+                            <div class="signature-line-text">Employee Signature over Printed Name</div>
+                        </td>
+                        <td>
+                            <div class="signature-text-label">Date:</div>
+                            <div class="signature-line"></div>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+</div>
+</body>
+</html>

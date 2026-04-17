@@ -2,6 +2,7 @@ package org.example.maridone.payroll;
 
 import jakarta.validation.Valid;
 import org.example.maridone.annotation.AuditLog;
+import org.example.maridone.auth.sensitive.SensitiveAccessService;
 import org.example.maridone.marker.OnCreate;
 import org.example.maridone.payroll.dto.*;
 import org.example.maridone.payroll.item.ItemFilter;
@@ -33,10 +34,14 @@ public class PayrollController {
 
     private final PayrollService payrollService;
     private final PayrollItemService payrollItemService;
+    private final SensitiveAccessService sensitiveAccessService;
 
-    public PayrollController(PayrollService payrollService, PayrollItemService payrollItemService) {
+    public PayrollController(PayrollService payrollService,
+                             PayrollItemService payrollItemService,
+                             SensitiveAccessService sensitiveAccessService) {
         this.payrollService = payrollService;
         this.payrollItemService = payrollItemService;
+        this.sensitiveAccessService = sensitiveAccessService;
     }
 
     @GetMapping("/item/{empId}")
@@ -99,7 +104,8 @@ public class PayrollController {
 
     @GetMapping("/item/manage/{itemId}")
     @PreAuthorize("hasRole('HR')")
-    public CorrectionSourceItemDto getItemForCorrection(@PathVariable Long itemId) {
+    public CorrectionSourceItemDto getItemForCorrection(@PathVariable Long itemId, Authentication authentication) {
+        sensitiveAccessService.assertHrSensitiveAccess(authentication);
         return payrollItemService.getItemForCorrection(itemId);
     }
 

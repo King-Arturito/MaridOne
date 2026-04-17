@@ -5,6 +5,7 @@ import org.example.maridone.log.attendance.AttendanceLog;
 import org.example.maridone.log.dto.ActivityRequestDto;
 import org.example.maridone.log.dto.AttendanceImportSummaryDto;
 import org.example.maridone.log.filter.AttendanceLogFilter;
+import org.example.maridone.log.timecard.TimecardService;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
@@ -18,6 +19,8 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.time.LocalDate;
+
 @RestController
 @RequestMapping("/api/logs")
 public class LogController {
@@ -25,15 +28,18 @@ public class LogController {
     private final AttendanceLogService attendanceLogService;
     private final AttendanceImportService attendanceImportService;
     private final AttendanceReportService attendanceReportService;
+    private final TimecardService timecardService;
 
     public LogController(ActivityLogService activityLogService,
                          AttendanceLogService attendanceLogService,
                          AttendanceImportService attendanceImportService,
-                         AttendanceReportService attendanceReportService) {
+                         AttendanceReportService attendanceReportService,
+                         TimecardService timecardService) {
         this.activityLogService = activityLogService;
         this.attendanceLogService = attendanceLogService;
         this.attendanceImportService = attendanceImportService;
         this.attendanceReportService = attendanceReportService;
+        this.timecardService = timecardService;
     }
 
 
@@ -114,6 +120,19 @@ public class LogController {
             AttendanceLogFilter filter,
             @PageableDefault(size = 25, sort = "timestamp", direction = Sort.Direction.DESC) Pageable pageable) {
         return attendanceLogService.getAttendance(empId, filter, pageable);
+    }
+
+    @GetMapping("/attendance/self/{empId}/timecard/pdf")
+    @PreAuthorize("@userCheck.isSelf(#empId, authentication.getName())")
+    public ResponseEntity<byte[]> getMyTimecardPdf(
+            @PathVariable Long empId,
+            @RequestParam("from") LocalDate from,
+            @RequestParam("to") LocalDate to) {
+        TimecardService.GeneratedTimecardPdf pdf = timecardService.generateTimecardPdf(empId, from, to);
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + pdf.fileName() + "\"")
+                .contentType(MediaType.APPLICATION_PDF)
+                .body(pdf.content());
     }
 
 
