@@ -39,6 +39,20 @@ public interface OvertimeRequestRepository extends JpaRepository<OvertimeRequest
     );
 
     @Query("""
+        SELECT COUNT(o) > 0
+        FROM OvertimeRequest o
+        WHERE o.employee.employeeId = :employeeId
+        AND o.requestStatus NOT IN ('CANCELLED', 'REJECTED')
+        AND o.workDate >= :startDate
+        AND o.workDate <= :endDate
+    """)
+    boolean existsActiveOnWorkDateRange(
+            @Param("employeeId") Long employeeId,
+            @Param("startDate") java.time.LocalDate startDate,
+            @Param("endDate") java.time.LocalDate endDate
+    );
+
+    @Query("""
         SELECT o from OvertimeRequest o
         where o.requestStatus = 'APPROVED'
         and o.employee.employeeId IN :employeeIds

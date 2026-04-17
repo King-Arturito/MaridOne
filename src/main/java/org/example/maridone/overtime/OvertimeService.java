@@ -438,13 +438,10 @@ public class OvertimeService {
             return;
         }
 
-        LocalDateTime startOfOvertimeDay = requestDto.getWorkDate().atStartOfDay();
-        LocalDateTime endOfOvertimeDayExclusive = requestDto.getEndTime().toLocalDate().plusDays(1).atStartOfDay();
-
-        boolean hasConflict = leaveRequestRepository.existsActiveOverlapForEmployee(
+        boolean hasConflict = leaveRequestRepository.existsActiveOnDateRange(
                 employee.getEmployeeId(),
-                startOfOvertimeDay,
-                endOfOvertimeDayExclusive
+                requestDto.getWorkDate().atStartOfDay(),
+                requestDto.getEndTime().toLocalDate().plusDays(1).atStartOfDay()
         );
 
         if (hasConflict) {
