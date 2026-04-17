@@ -59,8 +59,9 @@ public class EmployeeController {
     @AuditLog
     public Page<EmployeeResponseDto> getAllEmployees(
             EmployeeFilter employeeFilter,
-            @PageableDefault(sort = "employeeId", direction = Sort.Direction.ASC) Pageable pageable) {
-        return employeeService.getAllEmployees(employeeFilter,pageable);
+            @PageableDefault(sort = "employeeId", direction = Sort.Direction.ASC) Pageable pageable,
+            Authentication authentication) {
+        return employeeService.getAllEmployees(employeeFilter,pageable, authentication.getName());
     }
 
     @GetMapping("/options")

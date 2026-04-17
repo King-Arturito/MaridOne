@@ -29,6 +29,7 @@ import org.example.maridone.schedule.shift.TemplateShiftRepository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
+import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -96,8 +97,10 @@ public class EmployeeService {
     }
 
     @ExecutionTime
-    public Page<EmployeeResponseDto> getAllEmployees(EmployeeFilter employeeFilter, Pageable pageable) {
-        Specification<Employee> specs = EmployeeSpecs.hasFilters(employeeFilter);
+    public Page<EmployeeResponseDto> getAllEmployees(EmployeeFilter employeeFilter, Pageable pageable, String username) {
+        Specification<Employee> specs = Specification.allOf(
+                EmployeeSpecs.excludeSelf(username),
+                EmployeeSpecs.hasFilters(employeeFilter));
         Page<Employee> employeePage = employeeRepository.findAll(specs, pageable);
         Map<Long, List<ShiftResponseDto>> schedulesByEmployeeId =
                 findSchedulesByEmployeeId(employeePage.stream().map(Employee::getEmployeeId).toList());

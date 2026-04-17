@@ -57,4 +57,8 @@ public class EmployeeSpecs {
     public static Specification<Employee> hasUserAccount(String username) {
         return (root, query, cb) -> cb.equal(root.get("userAccount").get("username"), username);
     }
+
+    public static Specification<Employee> excludeSelf(String username) {
+        return ((root, query, cb) -> cb.notEqual(root.get("userAccount").get("username"), username));
+    }
 }
