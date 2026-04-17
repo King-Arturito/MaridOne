@@ -116,7 +116,7 @@ class OvertimeServiceTest {
         when(overtimeMapper.toOvertimeRequest(dto)).thenReturn(request);
         when(employeeRepository.findOne(any(Specification.class))).thenReturn(Optional.of(emp));
         when(defaultConfig.getTimeZone()).thenReturn(zoneId);
-        when(leaveRequestRepository.existsActiveOverlapForEmployee(any(), any(), any())).thenReturn(false);
+        when(leaveRequestRepository.existsActiveOnDateRange(any(), any(), any())).thenReturn(false);
         when(templateShiftRepository.findAllByEmployeeId(9L)).thenReturn(java.util.List.of(shift));
         when(overtimeRequestRepository.save(any(OvertimeRequest.class))).thenReturn(request);
 
@@ -144,7 +144,7 @@ class OvertimeServiceTest {
 
         when(employeeRepository.findOne(any(Specification.class))).thenReturn(Optional.of(emp));
         when(defaultConfig.getTimeZone()).thenReturn(zoneId);
-        when(leaveRequestRepository.existsActiveOverlapForEmployee(any(), any(), any())).thenReturn(false);
+        when(leaveRequestRepository.existsActiveOnDateRange(any(), any(), any())).thenReturn(false);
         when(templateShiftRepository.findAllByEmployeeId(9L)).thenReturn(java.util.List.of(shift));
 
         Assertions.assertThrows(OvertimeException.class, () -> overtimeService.createOvertimeRequest(dto, username));
@@ -183,7 +183,7 @@ class OvertimeServiceTest {
         when(overtimeMapper.toOvertimeRequest(dto)).thenReturn(request);
         when(employeeRepository.findOne(any(Specification.class))).thenReturn(Optional.of(emp));
         when(defaultConfig.getTimeZone()).thenReturn(zoneId);
-        when(leaveRequestRepository.existsActiveOverlapForEmployee(any(), any(), any())).thenReturn(false);
+        when(leaveRequestRepository.existsActiveOnDateRange(any(), any(), any())).thenReturn(false);
         when(templateShiftRepository.findAllByEmployeeId(9L)).thenReturn(java.util.List.of(shift));
         when(overtimeRequestRepository.save(any(OvertimeRequest.class))).thenReturn(request);
 
@@ -210,7 +210,7 @@ class OvertimeServiceTest {
 
         when(employeeRepository.findOne(any(Specification.class))).thenReturn(Optional.of(emp));
         when(defaultConfig.getTimeZone()).thenReturn(zoneId);
-        when(leaveRequestRepository.existsActiveOverlapForEmployee(any(), any(), any())).thenReturn(true);
+        when(leaveRequestRepository.existsActiveOnDateRange(any(), any(), any())).thenReturn(true);
 
         OverlappingDatesException error = Assertions.assertThrows(
                 OverlappingDatesException.class,

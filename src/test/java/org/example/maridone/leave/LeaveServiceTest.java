@@ -5,6 +5,7 @@ import java.time.*;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 import org.example.maridone.config.DefaultConfig;
 import org.example.maridone.core.employee.Employee;
@@ -26,6 +27,8 @@ import org.example.maridone.leave.dto.LeaveResponseDto;
 import org.example.maridone.leave.dto.LeaveRequestDto;
 import org.example.maridone.leave.request.LeaveRequest;
 import org.example.maridone.leave.request.LeaveRequestRepository;
+import org.example.maridone.holiday.HolidayLookup;
+import org.example.maridone.holiday.HolidayService;
 import org.example.maridone.notification.NotificationService;
 import org.example.maridone.notification.WorkflowEmailService;
 import org.example.maridone.overtime.OvertimeRequestRepository;
@@ -73,6 +76,7 @@ class LeaveServiceTest {
     @Mock private NotificationService notificationService;
     @Mock private OvertimeRequestRepository overtimeRequestRepository;
     @Mock private WorkflowEmailService workflowEmailService;
+    @Mock private HolidayService holidayService;
 
     @InjectMocks
     private LeaveService leaveService;
@@ -97,6 +101,8 @@ class LeaveServiceTest {
     @BeforeEach
     void setUp() {
         lenient().when(defaultConfig.getTimeZone()).thenReturn(ZoneId.of("Asia/Manila"));
+        lenient().when(holidayService.getHolidayLookup(any(LocalDate.class), any(LocalDate.class)))
+                .thenReturn(HolidayLookup.empty());
 
         LocalDate mockedDate = LocalDate.of(2026, 4, 13);
         mockedDay = mockedDate.atStartOfDay();
@@ -157,7 +163,7 @@ class LeaveServiceTest {
         when(employeeRepository.findById(empId)).thenReturn(Optional.of(emp));
         when(leaveBalanceRepository.findByLeaveTypeAndEmployee_EmployeeId(LeaveType.VACATION_LEAVE, empId))
                 .thenReturn(Optional.of(leaveBalance));
-        when(overtimeRequestRepository.existsActiveOverlapForEmployee(any(), any(), any())).thenReturn(false);
+        when(overtimeRequestRepository.existsActiveOnWorkDateRange(any(), any(), any())).thenReturn(false);
         when(templateShiftRepository.findAllByEmployeeId(empId)).thenReturn(List.of(
                 createSchedule(DayOfWeek.MONDAY, LocalTime.of(8, 0), LocalTime.of(17, 0), emp)
         ));
@@ -207,7 +213,7 @@ class LeaveServiceTest {
         leaveBalance.setBalanceHours(BigDecimal.valueOf(9));
 
         when(employeeRepository.findById(empId)).thenReturn(Optional.of(emp));
-        when(overtimeRequestRepository.existsActiveOverlapForEmployee(any(), any(), any())).thenReturn(false);
+        when(overtimeRequestRepository.existsActiveOnWorkDateRange(any(), any(), any())).thenReturn(false);
 
         List<LeaveRequest> results = leaveService.createLeaveRequest(dto, empId, null);
 
@@ -287,7 +293,7 @@ class LeaveServiceTest {
         when(employeeRepository.findById(empId)).thenReturn(Optional.of(emp));
         when(leaveBalanceRepository.findByLeaveTypeAndEmployee_EmployeeId(LeaveType.VACATION_LEAVE, empId))
                 .thenReturn(Optional.of(leaveBalance));
-        when(overtimeRequestRepository.existsActiveOverlapForEmployee(any(), any(), any())).thenReturn(false);
+        when(overtimeRequestRepository.existsActiveOnWorkDateRange(any(), any(), any())).thenReturn(false);
         when(templateShiftRepository.findAllByEmployeeId(empId)).thenReturn(List.of(
                 createSchedule(DayOfWeek.MONDAY, LocalTime.of(9, 0), LocalTime.of(17, 0), emp),
                 createSchedule(DayOfWeek.TUESDAY, LocalTime.of(9, 0), LocalTime.of(17, 0), emp),
@@ -330,7 +336,7 @@ class LeaveServiceTest {
         when(employeeRepository.findById(empId)).thenReturn(Optional.of(emp));
         when(leaveBalanceRepository.findByLeaveTypeAndEmployee_EmployeeId(LeaveType.SICK_LEAVE, empId))
                 .thenReturn(Optional.of(leaveBalance));
-        when(overtimeRequestRepository.existsActiveOverlapForEmployee(any(), any(), any())).thenReturn(false);
+        when(overtimeRequestRepository.existsActiveOnWorkDateRange(any(), any(), any())).thenReturn(false);
         when(templateShiftRepository.findAllByEmployeeId(empId)).thenReturn(List.of(
                 createSchedule(DayOfWeek.MONDAY, LocalTime.of(9, 0), LocalTime.of(17, 0), emp),
                 createSchedule(DayOfWeek.TUESDAY, LocalTime.of(9, 0), LocalTime.of(17, 0), emp),
@@ -350,6 +356,40 @@ class LeaveServiceTest {
         Assertions.assertFalse(unpaid.getPaid());
         Assertions.assertEquals(mockedDay.plusDays(9).withHour(9), unpaid.getStartDateTime());
         Assertions.assertEquals(mockedDay.plusDays(9).withHour(17), unpaid.getEndDateTime());
+    }
+
+    @Test
+    void createLeaveRequest_ShouldIgnoreHolidayHoursWhenEvaluatingBalanceCoverage() {
+        Long empId = 1L;
+        LeaveRequestDto dto = new LeaveRequestDto();
+        dto.setStartDateTime(LocalDateTime.of(2026, 4, 20, 9, 0));
+        dto.setEndDateTime(LocalDateTime.of(2026, 4, 21, 13, 0));
+        dto.setReason("Vacation");
+        dto.setLeaveType(LeaveType.VACATION_LEAVE);
+
+        Employee emp = new Employee();
+        ReflectionTestUtils.setField(emp, "employeeId", empId);
+
+        LeaveBalance leaveBalance = new LeaveBalance();
+        leaveBalance.setBalanceHours(BigDecimal.valueOf(4));
+
+        when(employeeRepository.findById(empId)).thenReturn(Optional.of(emp));
+        when(leaveBalanceRepository.findByLeaveTypeAndEmployee_EmployeeId(LeaveType.VACATION_LEAVE, empId))
+                .thenReturn(Optional.of(leaveBalance));
+        when(overtimeRequestRepository.existsActiveOnWorkDateRange(any(), any(), any())).thenReturn(false);
+        when(templateShiftRepository.findAllByEmployeeId(empId)).thenReturn(List.of(
+                createSchedule(DayOfWeek.MONDAY, LocalTime.of(9, 0), LocalTime.of(13, 0), emp),
+                createSchedule(DayOfWeek.TUESDAY, LocalTime.of(9, 0), LocalTime.of(13, 0), emp)
+        ));
+        when(holidayService.getHolidayLookup(LocalDate.of(2026, 4, 20), LocalDate.of(2026, 4, 21)))
+                .thenReturn(new HolidayLookup(Set.of(LocalDate.of(2026, 4, 21)), Set.of()));
+
+        List<LeaveRequest> results = leaveService.createLeaveRequest(dto, empId, null);
+
+        Assertions.assertEquals(1, results.size());
+        Assertions.assertTrue(results.get(0).getPaid());
+        Assertions.assertEquals(LocalDateTime.of(2026, 4, 20, 9, 0), results.get(0).getStartDateTime());
+        Assertions.assertEquals(LocalDateTime.of(2026, 4, 21, 13, 0), results.get(0).getEndDateTime());
     }
 
     @Test
@@ -382,7 +422,7 @@ class LeaveServiceTest {
         when(employeeRepository.findById(empId)).thenReturn(Optional.of(emp));
         when(leaveBalanceRepository.findByLeaveTypeAndEmployee_EmployeeId(LeaveType.VACATION_LEAVE, empId))
                 .thenReturn(Optional.of(leaveBalance));
-        when(overtimeRequestRepository.existsActiveOverlapForEmployee(any(), any(), any())).thenReturn(false);
+        when(overtimeRequestRepository.existsActiveOnWorkDateRange(any(), any(), any())).thenReturn(false);
         when(templateShiftRepository.findAllByEmployeeId(empId)).thenReturn(List.of(
                 createSchedule(DayOfWeek.MONDAY, LocalTime.of(8, 0), LocalTime.of(17, 0), emp)
         ));
@@ -408,7 +448,7 @@ class LeaveServiceTest {
         ReflectionTestUtils.setField(emp, "employeeId", empId);
 
         when(employeeRepository.findById(empId)).thenReturn(Optional.of(emp));
-        when(overtimeRequestRepository.existsActiveOverlapForEmployee(any(), any(), any())).thenReturn(true);
+        when(overtimeRequestRepository.existsActiveOnWorkDateRange(any(), any(), any())).thenReturn(true);
 
         OverlappingDatesException error = Assertions.assertThrows(
                 OverlappingDatesException.class,
@@ -528,7 +568,7 @@ class LeaveServiceTest {
         when(employeeRepository.findById(empId)).thenReturn(Optional.of(emp));
         when(leaveBalanceRepository.findByLeaveTypeAndEmployee_EmployeeId(LeaveType.VACATION_LEAVE, empId))
                 .thenReturn(Optional.of(leaveBalance));
-        when(overtimeRequestRepository.existsActiveOverlapForEmployee(any(), any(), any())).thenReturn(false);
+        when(overtimeRequestRepository.existsActiveOnWorkDateRange(any(), any(), any())).thenReturn(false);
         when(templateShiftRepository.findAllByEmployeeId(empId)).thenReturn(List.of(
                 createSchedule(DayOfWeek.MONDAY, LocalTime.of(9, 0), LocalTime.of(13, 0), emp),
                 createSchedule(DayOfWeek.TUESDAY, LocalTime.of(9, 0), LocalTime.of(13, 0), emp),
@@ -622,6 +662,67 @@ class LeaveServiceTest {
 
         Assertions.assertEquals(Status.APPROVED, result.getRequestStatus());
         Assertions.assertEquals(new BigDecimal("4.00"), leaveBalance.getBalanceHours());
+        SecurityContextHolder.clearContext();
+    }
+
+    @Test
+    void updateLeaveRequest_ShouldNotDeductHolidayHoursFromLeaveBalance() {
+        Employee requestEmployee = new Employee();
+        ReflectionTestUtils.setField(requestEmployee, "employeeId", 3L);
+
+        LeaveRequest request = new LeaveRequest();
+        request.setEmployee(requestEmployee);
+        request.setRequestStatus(Status.PENDING_HR);
+        request.setLeaveType(LeaveType.SICK_LEAVE);
+        request.setPaid(true);
+        request.setSuggestedPaid(true);
+        request.setStartDateTime(LocalDateTime.of(2026, 4, 20, 9, 0));
+        request.setEndDateTime(LocalDateTime.of(2026, 4, 21, 13, 0));
+
+        Employee hrEmployee = new Employee();
+        ReflectionTestUtils.setField(hrEmployee, "employeeId", 2L);
+        hrEmployee.setFirstName("Pat");
+        hrEmployee.setLastName("Reyes");
+        hrEmployee.setPosition(Position.HR);
+
+        UserAccount hrAccount = new UserAccount();
+        hrAccount.setUsername("hr1");
+        hrAccount.setEmployee(hrEmployee);
+
+        LeaveBalance leaveBalance = new LeaveBalance();
+        leaveBalance.setLeaveType(LeaveType.SICK_LEAVE);
+        leaveBalance.setBalanceHours(BigDecimal.valueOf(10));
+
+        LeaveRequestDto payload = new LeaveRequestDto();
+        payload.setLeaveType(LeaveType.SICK_LEAVE);
+        payload.setRequestStatus(Status.APPROVED);
+        payload.setApproverReason("Approved after holiday validation.");
+        payload.setPaid(true);
+
+        Authentication authentication = org.mockito.Mockito.mock(Authentication.class);
+        SecurityContext securityContext = org.mockito.Mockito.mock(SecurityContext.class);
+
+        when(authentication.getName()).thenReturn("hr1");
+        when(securityContext.getAuthentication()).thenReturn(authentication);
+        SecurityContextHolder.setContext(securityContext);
+
+        when(userAccountRepository.findByUsername("hr1")).thenReturn(Optional.of(hrAccount));
+        when(userAccountRepository.findEmployeeIdByUsername("hr1")).thenReturn(2L);
+        when(leaveRequestRepository.findByIdForUpdate(22L)).thenReturn(Optional.of(request));
+        when(leaveRequestRepository.findEmployeeIdByRequestId(22L)).thenReturn(Optional.of(3L));
+        when(templateShiftRepository.findAllByEmployeeId(3L)).thenReturn(List.of(
+                createSchedule(DayOfWeek.MONDAY, LocalTime.of(9, 0), LocalTime.of(13, 0), requestEmployee),
+                createSchedule(DayOfWeek.TUESDAY, LocalTime.of(9, 0), LocalTime.of(13, 0), requestEmployee)
+        ));
+        when(leaveBalanceRepository.findOne(any(Specification.class))).thenReturn(Optional.of(leaveBalance));
+        when(leaveRequestRepository.save(any(LeaveRequest.class))).thenReturn(request);
+        when(holidayService.getHolidayLookup(LocalDate.of(2026, 4, 20), LocalDate.of(2026, 4, 21)))
+                .thenReturn(new HolidayLookup(Set.of(LocalDate.of(2026, 4, 21)), Set.of()));
+
+        LeaveRequest result = leaveService.updateLeaveRequest(payload, 22L);
+
+        Assertions.assertEquals(Status.APPROVED, result.getRequestStatus());
+        Assertions.assertEquals(0, leaveBalance.getBalanceHours().compareTo(new BigDecimal("6.00")));
         SecurityContextHolder.clearContext();
     }
 

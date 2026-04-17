@@ -56,6 +56,20 @@ public interface LeaveRequestRepository extends JpaRepository<LeaveRequest,Long>
             @Param("endDateTime") LocalDateTime endDateTime
     );
 
+    @Query("""
+        SELECT COUNT(lr) > 0
+        FROM LeaveRequest lr
+        WHERE lr.employee.employeeId = :employeeId
+        AND lr.requestStatus NOT IN ('CANCELLED', 'REJECTED')
+        AND lr.startDateTime < :endDateExclusive
+        AND lr.endDateTime > :startDateTime
+    """)
+    boolean existsActiveOnDateRange(
+            @Param("employeeId") Long employeeId,
+            @Param("startDateTime") LocalDateTime startDateTime,
+            @Param("endDateExclusive") LocalDateTime endDateExclusive
+    );
+
 
     @Query("SELECT COUNT(l) > 0 FROM LeaveRequest l, UserAccount u " +
             "WHERE l.requestId = :leaveRequestId " +

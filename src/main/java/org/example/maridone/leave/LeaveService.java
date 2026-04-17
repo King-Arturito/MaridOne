@@ -20,6 +20,8 @@ import org.example.maridone.exception.toolarge.FileTooLargeException;
 import org.example.maridone.exception.unauthorized.DuplicateLeaveException;
 import org.example.maridone.exception.unauthorized.InvalidActionException;
 import org.example.maridone.exception.unauthorized.InsufficientBalanceException;
+import org.example.maridone.holiday.HolidayLookup;
+import org.example.maridone.holiday.HolidayService;
 import org.example.maridone.leave.balance.*;
 import org.example.maridone.leave.dto.*;
 import org.example.maridone.leave.request.LeaveRequest;
@@ -79,6 +81,7 @@ public class LeaveService {
     private final NotificationService notificationService;
     private final OvertimeRequestRepository overtimeRequestRepository;
     private final WorkflowEmailService workflowEmailService;
+    private final HolidayService holidayService;
 
     public LeaveService(
             LeaveBalanceRepository leaveBalanceRepository,
@@ -94,7 +97,8 @@ public class LeaveService {
             DefaultConfig defaultConfig,
             NotificationService notificationService,
             OvertimeRequestRepository overtimeRequestRepository,
-            WorkflowEmailService workflowEmailService) {
+            WorkflowEmailService workflowEmailService,
+            HolidayService holidayService) {
         this.leaveBalanceRepository = leaveBalanceRepository;
         this.leaveRequestRepository = leaveRequestRepository;
         this.employeeRepository = employeeRepository;
@@ -109,6 +113,7 @@ public class LeaveService {
         this.notificationService = notificationService;
         this.overtimeRequestRepository = overtimeRequestRepository;
         this.workflowEmailService = workflowEmailService;
+        this.holidayService = holidayService;
     }
 
     @Transactional
@@ -348,13 +353,10 @@ public class LeaveService {
             return;
         }
 
-        LocalDateTime startOfFirstLeaveDay = leaveStart.toLocalDate().atStartOfDay();
-        LocalDateTime endOfLastLeaveDayExclusive = leaveEnd.toLocalDate().plusDays(1).atStartOfDay();
-
-        boolean hasConflict = overtimeRequestRepository.existsActiveOverlapForEmployee(
+        boolean hasConflict = overtimeRequestRepository.existsActiveOnWorkDateRange(
                 employeeId,
-                startOfFirstLeaveDay,
-                endOfLastLeaveDayExclusive
+                leaveStart.toLocalDate(),
+                leaveEnd.toLocalDate()
         );
 
         if (hasConflict) {
@@ -510,8 +512,15 @@ public class LeaveService {
         LocalDate current = startDate;
         LocalDateTime payloadStart = payload.getStartDateTime();
         LocalDateTime payloadEnd = payload.getEndDateTime();
+        HolidayLookup holidayLookup = safeHolidayLookup(startDate, endDate);
+        java.util.Set<LocalDate> holidayDates = holidayLookup.holidayDates();
 
         while (!current.isAfter(endDate)) {
+            if (holidayDates.contains(current)) {
+                current = current.plusDays(1);
+                continue;
+            }
+
             for (LeaveWindow effectiveWindow : resolveEffectiveShiftWindows(current, scheduleMap, dailyShiftMap)) {
                 LocalDateTime overlapStart = effectiveWindow.startDateTime().isBefore(payloadStart)
                         ? payloadStart
@@ -587,6 +596,15 @@ public class LeaveService {
             hours = hours.add(CommonCalculator.deductUnpaidLunchHour(rawHours));
         }
         return hours;
+    }
+
+    private HolidayLookup safeHolidayLookup(LocalDate startDate, LocalDate endDate) {
+        try {
+            HolidayLookup lookup = holidayService.getHolidayLookup(startDate, endDate);
+            return lookup == null ? HolidayLookup.empty() : lookup;
+        } catch (RuntimeException exception) {
+            return HolidayLookup.empty();
+        }
     }
 
     private LocalDateTime resolvePaidCoverageEnd(
