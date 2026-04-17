@@ -8,6 +8,6 @@ import org.mapstruct.Mapping;
 @Mapper(componentModel = "spring")
 public interface DocumentMapper {
 
-    @Mapping(target = "username", source = "username.username")
+    @Mapping(target = "username", source = "userAccount.username")
     DocumentResponseDto toDocumentResponseDto(DocumentPath documentPath);
 }

@@ -1,12 +1,16 @@
 package org.example.maridone.core.user;
 
 import java.time.Instant;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 import java.util.Optional;
 
 import org.example.maridone.auth.token.RefreshTokenRepository;
+import org.example.maridone.config.DefaultConfig;
 import org.example.maridone.core.dto.ChangePasswordDto;
 import org.example.maridone.core.dto.CreateUserAccountDto;
+import org.example.maridone.core.dto.UpdateUserAccountDto;
 import org.example.maridone.core.employee.Employee;
 import org.example.maridone.core.employee.EmployeeRepository;
 import org.example.maridone.document.DocumentPathRepository;
@@ -16,20 +20,22 @@ import org.example.maridone.document.path.DocumentPath;
 import org.example.maridone.enums.AccountStatus;
 import org.example.maridone.exception.notfound.AccountNotFoundException;
 import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.*;
+
+import org.junit.platform.commons.util.ReflectionUtils;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.ArgumentCaptor;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.test.util.ReflectionTestUtils;
 
 @ExtendWith(MockitoExtension.class)
 class UserAccountServiceTest {
@@ -40,9 +46,26 @@ class UserAccountServiceTest {
     @Mock private DocumentPathRepository documentPathRepository;
     @Mock private DocumentMapper documentMapper;
     @Mock private RefreshTokenRepository refreshTokenRepository;
+    @Mock private DefaultConfig defaultConfig;
 
     @InjectMocks
     private UserAccountService userAccountService;
+
+    @BeforeEach
+    void setUp() {
+        DefaultConfig config = new DefaultConfig();
+        config.setTimeZone(ZoneId.of("Asia/Manila"));
+
+        userAccountService = new UserAccountService(
+                userAccountRepository,
+                passwordEncoder,
+                employeeRepository,
+                documentPathRepository,
+                documentMapper,
+                refreshTokenRepository,
+                config
+        );
+    }
 
     @Test
     void createUserAccount_ShouldHashPasswordAndSave() {
@@ -116,55 +139,40 @@ class UserAccountServiceTest {
     }
 
     @Test
-    void updateUserAccount_ShouldMigrateLinkedRecords_WhenUsernameChanges() {
-        CreateUserAccountDto dto = new CreateUserAccountDto();
+    void updateUserAccount_ShouldUpdateUsername_WhenUsernameChanges() {
+        UpdateUserAccountDto dto = new UpdateUserAccountDto();
         dto.setEmployeeId(21L);
         dto.setUsername("chloe.renamed");
 
         Employee employee = new Employee();
         UserAccount existing = new UserAccount();
         existing.setUsername("chloe.old");
-        existing.setPasswordHash("existing_hash");
         existing.setAccountStatus(AccountStatus.ACTIVE);
         existing.setEmployee(employee);
-        existing.setTwoFactorEnabled(true);
-        existing.setTwoFactorSecret("secret-2fa");
-
-        UserAccount replacement = new UserAccount();
-        replacement.setUsername("chloe.renamed");
 
         when(userAccountRepository.findByEmployee_EmployeeId(21L)).thenReturn(Optional.of(existing));
         when(userAccountRepository.existsByUsername("chloe.renamed")).thenReturn(false);
-        when(userAccountRepository.findByUsername("chloe.renamed")).thenReturn(Optional.of(replacement));
+        when(userAccountRepository.save(any(UserAccount.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         UserAccount result = userAccountService.updateUserAccount(dto);
 
         Assertions.assertEquals("chloe.renamed", result.getUsername());
-        verify(userAccountRepository).insertReplacementAccount(
-                "chloe.renamed",
-                "existing_hash",
-                AccountStatus.ACTIVE.name(),
-                21L,
-                true,
-                "secret-2fa",
-                false,
-                null
-        );
-        verify(documentPathRepository).reassignUsername("chloe.old", "chloe.renamed");
-        verify(refreshTokenRepository).deleteByUsername("chloe.old");
-        verify(userAccountRepository).deleteByUsernameNative("chloe.old");
-        verify(userAccountRepository, never()).save(existing);
+
+        verify(userAccountRepository).save(existing);
+
+        verifyNoInteractions(documentPathRepository);
     }
 
     @Test
     void updateUserAccount_ShouldRequirePasswordChange_WhenPasswordIsReset() {
-        CreateUserAccountDto dto = new CreateUserAccountDto();
+        UpdateUserAccountDto dto = new UpdateUserAccountDto();
         dto.setEmployeeId(21L);
         dto.setUsername("chloe.old");
         dto.setPassword("temp1234");
 
         Employee employee = new Employee();
         UserAccount existing = new UserAccount();
+        ReflectionTestUtils.setField(existing, "accountId", 99L);
         existing.setUsername("chloe.old");
         existing.setPasswordHash("existing_hash");
         existing.setAccountStatus(AccountStatus.ACTIVE);
@@ -178,7 +186,7 @@ class UserAccountServiceTest {
 
         Assertions.assertEquals("reset_hash", result.getPasswordHash());
         Assertions.assertTrue(Boolean.TRUE.equals(result.getPasswordChangeRequired()));
-        verify(refreshTokenRepository).deleteByUsername("chloe.old");
+        verify(refreshTokenRepository).deleteAllByUserAccount(99L);
     }
 
     @Test

@@ -5,6 +5,7 @@ import java.net.URI;
 import org.example.maridone.annotation.AuditLog;
 import org.example.maridone.core.dto.ChangePasswordDto;
 import org.example.maridone.core.dto.CreateUserAccountDto;
+import org.example.maridone.core.dto.UpdateUserAccountDto;
 import org.example.maridone.document.dto.DocumentResponseDto;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -40,12 +41,12 @@ public class UserAccountController {
         return ResponseEntity.created(location).body(user);
     }
 
-    @PatchMapping("/{employeeId}")
+    @PatchMapping("/update/{employeeId}")
     @PreAuthorize("hasRole('HR')")
     @AuditLog
     public ResponseEntity<UserAccount> updateUserAccount(
             @PathVariable Long employeeId,
-            @RequestBody CreateUserAccountDto payload) {
+            @RequestBody UpdateUserAccountDto payload) {
         payload.setEmployeeId(employeeId);
         return ResponseEntity.ok(userAccountService.updateUserAccount(payload));
     }

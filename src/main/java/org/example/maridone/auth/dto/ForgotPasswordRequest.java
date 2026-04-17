@@ -1,4 +1,4 @@
-package org.example.maridone.auth;
+package org.example.maridone.auth.dto;
 
 public class ForgotPasswordRequest {
     private String username;

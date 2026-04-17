@@ -137,7 +137,7 @@ public class DocumentService {
         documentPath.setFileName(resolveStoredFileName(file, subDir));
         documentPath.setFileType(file.getContentType() != null ? file.getContentType() : "application/octet-stream");
         documentPath.setFilePath(savedFilePath);
-        documentPath.setUsername(user);
+        documentPath.setUserAccount(user);
         return documentPath;
     }
 

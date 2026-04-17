@@ -10,7 +10,7 @@ public class DocumentSpecs {
             if(username == null) {
                 return cb.conjunction();
             }
-            return cb.equal(root.get("username").get("username"), username);
+            return cb.equal(root.get("userAccount").get("username"), username);
         };
     }
 }

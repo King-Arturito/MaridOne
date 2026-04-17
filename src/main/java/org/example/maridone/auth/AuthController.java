@@ -1,5 +1,6 @@
 package org.example.maridone.auth;
 
+import org.example.maridone.auth.dto.*;
 import org.example.maridone.auth.twofactor.TwoFactorService;
 import org.example.maridone.auth.twofactor.TwoFactorSetupResponse;
 import org.springframework.http.ResponseEntity;

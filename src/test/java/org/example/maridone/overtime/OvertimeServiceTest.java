@@ -29,14 +29,18 @@ import org.example.maridone.overtime.dto.OvertimeUpdateDto;
 import org.example.maridone.overtime.mapper.OvertimeMapper;
 import org.example.maridone.schedule.shift.TemplateShiftRepository;
 import org.example.maridone.schedule.shift.TemplateShiftSchedule;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.*;
+
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
-import static org.mockito.Mockito.when;
-import static org.mockito.Mockito.verify;
+import org.mockito.MockedStatic;
+import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
@@ -60,13 +64,36 @@ class OvertimeServiceTest {
     @InjectMocks
     private OvertimeService overtimeService;
 
-    @org.junit.jupiter.api.BeforeEach
-    void setUpClock() {
-        ReflectionTestUtils.setField(
-                overtimeService,
-                "clock",
-                Clock.fixed(Instant.parse("2026-03-16T12:00:00Z"), ZoneOffset.UTC)
-        );
+    private MockedStatic<LocalDate> mockedLocalDate;
+    private MockedStatic<LocalDateTime> mockedLocalDateTime;
+    private LocalDate mockedDate;
+    private LocalDateTime mockedDay;
+
+    @BeforeEach
+    void setUp() {
+        lenient().when(defaultConfig.getTimeZone()).thenReturn(ZoneId.of("Asia/Manila"));
+
+        mockedDate = LocalDate.of(2026, 4, 7);
+        mockedDay = mockedDate.atStartOfDay();
+
+        mockedLocalDate = Mockito.mockStatic(LocalDate.class, Mockito.CALLS_REAL_METHODS);
+        mockedLocalDateTime = Mockito.mockStatic(LocalDateTime.class, Mockito.CALLS_REAL_METHODS);
+
+        mockedLocalDate.when(() -> LocalDate.now(Mockito.any(ZoneId.class))).thenReturn(mockedDate);
+        mockedLocalDate.when(LocalDate::now).thenReturn(mockedDate);
+
+        mockedLocalDateTime.when(() -> LocalDateTime.now(Mockito.any(ZoneId.class))).thenReturn(mockedDay);
+        mockedLocalDateTime.when(LocalDateTime::now).thenReturn(mockedDay);
+    }
+
+    @AfterEach
+    void tearDownTimeMocks() {
+        if (mockedLocalDate != null) {
+            mockedLocalDate.close();
+        }
+        if (mockedLocalDateTime != null) {
+            mockedLocalDateTime.close();
+        }
     }
 
     @Test
@@ -214,7 +241,7 @@ class OvertimeServiceTest {
                 () -> overtimeService.createOvertimeRequest(dto, username)
         );
 
-        Assertions.assertTrue(error.getMessage().contains("already started or passed"));
+        Assertions.assertTrue(error.getMessage().contains("past dates"));
     }
 
     @Test
@@ -240,7 +267,8 @@ class OvertimeServiceTest {
         OvertimeRequest request = new OvertimeRequest();
         request.setEmployee(emp);
         request.setRequestStatus(Status.PENDING);
-        request.setWorkDate(LocalDate.of(2026, 4, 7));
+        request.setWorkDate(mockedDate);
+        request.setStartTime(LocalDateTime.now(defaultConfig.getTimeZone()).plusHours(1));
 
         when(overtimeRequestRepository.findByIdForUpdate(14L)).thenReturn(Optional.of(request));
         when(overtimeRequestRepository.save(any(OvertimeRequest.class))).thenReturn(request);

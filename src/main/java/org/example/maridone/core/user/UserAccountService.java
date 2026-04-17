@@ -3,8 +3,10 @@ package org.example.maridone.core.user;
 import org.example.maridone.annotation.ExecutionTime;
 import org.example.maridone.auth.PasswordPolicy;
 import org.example.maridone.auth.token.RefreshTokenRepository;
+import org.example.maridone.config.DefaultConfig;
 import org.example.maridone.core.dto.ChangePasswordDto;
 import org.example.maridone.core.dto.CreateUserAccountDto;
+import org.example.maridone.core.dto.UpdateUserAccountDto;
 import org.example.maridone.core.employee.Employee;
 import org.example.maridone.core.employee.EmployeeRepository;
 import org.example.maridone.document.DocumentPathRepository;
@@ -28,16 +30,17 @@ import java.util.List;
 
 @Service
 public class UserAccountService {
-    private static final ZoneId APP_TIME_ZONE = ZoneId.of("Asia/Manila");
-    private static final DateTimeFormatter PASSWORD_CHANGE_AVAILABLE_FORMAT =
-            DateTimeFormatter.ofPattern("MMMM d, yyyy 'at' h:mm a").withZone(APP_TIME_ZONE);
-
     private final UserAccountRepository userAccountRepository;
     private final PasswordEncoder passwordEncoder;
     private final EmployeeRepository employeeRepository;
     private final DocumentPathRepository documentPathRepository;
     private final DocumentMapper documentMapper;
     private final RefreshTokenRepository refreshTokenRepository;
+    private final DefaultConfig defaultConfig;
+
+    private final ZoneId APP_TIME_ZONE;
+    private final DateTimeFormatter PASSWORD_CHANGE_AVAILABLE_FORMAT;
+
 
     public UserAccountService
             (UserAccountRepository userAccountRepository,
@@ -45,13 +48,18 @@ public class UserAccountService {
              EmployeeRepository employeeRepository,
              DocumentPathRepository documentPathRepository,
              DocumentMapper documentMapper,
-             RefreshTokenRepository refreshTokenRepository) {
+             RefreshTokenRepository refreshTokenRepository,
+             DefaultConfig defaultConfig) {
         this.userAccountRepository = userAccountRepository;
         this.passwordEncoder = passwordEncoder;
         this.employeeRepository = employeeRepository;
         this.documentPathRepository = documentPathRepository;
         this.documentMapper = documentMapper;
         this.refreshTokenRepository = refreshTokenRepository;
+        this.defaultConfig =  defaultConfig;
+        this.APP_TIME_ZONE = defaultConfig.getTimeZone();
+        this.PASSWORD_CHANGE_AVAILABLE_FORMAT = DateTimeFormatter.ofPattern("MMMM d, yyyy 'at' h:mm a")
+                .withZone(APP_TIME_ZONE);
     }
 
     @ExecutionTime
@@ -91,65 +99,33 @@ public class UserAccountService {
 
     @Transactional
     @ExecutionTime
-    public UserAccount updateUserAccount(CreateUserAccountDto payload) {
-        UserAccount existing = userAccountRepository.findByEmployee_EmployeeId(payload.getEmployeeId()).orElse(null);
-        if (existing == null) {
-            throw new AccountNotFoundException("employeeId=" + payload.getEmployeeId());
+    public UserAccount updateUserAccount(UpdateUserAccountDto payload) {
+        UserAccount existing = userAccountRepository.findByEmployee_EmployeeId(payload.getEmployeeId())
+                .orElseThrow(() -> new AccountNotFoundException("employeeId=" + payload.getEmployeeId()));
+        Long existingId = existing.getAccountId();
+
+        String newUsername = requireUsername(payload.getUsername());
+        if (!existing.getUsername().equals(newUsername)) {
+            if (userAccountRepository.existsByUsername(newUsername)) {
+                throw new DuplicateAccountException("Username already exists");
+            }
+            existing.setUsername(newUsername);
         }
 
-        String username = requireUsername(payload.getUsername());
-        if (!existing.getUsername().equals(username) && userAccountRepository.existsByUsername(username)) {
-            throw new DuplicateAccountException("Username already exists");
-        }
-
-        String oldUsername = existing.getUsername();
-        String updatedPasswordHash = existing.getPasswordHash();
-        boolean passwordChangeRequired = Boolean.TRUE.equals(existing.getPasswordChangeRequired());
         boolean passwordUpdated = payload.getPassword() != null && !payload.getPassword().trim().isEmpty();
         if (passwordUpdated) {
-            updatedPasswordHash = passwordEncoder.encode(payload.getPassword().trim());
-            passwordChangeRequired = true;
-        }
-        Instant lastPasswordChangedAt = existing.getLastPasswordChangedAt();
-        if (passwordUpdated) {
-            lastPasswordChangedAt = null;
-        }
-
-        if (!oldUsername.equals(username)) {
-            userAccountRepository.insertReplacementAccount(
-                    username,
-                    updatedPasswordHash,
-                    existing.getAccountStatus().name(),
-                    payload.getEmployeeId(),
-                    Boolean.TRUE.equals(existing.getTwoFactorEnabled()),
-                    existing.getTwoFactorSecret(),
-                    passwordChangeRequired,
-                    lastPasswordChangedAt
-            );
-            documentPathRepository.reassignUsername(oldUsername, username);
-            refreshTokenRepository.deleteByUsername(oldUsername);
-            userAccountRepository.deleteByUsernameNative(oldUsername);
-
-            return userAccountRepository.findByUsername(username)
-                    .orElseThrow(() -> new AccountNotFoundException(username));
-        }
-
-        existing.setUsername(username);
-        if (existing.getEmployee() != null) {
-            existing.getEmployee().setUserAccount(existing);
-        }
-
-        existing.setPasswordHash(updatedPasswordHash);
-        existing.setPasswordChangeRequired(passwordChangeRequired);
-        existing.setLastPasswordChangedAt(lastPasswordChangedAt);
-        if (passwordUpdated) {
+            existing.setPasswordHash(passwordEncoder.encode(payload.getPassword().trim()));
+            existing.setPasswordChangeRequired(true);
+            existing.setLastPasswordChangedAt(null);
             existing.setPasswordResetSecret(null);
             existing.setPasswordResetExpiresAt(null);
-            refreshTokenRepository.deleteByUsername(existing.getUsername());
+
+            refreshTokenRepository.deleteAllByUserAccount(existingId);
         }
 
-        userAccountRepository.save(existing);
-        return existing;
+        existing.setAccountStatus(payload.getAccountStatus());
+
+        return userAccountRepository.save(existing);
     }
 
     @Transactional

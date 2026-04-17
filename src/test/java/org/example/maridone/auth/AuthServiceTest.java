@@ -1,5 +1,7 @@
 package org.example.maridone.auth;
 
+import org.example.maridone.auth.dto.ForgotPasswordRequest;
+import org.example.maridone.auth.dto.ForgotPasswordResetRequest;
 import org.example.maridone.auth.email.EmailService;
 import org.example.maridone.auth.token.RefreshTokenRepository;
 import org.example.maridone.auth.twofactor.TotpService;
