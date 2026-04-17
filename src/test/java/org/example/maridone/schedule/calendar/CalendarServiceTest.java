@@ -228,22 +228,22 @@ class CalendarServiceTest {
 
         verify(notificationService).createNotification(
                 same(employeeRecipient),
-                eq("Harper Stone made an announcement for April 8, 2026 - April 10, 2026: Town Hall Reminder."),
+                eq("Town Hall Reminder (April 8, 2026 9:30 AM - April 10, 2026 5:00 PM): Harper Stone created an announcement."),
                 eq("HIGH")
         );
         verify(notificationService).createNotification(
                 same(managerRecipient),
-                eq("Harper Stone made an announcement for April 8, 2026 - April 10, 2026: Town Hall Reminder."),
+                eq("Town Hall Reminder (April 8, 2026 9:30 AM - April 10, 2026 5:00 PM): Harper Stone created an announcement."),
                 eq("HIGH")
         );
         verify(notificationService).createNotification(
                 same(managementRecipient),
-                eq("Harper Stone made an announcement for April 8, 2026 - April 10, 2026: Town Hall Reminder."),
+                eq("Town Hall Reminder (April 8, 2026 9:30 AM - April 10, 2026 5:00 PM): Harper Stone created an announcement."),
                 eq("HIGH")
         );
         verify(notificationService).createNotification(
                 same(hrRecipient),
-                eq("Harper Stone made an announcement for April 8, 2026 - April 10, 2026: Town Hall Reminder."),
+                eq("Town Hall Reminder (April 8, 2026 9:30 AM - April 10, 2026 5:00 PM): Harper Stone created an announcement."),
                 eq("HIGH")
         );
         verify(notificationService, never()).createNotification(same(accountingRecipient), any(), any());

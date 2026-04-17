@@ -7,12 +7,15 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.util.Locale;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 public final class NotificationMessageFormatter {
 
-    private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("MMMM d, uuuu");
+    private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("MMMM d, uuuu", Locale.ENGLISH);
+    private static final DateTimeFormatter DATE_TIME_FORMATTER =
+            DateTimeFormatter.ofPattern("MMMM d, uuuu h:mm a", Locale.ENGLISH);
 
     private NotificationMessageFormatter() {}
 
@@ -60,30 +63,28 @@ public final class NotificationMessageFormatter {
             ZoneId zoneId
     ) {
         String announcementTitle = title == null || title.isBlank() ? "Untitled announcement" : title.trim();
-        String message = formatEmployeeName(employee)
-                + " made an announcement for "
+        return announcementTitle
+                + " ("
                 + formatAnnouncementDateRange(startDate, endDate, zoneId)
-                + ": "
-                + announcementTitle;
-        return endsWithTerminalPunctuation(announcementTitle) ? message : message + ".";
+                + "): "
+                + formatEmployeeName(employee)
+                + " created an announcement.";
     }
 
     public static String formatAnnouncementDateRange(Instant startDate, Instant endDate, ZoneId zoneId) {
         ZoneId resolvedZoneId = zoneId == null ? ZoneId.systemDefault() : zoneId;
-        LocalDate normalizedStart = startDate == null ? null : startDate.atZone(resolvedZoneId).toLocalDate();
-        LocalDate normalizedEnd = endDate == null ? null : endDate.atZone(resolvedZoneId).toLocalDate();
+        String normalizedStart = startDate == null ? null : DATE_TIME_FORMATTER.format(startDate.atZone(resolvedZoneId));
+        String normalizedEnd = endDate == null ? null : DATE_TIME_FORMATTER.format(endDate.atZone(resolvedZoneId));
 
         if (normalizedStart == null && normalizedEnd == null) {
-            return "an unspecified date - an unspecified date";
+            return "an unspecified date and time";
         }
-
-        LocalDate safeStart = normalizedStart == null ? normalizedEnd : normalizedStart;
-        LocalDate safeEnd = normalizedEnd == null ? normalizedStart : normalizedEnd;
-
-        return formatDate(safeStart) + " - " + formatDate(safeEnd);
-    }
-
-    private static boolean endsWithTerminalPunctuation(String value) {
-        return value.endsWith(".") || value.endsWith("!") || value.endsWith("?");
+        if (normalizedStart == null) {
+            return normalizedEnd;
+        }
+        if (normalizedEnd == null || normalizedStart.equals(normalizedEnd)) {
+            return normalizedStart;
+        }
+        return normalizedStart + " - " + normalizedEnd;
     }
 }
