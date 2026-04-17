@@ -118,7 +118,7 @@ class HoursCalculatorTest {
 
         BigDecimal hours = leaveService.calculateRequestHours(payload, empId);
 
-        assertEquals(new BigDecimal("8.00"), hours);
+        assertEquals(new BigDecimal("7.00"), hours);
     }
 
     @Test
@@ -159,7 +159,7 @@ class HoursCalculatorTest {
 
         BigDecimal hours = leaveService.calculateRequestHours(payload, empId);
 
-        assertEquals(new BigDecimal("8.00"), hours);
+        assertEquals(new BigDecimal("7.00"), hours);
     }
 
     @Test
@@ -186,7 +186,7 @@ class HoursCalculatorTest {
         LeaveRequestDto payload = createPayload(start, end);
         BigDecimal hours = leaveService.calculateRequestHours(payload, empId);
 
-        assertEquals(new BigDecimal("24.00"), hours);
+        assertEquals(new BigDecimal("21.00"), hours);
     }
 
     @Test

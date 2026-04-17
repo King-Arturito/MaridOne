@@ -52,7 +52,6 @@ public class OvertimeService {
     private final NotificationService notificationService;
     private final LeaveRequestRepository leaveRequestRepository;
     private final WorkflowEmailService workflowEmailService;
-    private Clock clock = Clock.systemDefaultZone();
 
     public OvertimeService(OvertimeRequestRepository overtimeRequestRepository,
                            OvertimeMapper overtimeMapper,
@@ -455,6 +454,6 @@ public class OvertimeService {
 
     private LocalDateTime currentDateTime() {
         ZoneId zoneId = defaultConfig.getTimeZone();
-        return LocalDateTime.now(clock.withZone(zoneId));
+        return LocalDateTime.now(defaultConfig.getTimeZone());
     }
 }

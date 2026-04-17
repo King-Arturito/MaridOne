@@ -1,16 +1,12 @@
 package org.example.maridone.leave;
 
 import java.math.BigDecimal;
-import java.time.Clock;
-import java.time.DayOfWeek;
-import java.time.Instant;
-import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.time.LocalTime;
-import java.time.ZoneOffset;
+import java.time.*;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
+import org.example.maridone.config.DefaultConfig;
 import org.example.maridone.core.employee.Employee;
 import org.example.maridone.core.employee.EmployeeRepository;
 import org.example.maridone.core.user.UserAccountRepository;
@@ -37,15 +33,21 @@ import org.example.maridone.schedule.shift.DailyShiftRepository;
 import org.example.maridone.schedule.shift.DailyShiftSchedule;
 import org.example.maridone.schedule.shift.TemplateShiftRepository;
 import org.example.maridone.schedule.shift.TemplateShiftSchedule;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.*;
+
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
-import static org.mockito.Mockito.when;
-import static org.mockito.Mockito.verify;
+
+import org.mockito.MockedStatic;
+import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
@@ -67,6 +69,7 @@ class LeaveServiceTest {
     @Mock private TemplateShiftRepository templateShiftRepository;
     @Mock private LeaveMapper leaveMapper;
     @Mock private PayrollConfig payrollConfig;
+    @Mock private DefaultConfig defaultConfig;
     @Mock private NotificationService notificationService;
     @Mock private OvertimeRequestRepository overtimeRequestRepository;
     @Mock private WorkflowEmailService workflowEmailService;
@@ -74,13 +77,38 @@ class LeaveServiceTest {
     @InjectMocks
     private LeaveService leaveService;
 
+    private LocalDateTime getFixedDate() {
+        return LocalDateTime.now(defaultConfig.getTimeZone()).plusMonths(2).plusDays(15);
+    }
+    private MockedStatic<LocalDate> mockedLocalDate;
+    private MockedStatic<LocalDateTime> mockedLocalDateTime;
+    private LocalDateTime mockedDay;
+
+    @AfterEach
+    void tearDownTimeMocks() {
+        if (mockedLocalDate != null) {
+            mockedLocalDate.close();
+        }
+        if (mockedLocalDateTime != null) {
+            mockedLocalDateTime.close();
+        }
+    }
+
     @BeforeEach
-    void setUpClock() {
-        ReflectionTestUtils.setField(
-                leaveService,
-                "clock",
-                Clock.fixed(Instant.parse("2026-03-16T12:00:00Z"), ZoneOffset.UTC)
-        );
+    void setUp() {
+        lenient().when(defaultConfig.getTimeZone()).thenReturn(ZoneId.of("Asia/Manila"));
+
+        LocalDate mockedDate = LocalDate.of(2026, 4, 13);
+        mockedDay = mockedDate.atStartOfDay();
+
+        mockedLocalDate = Mockito.mockStatic(LocalDate.class, Mockito.CALLS_REAL_METHODS);
+        mockedLocalDateTime = Mockito.mockStatic(LocalDateTime.class, Mockito.CALLS_REAL_METHODS);
+
+        mockedLocalDate.when(() -> LocalDate.now(Mockito.any(ZoneId.class))).thenReturn(mockedDate);
+        mockedLocalDate.when(LocalDate::now).thenReturn(mockedDate);
+
+        mockedLocalDateTime.when(() -> LocalDateTime.now(Mockito.any(ZoneId.class))).thenReturn(mockedDay);
+        mockedLocalDateTime.when(LocalDateTime::now).thenReturn(mockedDay);
     }
 
     @Test
@@ -112,8 +140,8 @@ class LeaveServiceTest {
     void createLeaveRequest_ShouldSetStatusPendingManager() {
         Long empId = 1L;
         LeaveRequestDto dto = new LeaveRequestDto();
-        dto.setStartDateTime(LocalDate.of(2026, 3, 23).atTime(8, 0));
-        dto.setEndDateTime(LocalDate.of(2026, 3, 23).atTime(17, 0));
+        dto.setStartDateTime(mockedDay.plusDays(7).withHour(8));
+        dto.setEndDateTime(mockedDay.plusDays(7).withHour(17));
         dto.setReason("Vacation");
         dto.setLeaveType(LeaveType.VACATION_LEAVE);
 
@@ -147,8 +175,8 @@ class LeaveServiceTest {
     void createLeaveRequest_ShouldRejectNonSickLeaveWithoutOneWeekNotice() {
         Long empId = 1L;
         LeaveRequestDto dto = new LeaveRequestDto();
-        dto.setStartDateTime(LocalDate.of(2026, 3, 22).atTime(8, 0));
-        dto.setEndDateTime(LocalDate.of(2026, 3, 22).atTime(17, 0));
+        dto.setStartDateTime(mockedDay.plusDays(4).withHour(8));
+        dto.setEndDateTime(mockedDay.plusDays(4).withHour(17));
         dto.setReason("Vacation");
         dto.setLeaveType(LeaveType.VACATION_LEAVE);
 
@@ -164,13 +192,13 @@ class LeaveServiceTest {
     }
 
     @Test
-    void createLeaveRequest_ShouldAllowSickLeaveWithoutOneWeekNotice() {
+    void createLeaveRequest_ShouldAllowEmergencyLeaveWithoutOneWeekNotice() {
         Long empId = 1L;
         LeaveRequestDto dto = new LeaveRequestDto();
-        dto.setStartDateTime(LocalDate.of(2026, 3, 17).atTime(8, 0));
-        dto.setEndDateTime(LocalDate.of(2026, 3, 17).atTime(17, 0));
+        dto.setStartDateTime(mockedDay.plusDays(1).withHour(8));
+        dto.setEndDateTime(mockedDay.plusDays(1).withHour(17));
         dto.setReason("Flu symptoms");
-        dto.setLeaveType(LeaveType.SICK_LEAVE);
+        dto.setLeaveType(LeaveType.EMERGENCY_LEAVE);
 
         Employee emp = new Employee();
         ReflectionTestUtils.setField(emp, "employeeId", empId);
@@ -179,17 +207,12 @@ class LeaveServiceTest {
         leaveBalance.setBalanceHours(BigDecimal.valueOf(9));
 
         when(employeeRepository.findById(empId)).thenReturn(Optional.of(emp));
-        when(leaveBalanceRepository.findByLeaveTypeAndEmployee_EmployeeId(LeaveType.SICK_LEAVE, empId))
-                .thenReturn(Optional.of(leaveBalance));
         when(overtimeRequestRepository.existsActiveOverlapForEmployee(any(), any(), any())).thenReturn(false);
-        when(templateShiftRepository.findAllByEmployeeId(empId)).thenReturn(List.of(
-                createSchedule(DayOfWeek.TUESDAY, LocalTime.of(8, 0), LocalTime.of(17, 0), emp)
-        ));
 
         List<LeaveRequest> results = leaveService.createLeaveRequest(dto, empId, null);
 
         Assertions.assertEquals(1, results.size());
-        Assertions.assertEquals(LeaveType.SICK_LEAVE, results.get(0).getLeaveType());
+        Assertions.assertEquals(LeaveType.EMERGENCY_LEAVE, results.get(0).getLeaveType());
     }
 
     @Test
@@ -214,18 +237,28 @@ class LeaveServiceTest {
         Assertions.assertTrue(error.getMessage().contains("already started or passed"));
     }
 
-    @Test
-    void createLeaveRequest_ShouldReject_WhenFiledTwoMonthsOrMoreAhead() {
+    @ParameterizedTest
+    @EnumSource(value = LeaveType.class, names = {
+            "SICK_LEAVE",
+            "EMERGENCY_LEAVE",
+            "MAGNA_CARTA",
+            "SOLO_PARENT_LEAVE",
+            "RA9262",
+    })
+    void createLeaveRequest_AdvanceRestricted_ShouldReject_WhenFiledTwoMonthsOrMoreAhead(LeaveType restrictedLeaveTypes) {
         Long empId = 1L;
         LeaveRequestDto dto = new LeaveRequestDto();
-        dto.setStartDateTime(LocalDateTime.of(2026, 5, 16, 8, 0));
-        dto.setEndDateTime(LocalDateTime.of(2026, 5, 16, 17, 0));
+        LocalDateTime fixedDate = getFixedDate();
+        dto.setStartDateTime(fixedDate.withHour(9));
+        dto.setEndDateTime(fixedDate.withHour(17));
         dto.setReason("Planned vacation");
-        dto.setLeaveType(LeaveType.VACATION_LEAVE);
+        dto.setLeaveType(restrictedLeaveTypes);
 
         Employee emp = new Employee();
         ReflectionTestUtils.setField(emp, "employeeId", empId);
 
+        LeaveBalance leaveBalance = new LeaveBalance();
+        leaveBalance.setBalanceHours(BigDecimal.valueOf(20));
         when(employeeRepository.findById(empId)).thenReturn(Optional.of(emp));
 
         InvalidActionException error = Assertions.assertThrows(
@@ -233,15 +266,15 @@ class LeaveServiceTest {
                 () -> leaveService.createLeaveRequest(dto, empId, null)
         );
 
-        Assertions.assertEquals("Leave requests cannot be filed 2 or more months in advance", error.getMessage());
+        Assertions.assertEquals("Leave requests cannot be filed 2 or more months in advance for this leave type.", error.getMessage());
     }
 
     @Test
     void createLeaveRequest_ShouldSplitPaidAndUnpaidUsingShiftCoverage() {
         Long empId = 1L;
         LeaveRequestDto dto = new LeaveRequestDto();
-        dto.setStartDateTime(LocalDateTime.of(2026, 3, 23, 9, 0));
-        dto.setEndDateTime(LocalDateTime.of(2026, 3, 27, 17, 0));
+        dto.setStartDateTime(mockedDay.plusDays(7).withHour(9));
+        dto.setEndDateTime(mockedDay.plusDays(11).withHour(17));
         dto.setReason("Vacation");
         dto.setLeaveType(LeaveType.VACATION_LEAVE);
 
@@ -262,28 +295,29 @@ class LeaveServiceTest {
                 createSchedule(DayOfWeek.THURSDAY, LocalTime.of(9, 0), LocalTime.of(17, 0), emp),
                 createSchedule(DayOfWeek.FRIDAY, LocalTime.of(9, 0), LocalTime.of(17, 0), emp)
         ));
-
         List<LeaveRequest> results = leaveService.createLeaveRequest(dto, empId,null);
-
         Assertions.assertEquals(2, results.size());
 
         LeaveRequest paid = results.get(0);
         Assertions.assertTrue(paid.getPaid());
-        Assertions.assertEquals(LocalDateTime.of(2026, 3, 23, 9, 0), paid.getStartDateTime());
-        Assertions.assertEquals(LocalDateTime.of(2026, 3, 25, 13, 0), paid.getEndDateTime());
+        Assertions.assertEquals(dto.getStartDateTime().withHour(9), paid.getStartDateTime());
+            //1 hour break accounted first
+        Assertions.assertEquals(dto.getStartDateTime().plusDays(2).withHour(16), paid.getEndDateTime());
 
         LeaveRequest unpaid = results.get(1);
         Assertions.assertFalse(unpaid.getPaid());
-        Assertions.assertEquals(LocalDateTime.of(2026, 3, 25, 13, 0), unpaid.getStartDateTime());
-        Assertions.assertEquals(LocalDateTime.of(2026, 3, 27, 17, 0), unpaid.getEndDateTime());
+        Assertions.assertEquals(dto.getStartDateTime().plusDays(2).withHour(16), unpaid.getStartDateTime());
+        Assertions.assertEquals(dto.getStartDateTime().plusDays(4).withHour(17), unpaid.getEndDateTime());
     }
+
 
     @Test
     void createLeaveRequest_ShouldMoveUnpaidPortionToNextShift_WhenPaidCoverageEndsAtShiftBoundary() {
         Long empId = 1L;
         LeaveRequestDto dto = new LeaveRequestDto();
-        dto.setStartDateTime(LocalDateTime.of(2026, 5, 11, 9, 0));
-        dto.setEndDateTime(LocalDateTime.of(2026, 5, 13, 17, 0));
+
+        dto.setStartDateTime(mockedDay.plusDays(7).withHour(9));
+        dto.setEndDateTime(mockedDay.plusDays(9).withHour(17));
         dto.setReason("Medical recovery");
         dto.setLeaveType(LeaveType.SICK_LEAVE);
 
@@ -291,7 +325,7 @@ class LeaveServiceTest {
         ReflectionTestUtils.setField(emp, "employeeId", empId);
 
         LeaveBalance leaveBalance = new LeaveBalance();
-        leaveBalance.setBalanceHours(BigDecimal.valueOf(16));
+        leaveBalance.setBalanceHours(BigDecimal.valueOf(14));
 
         when(employeeRepository.findById(empId)).thenReturn(Optional.of(emp));
         when(leaveBalanceRepository.findByLeaveTypeAndEmployee_EmployeeId(LeaveType.SICK_LEAVE, empId))
@@ -309,21 +343,21 @@ class LeaveServiceTest {
 
         LeaveRequest paid = results.get(0);
         Assertions.assertTrue(paid.getPaid());
-        Assertions.assertEquals(LocalDateTime.of(2026, 5, 11, 9, 0), paid.getStartDateTime());
-        Assertions.assertEquals(LocalDateTime.of(2026, 5, 12, 17, 0), paid.getEndDateTime());
+        Assertions.assertEquals(mockedDay.plusDays(7).withHour(9), paid.getStartDateTime());
+        Assertions.assertEquals(mockedDay.plusDays(8).withHour(17), paid.getEndDateTime());
 
         LeaveRequest unpaid = results.get(1);
         Assertions.assertFalse(unpaid.getPaid());
-        Assertions.assertEquals(LocalDateTime.of(2026, 5, 13, 9, 0), unpaid.getStartDateTime());
-        Assertions.assertEquals(LocalDateTime.of(2026, 5, 13, 17, 0), unpaid.getEndDateTime());
+        Assertions.assertEquals(mockedDay.plusDays(9).withHour(9), unpaid.getStartDateTime());
+        Assertions.assertEquals(mockedDay.plusDays(9).withHour(17), unpaid.getEndDateTime());
     }
 
     @Test
     void createLeaveRequest_ShouldNotifyManager_WhenEmployeeHasManager() {
         Long empId = 1L;
         LeaveRequestDto dto = new LeaveRequestDto();
-        dto.setStartDateTime(LocalDate.of(2026, 3, 23).atTime(8, 0));
-        dto.setEndDateTime(LocalDate.of(2026, 3, 23).atTime(17, 0));
+        dto.setStartDateTime(mockedDay.plusDays(7).withHour(9));
+        dto.setEndDateTime(mockedDay.plusDays(9).withHour(17));
         dto.setReason("Vacation");
         dto.setLeaveType(LeaveType.VACATION_LEAVE);
 
@@ -357,7 +391,7 @@ class LeaveServiceTest {
 
         verify(notificationService).createNotification(
                 manager,
-                "New team leave request from Richard Moore (2026-03-23 to 2026-03-23)",
+                "New team leave request from Richard Moore (2026-04-20 to 2026-04-22)",
                 "HIGH");
     }
 
@@ -365,8 +399,8 @@ class LeaveServiceTest {
     void createLeaveRequest_ShouldReject_WhenOvertimeExistsOnAnyCoveredDay() {
         Long empId = 1L;
         LeaveRequestDto dto = new LeaveRequestDto();
-        dto.setStartDateTime(LocalDate.of(2026, 4, 10).atTime(8, 0));
-        dto.setEndDateTime(LocalDate.of(2026, 4, 10).atTime(17, 0));
+        dto.setStartDateTime(mockedDay.plusDays(7).withHour(9));
+        dto.setEndDateTime(mockedDay.plusDays(9).withHour(17));
         dto.setReason("Medical leave");
         dto.setLeaveType(LeaveType.SICK_LEAVE);
 
@@ -407,8 +441,8 @@ class LeaveServiceTest {
         LeaveRequest request = new LeaveRequest();
         request.setEmployee(emp);
         request.setRequestStatus(Status.PENDING);
-        request.setStartDateTime(LocalDateTime.of(2026, 4, 7, 8, 0));
-        request.setEndDateTime(LocalDateTime.of(2026, 4, 8, 17, 0));
+        request.setStartDateTime(mockedDay.plusDays(7).withHour(9));
+        request.setEndDateTime(mockedDay.plusDays(9).withHour(17));
 
         when(leaveRequestRepository.findByIdForUpdate(12L)).thenReturn(Optional.of(request));
         when(leaveRequestRepository.save(any(LeaveRequest.class))).thenReturn(request);
@@ -420,11 +454,11 @@ class LeaveServiceTest {
         Assertions.assertEquals(Status.CANCELLED, request.getRequestStatus());
         verify(notificationService).createNotification(
                 hr,
-                "Leave request from Richard Moore (April 7, 2026 to April 8, 2026) was cancelled.",
+                "Leave request from Richard Moore (April 20, 2026 to April 22, 2026) was cancelled.",
                 "HIGH");
         verify(notificationService).createNotification(
                 manager,
-                "Team leave request from Richard Moore (April 7, 2026 to April 8, 2026) was cancelled.",
+                "Team leave request from Richard Moore (April 20, 2026 to April 22, 2026) was cancelled.",
                 "HIGH");
     }
 
@@ -596,8 +630,8 @@ class LeaveServiceTest {
         LeaveRequest request = new LeaveRequest();
         request.setRequestStatus(Status.PENDING_MANAGER);
         request.setPaid(false);
-        request.setStartDateTime(LocalDateTime.of(2026, 4, 10, 8, 0));
-        request.setEndDateTime(LocalDateTime.of(2026, 4, 10, 17, 0));
+        request.setStartDateTime(mockedDay.plusDays(7).withHour(9));
+        request.setEndDateTime(mockedDay.plusDays(9).withHour(17));
 
         Employee employee = new Employee();
         ReflectionTestUtils.setField(employee, "employeeId", 3L);
@@ -644,8 +678,8 @@ class LeaveServiceTest {
         LeaveRequest request = new LeaveRequest();
         request.setRequestStatus(Status.PENDING_MANAGER);
         request.setPaid(false);
-        request.setStartDateTime(LocalDateTime.of(2026, 4, 10, 8, 0));
-        request.setEndDateTime(LocalDateTime.of(2026, 4, 10, 17, 0));
+        request.setStartDateTime(mockedDay.plusDays(7).withHour(9));
+        request.setEndDateTime(mockedDay.plusDays(9).withHour(17));
 
         Employee employee = new Employee();
         ReflectionTestUtils.setField(employee, "employeeId", 7L);

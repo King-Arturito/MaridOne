@@ -232,6 +232,7 @@ public class SampleRows {
     private void createAndSaveUserAccounts(List<Employee> employees) {
         for (Employee employee : employees) {
             UserAccount userAccount = new UserAccount();
+            userAccount.setAccountId(employee.getEmployeeId());
             userAccount.setEmployee(employee);
             userAccount.setUsername(employee.getFirstName().toLowerCase(Locale.ROOT) + employee.getEmployeeId());
             userAccount.setPasswordHash(passwordEncoder.encode("test"));

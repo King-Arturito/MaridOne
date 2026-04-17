@@ -3,7 +3,7 @@ CREATE TABLE document_path (
     file_name   VARCHAR(255)    NOT NULL,
     file_path   VARCHAR(255)    NOT NULL,
     file_type   VARCHAR(255)    NOT NULL,
-    username    VARCHAR(255)    NOT NULL,
+    account_id  BIGINT          NOT NULL,
 
-    CONSTRAINT fk_document_path_user_account FOREIGN KEY (username) REFERENCES user_account (username)
+    CONSTRAINT fk_document_path_user_account FOREIGN KEY (account_id) REFERENCES user_account (account_id)
 );

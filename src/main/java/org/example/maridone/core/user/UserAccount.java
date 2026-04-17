@@ -15,6 +15,9 @@ import java.util.List;
 public class UserAccount {
 
     @Id
+    @Column(name = "account_id", unique = true, nullable = false)
+    private Long accountId;
+
     @Column(name = "username", unique = true, nullable = false)
     @Size(min = 4, max = 30)
     private String username;
@@ -57,7 +60,7 @@ public class UserAccount {
     private Long employeeId;
 
     @JsonIgnore
-    @OneToMany(mappedBy = "username", fetch = FetchType.LAZY, cascade = CascadeType.ALL)
+    @OneToMany(mappedBy = "userAccount", fetch = FetchType.LAZY, cascade = CascadeType.ALL)
     private List<DocumentPath> documentPaths;
 
     public String getUsername() {
@@ -142,6 +145,14 @@ public class UserAccount {
 
     public void setLastPasswordChangedAt(Instant lastPasswordChangedAt) {
         this.lastPasswordChangedAt = lastPasswordChangedAt;
+    }
+
+    public Long getAccountId() {
+        return accountId;
+    }
+
+    public void setAccountId(Long accountId) {
+        this.accountId = accountId;
     }
 
     @Transient
