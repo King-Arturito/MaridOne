@@ -361,6 +361,8 @@ class LeaveServiceTest {
     @Test
     void createLeaveRequest_ShouldIgnoreHolidayHoursWhenEvaluatingBalanceCoverage() {
         Long empId = 1L;
+        LocalDate startDate = LocalDate.of(2026, 4, 20);
+        LocalDate endDate = LocalDate.of(2026, 4, 21);
         LeaveRequestDto dto = new LeaveRequestDto();
         dto.setStartDateTime(LocalDateTime.of(2026, 4, 20, 9, 0));
         dto.setEndDateTime(LocalDateTime.of(2026, 4, 21, 13, 0));
@@ -381,8 +383,8 @@ class LeaveServiceTest {
                 createSchedule(DayOfWeek.MONDAY, LocalTime.of(9, 0), LocalTime.of(13, 0), emp),
                 createSchedule(DayOfWeek.TUESDAY, LocalTime.of(9, 0), LocalTime.of(13, 0), emp)
         ));
-        when(holidayService.getHolidayLookup(LocalDate.of(2026, 4, 20), LocalDate.of(2026, 4, 21)))
-                .thenReturn(new HolidayLookup(Set.of(LocalDate.of(2026, 4, 21)), Set.of()));
+        when(holidayService.getHolidayLookup(startDate, endDate))
+                .thenReturn(new HolidayLookup(Set.of(endDate), Set.of()));
 
         List<LeaveRequest> results = leaveService.createLeaveRequest(dto, empId, null);
 
@@ -502,6 +504,45 @@ class LeaveServiceTest {
                 "HIGH");
     }
 
+    @Test
+    void cancelRequest_ShouldAllowPendingLeaveWithinTwoDaysOfStart() {
+        Employee employee = new Employee();
+        LeaveRequest request = new LeaveRequest();
+        request.setEmployee(employee);
+        request.setRequestStatus(Status.PENDING_HR);
+        request.setStartDateTime(mockedDay.plusDays(1).withHour(9));
+        request.setEndDateTime(mockedDay.plusDays(1).withHour(17));
+
+        when(leaveRequestRepository.findByIdForUpdate(13L)).thenReturn(Optional.of(request));
+        when(leaveRequestRepository.save(any(LeaveRequest.class))).thenReturn(request);
+        when(employeeRepository.findEmployeeIdsByPosition(Position.HR, EmploymentStatus.TERMINATED)).thenReturn(List.of());
+
+        leaveService.cancelRequest(13L);
+
+        Assertions.assertEquals(Status.CANCELLED, request.getRequestStatus());
+        verify(leaveRequestRepository).save(request);
+    }
+
+    @Test
+    void cancelRequest_ShouldRejectApprovedLeaveWithinTwoDaysOfStart() {
+        Employee employee = new Employee();
+        LeaveRequest request = new LeaveRequest();
+        request.setEmployee(employee);
+        request.setRequestStatus(Status.APPROVED);
+        request.setStartDateTime(mockedDay.plusDays(1).withHour(9));
+        request.setEndDateTime(mockedDay.plusDays(1).withHour(17));
+
+        when(leaveRequestRepository.findByIdForUpdate(14L)).thenReturn(Optional.of(request));
+
+        InvalidActionException error = Assertions.assertThrows(
+                InvalidActionException.class,
+                () -> leaveService.cancelRequest(14L)
+        );
+
+        Assertions.assertTrue(error.getMessage().contains("at least 2 days before the start date"));
+        verify(leaveRequestRepository, never()).save(any(LeaveRequest.class));
+    }
+
     private TemplateShiftSchedule createSchedule(DayOfWeek day, LocalTime start, LocalTime end, Employee employee) {
         TemplateShiftSchedule schedule = new TemplateShiftSchedule();
         schedule.setDayOfWeek(day);
@@ -554,13 +595,20 @@ class LeaveServiceTest {
     void createLeaveRequest_ShouldUseDailyOverridesWhenSplittingPaidAndUnpaid() {
         Long empId = 1L;
         LeaveRequestDto dto = new LeaveRequestDto();
-        dto.setStartDateTime(LocalDateTime.of(2026, 3, 23, 9, 0));
-        dto.setEndDateTime(LocalDateTime.of(2026, 3, 25, 13, 0));
+        dto.setStartDateTime(LocalDateTime.of(2026, 4, 20, 9, 0));
+        dto.setEndDateTime(LocalDateTime.of(2026, 4, 22, 13, 0));
         dto.setReason("Vacation");
         dto.setLeaveType(LeaveType.VACATION_LEAVE);
 
         Employee emp = new Employee();
         ReflectionTestUtils.setField(emp, "employeeId", empId);
+
+        DailyShiftSchedule dayOffShift = createDailyShift(
+                LocalDateTime.of(2026, 4, 21, 0, 0),
+                LocalDateTime.of(2026, 4, 21, 0, 0),
+                true,
+                emp
+        );
 
         LeaveBalance leaveBalance = new LeaveBalance();
         leaveBalance.setBalanceHours(BigDecimal.valueOf(6));
@@ -574,14 +622,7 @@ class LeaveServiceTest {
                 createSchedule(DayOfWeek.TUESDAY, LocalTime.of(9, 0), LocalTime.of(13, 0), emp),
                 createSchedule(DayOfWeek.WEDNESDAY, LocalTime.of(9, 0), LocalTime.of(13, 0), emp)
         ));
-        when(dailyShiftRepository.findAllByEmployeeIdAndPeriod(any(), any(), any())).thenReturn(List.of(
-                createDailyShift(
-                        LocalDateTime.of(2026, 3, 24, 0, 0),
-                        LocalDateTime.of(2026, 3, 24, 0, 0),
-                        true,
-                        emp
-                )
-        ));
+        when(dailyShiftRepository.findAllByEmployeeIdAndPeriod(any(), any(), any())).thenReturn(List.of(dayOffShift));
 
         List<LeaveRequest> results = leaveService.createLeaveRequest(dto, empId, null);
 
@@ -589,17 +630,23 @@ class LeaveServiceTest {
 
         LeaveRequest paid = results.get(0);
         Assertions.assertTrue(paid.getPaid());
-        Assertions.assertEquals(LocalDateTime.of(2026, 3, 23, 9, 0), paid.getStartDateTime());
-        Assertions.assertEquals(LocalDateTime.of(2026, 3, 25, 11, 0), paid.getEndDateTime());
+        Assertions.assertEquals(LocalDateTime.of(2026, 4, 20, 9, 0), paid.getStartDateTime());
+        Assertions.assertEquals(LocalDateTime.of(2026, 4, 22, 11, 0), paid.getEndDateTime());
 
         LeaveRequest unpaid = results.get(1);
         Assertions.assertFalse(unpaid.getPaid());
-        Assertions.assertEquals(LocalDateTime.of(2026, 3, 25, 11, 0), unpaid.getStartDateTime());
-        Assertions.assertEquals(LocalDateTime.of(2026, 3, 25, 13, 0), unpaid.getEndDateTime());
+        Assertions.assertEquals(LocalDateTime.of(2026, 4, 22, 11, 0), unpaid.getStartDateTime());
+        Assertions.assertEquals(LocalDateTime.of(2026, 4, 22, 13, 0), unpaid.getEndDateTime());
     }
 
     @Test
     void updateLeaveRequest_ShouldDeductOnlyShiftCoveredHoursUsingDailyOverrides() {
+        DailyShiftSchedule overriddenShift = createDailyShift(
+                LocalDateTime.of(2026, 3, 24, 10, 0),
+                LocalDateTime.of(2026, 3, 24, 12, 0),
+                false,
+                null
+        );
         Employee requestEmployee = new Employee();
         ReflectionTestUtils.setField(requestEmployee, "employeeId", 3L);
 
@@ -640,21 +687,13 @@ class LeaveServiceTest {
         SecurityContextHolder.setContext(securityContext);
 
         when(userAccountRepository.findByUsername("hr1")).thenReturn(Optional.of(hrAccount));
-        when(userAccountRepository.findEmployeeIdByUsername("hr1")).thenReturn(2L);
         when(leaveRequestRepository.findByIdForUpdate(21L)).thenReturn(Optional.of(request));
         when(leaveRequestRepository.findEmployeeIdByRequestId(21L)).thenReturn(Optional.of(3L));
         when(templateShiftRepository.findAllByEmployeeId(3L)).thenReturn(List.of(
                 createSchedule(DayOfWeek.MONDAY, LocalTime.of(9, 0), LocalTime.of(13, 0), requestEmployee),
                 createSchedule(DayOfWeek.TUESDAY, LocalTime.of(9, 0), LocalTime.of(13, 0), requestEmployee)
         ));
-        when(dailyShiftRepository.findAllByEmployeeIdAndPeriod(any(), any(), any())).thenReturn(List.of(
-                createDailyShift(
-                        LocalDateTime.of(2026, 3, 24, 10, 0),
-                        LocalDateTime.of(2026, 3, 24, 12, 0),
-                        false,
-                        requestEmployee
-                )
-        ));
+        when(dailyShiftRepository.findAllByEmployeeIdAndPeriod(any(), any(), any())).thenReturn(List.of(overriddenShift));
         when(leaveBalanceRepository.findOne(any(Specification.class))).thenReturn(Optional.of(leaveBalance));
         when(leaveRequestRepository.save(any(LeaveRequest.class))).thenReturn(request);
 
@@ -667,6 +706,8 @@ class LeaveServiceTest {
 
     @Test
     void updateLeaveRequest_ShouldNotDeductHolidayHoursFromLeaveBalance() {
+        LocalDate startDate = LocalDate.of(2026, 4, 20);
+        LocalDate endDate = LocalDate.of(2026, 4, 21);
         Employee requestEmployee = new Employee();
         ReflectionTestUtils.setField(requestEmployee, "employeeId", 3L);
 
@@ -707,7 +748,6 @@ class LeaveServiceTest {
         SecurityContextHolder.setContext(securityContext);
 
         when(userAccountRepository.findByUsername("hr1")).thenReturn(Optional.of(hrAccount));
-        when(userAccountRepository.findEmployeeIdByUsername("hr1")).thenReturn(2L);
         when(leaveRequestRepository.findByIdForUpdate(22L)).thenReturn(Optional.of(request));
         when(leaveRequestRepository.findEmployeeIdByRequestId(22L)).thenReturn(Optional.of(3L));
         when(templateShiftRepository.findAllByEmployeeId(3L)).thenReturn(List.of(
@@ -716,8 +756,8 @@ class LeaveServiceTest {
         ));
         when(leaveBalanceRepository.findOne(any(Specification.class))).thenReturn(Optional.of(leaveBalance));
         when(leaveRequestRepository.save(any(LeaveRequest.class))).thenReturn(request);
-        when(holidayService.getHolidayLookup(LocalDate.of(2026, 4, 20), LocalDate.of(2026, 4, 21)))
-                .thenReturn(new HolidayLookup(Set.of(LocalDate.of(2026, 4, 21)), Set.of()));
+        when(holidayService.getHolidayLookup(startDate, endDate))
+                .thenReturn(new HolidayLookup(Set.of(endDate), Set.of()));
 
         LeaveRequest result = leaveService.updateLeaveRequest(payload, 22L);
 

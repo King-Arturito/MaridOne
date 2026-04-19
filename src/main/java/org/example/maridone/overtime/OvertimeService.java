@@ -182,7 +182,17 @@ public class OvertimeService {
         OvertimeRequest overtimeRequest = overtimeRequestRepository.findByIdForUpdate(overtimeId)
                 .orElseThrow(() -> new OvertimeException("Overtime Not Found"));
 
-        if (overtimeRequest.getStartTime().isBefore(currentDateTime().plusHours(1))) {
+        Status requestStatus = overtimeRequest.getRequestStatus();
+        boolean isPendingRequest =
+                requestStatus == Status.PENDING
+                        || requestStatus == Status.PENDING_MANAGER
+                        || requestStatus == Status.PENDING_HR;
+
+        if (!isPendingRequest && requestStatus != Status.APPROVED) {
+            throw new InvalidActionException("Only pending or approved overtime requests can be cancelled.");
+        }
+
+        if (requestStatus == Status.APPROVED && overtimeRequest.getStartTime().isBefore(currentDateTime().plusHours(1))) {
             throw new InvalidActionException("Overtime request can only be cancelled at least 1 hour before the start time.");
         }
 

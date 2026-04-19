@@ -190,9 +190,10 @@ public class DeductionsService {
 
     private String getCurrentUsername() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication == null || !authentication.isAuthenticated() || "anonymousUser".equals(authentication.getPrincipal())) {
+        if (authentication == null || "anonymousUser".equals(authentication.getPrincipal())) {
             return "unknownUser";
         }
-        return authentication.getName();
+        String name = authentication.getName();
+        return name == null || name.isBlank() ? "unknownUser" : name;
     }
 }

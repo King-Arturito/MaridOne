@@ -172,7 +172,18 @@ public class LeaveService {
         LeaveRequest request = leaveRequestRepository.findByIdForUpdate(requestId)
                 .orElseThrow(() -> new RequestNotFoundException("Leave Request", requestId));
 
-        if (request.getStartDateTime().toLocalDate().isBefore(LocalDate.now(defaultConfig.getTimeZone()).plusDays(2))) {
+        Status requestStatus = request.getRequestStatus();
+        boolean isPendingRequest =
+                requestStatus == Status.PENDING
+                        || requestStatus == Status.PENDING_MANAGER
+                        || requestStatus == Status.PENDING_HR;
+
+        if (!isPendingRequest && requestStatus != Status.APPROVED) {
+            throw new InvalidActionException("Only pending or approved leave requests can be cancelled.");
+        }
+
+        if (requestStatus == Status.APPROVED
+                && request.getStartDateTime().toLocalDate().isBefore(LocalDate.now(defaultConfig.getTimeZone()).plusDays(2))) {
             throw new InvalidActionException("Leave request can only be cancelled at least 2 days before the start date.");
         }
 

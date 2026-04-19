@@ -289,6 +289,45 @@ class OvertimeServiceTest {
     }
 
     @Test
+    void cancelRequest_ShouldAllowPendingOvertimeWithinOneHourOfStart() {
+        Employee employee = new Employee();
+        OvertimeRequest request = new OvertimeRequest();
+        request.setEmployee(employee);
+        request.setRequestStatus(Status.PENDING_MANAGER);
+        request.setWorkDate(mockedDate);
+        request.setStartTime(mockedDay.plusMinutes(30));
+
+        when(overtimeRequestRepository.findByIdForUpdate(15L)).thenReturn(Optional.of(request));
+        when(overtimeRequestRepository.save(any(OvertimeRequest.class))).thenReturn(request);
+        when(employeeRepository.findEmployeeIdsByPosition(Position.HR, EmploymentStatus.TERMINATED)).thenReturn(java.util.List.of());
+
+        overtimeService.cancelRequest(15L);
+
+        Assertions.assertEquals(Status.CANCELLED, request.getRequestStatus());
+        verify(overtimeRequestRepository).save(request);
+    }
+
+    @Test
+    void cancelRequest_ShouldRejectApprovedOvertimeWithinOneHourOfStart() {
+        Employee employee = new Employee();
+        OvertimeRequest request = new OvertimeRequest();
+        request.setEmployee(employee);
+        request.setRequestStatus(Status.APPROVED);
+        request.setWorkDate(mockedDate);
+        request.setStartTime(mockedDay.plusMinutes(30));
+
+        when(overtimeRequestRepository.findByIdForUpdate(16L)).thenReturn(Optional.of(request));
+
+        InvalidActionException error = Assertions.assertThrows(
+                InvalidActionException.class,
+                () -> overtimeService.cancelRequest(16L)
+        );
+
+        Assertions.assertTrue(error.getMessage().contains("at least 1 hour before the start time"));
+        verify(overtimeRequestRepository, never()).save(any(OvertimeRequest.class));
+    }
+
+    @Test
     void updateOvertimeRequest_ShouldSucceed_WhenPending() {
         Long otId = 1L;
         String approver = "admin";

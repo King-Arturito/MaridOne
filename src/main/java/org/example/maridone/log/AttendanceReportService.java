@@ -445,7 +445,19 @@ public class AttendanceReportService {
 
     private Map<Long, List<OvertimeRequest>> groupOvertimeByEmployee(List<Long> employeeIds, LocalDate from, LocalDate to) {
         return overtimeRequestRepository.findApprovedOvertimeForPeriod(employeeIds, from, to).stream()
-                .collect(Collectors.groupingBy(OvertimeRequest::getEmployeeId, LinkedHashMap::new, Collectors.toList()));
+                .filter(Objects::nonNull)
+                .collect(Collectors.groupingBy(this::resolveOvertimeEmployeeId, LinkedHashMap::new, Collectors.toList()));
+    }
+
+    private Long resolveOvertimeEmployeeId(OvertimeRequest request) {
+        Long employeeId = request.getEmployeeId();
+        if (employeeId != null) {
+            return employeeId;
+        }
+        if (request.getEmployee() != null) {
+            return request.getEmployee().getEmployeeId();
+        }
+        throw new IllegalStateException("Approved overtime request is missing employee information.");
     }
 
     private void appendSummarySection(StringBuilder csv, List<DailyAttendanceOutcome> outcomes, List<Employee> employees) {
