@@ -76,12 +76,13 @@ class PayrollServiceTest {
     @Mock private PayrollItemService payrollItemService;
 
     private PayrollService payrollService;
+    private PayrollCalculator payrollCalculator;
 
     @BeforeEach
     void setUp() {
         PayrollConfig payrollConfig = new PayrollConfig();
         BracketService bracketService = new BracketService(payrollConfig);
-        PayrollCalculator payrollCalculator = new PayrollCalculator(
+        payrollCalculator = new PayrollCalculator(
                 bracketService,
                 defaultConfig,
                 payrollConfig
@@ -166,6 +167,50 @@ class PayrollServiceTest {
                 .noneMatch(line -> line.getDeductionType() == DeductionType.ABSENT_DEDUCTION));
         Assertions.assertTrue(items.get(0).getDeductions().stream()
                 .noneMatch(line -> line.getDeductionType() == DeductionType.LATE_PENALTY));
+    }
+
+    @Test
+    void processPayrollNonExempt_BrokenShiftMissingOneHour_ShouldOnlyDeductOneHour() {
+        LocalDate workDate = LocalDate.of(2026, 3, 25);
+        PayrollRun run = buildSingleDayRun(workDate);
+        Employee employee = buildEmployee(21L, ExemptionStatus.NON_EXEMPT, "624000.00");
+        DailyShiftSchedule morningShift = buildDailyShift(employee, workDate, LocalTime.of(8, 0), LocalTime.of(12, 0));
+        DailyShiftSchedule afternoonShift = buildDailyShift(employee, workDate, LocalTime.of(13, 0), LocalTime.of(17, 0));
+
+        List<AttendanceLog> attendanceLogs = List.of(
+                buildAttendanceLog(employee, workDate, LocalTime.of(8, 0), "IN"),
+                buildAttendanceLog(employee, workDate, LocalTime.of(12, 0), "OUT"),
+                buildAttendanceLog(employee, workDate, LocalTime.of(13, 0), "IN"),
+                buildAttendanceLog(employee, workDate, LocalTime.of(16, 0), "OUT")
+        );
+
+        when(defaultConfig.getTimeZone()).thenReturn(ZONE);
+        when(attendanceLogRepository.findByEmployeeIdInAndTimestampBetween(anyList(), any(Instant.class), any(Instant.class), any()))
+                .thenReturn(attendanceLogs);
+        when(overtimeRequestRepository.findAll(any(Specification.class)))
+                .thenReturn(List.of());
+        when(dailyShiftRepository.findAllByEmployeeIdsAndPeriod(anyList(), any(LocalDateTime.class), any(LocalDateTime.class)))
+                .thenReturn(List.of(morningShift, afternoonShift));
+        when(leaveRequestRepository.findApprovedLeavesForPeriod(anyList(), any(LocalDateTime.class), any(LocalDateTime.class)))
+                .thenReturn(List.of());
+        when(holidayService.getHolidayLookup(any(LocalDate.class), any(LocalDate.class)))
+                .thenReturn(HolidayLookup.empty());
+
+        List<PayrollItem> items = new ArrayList<>();
+        payrollService.processPayrollNonExempt(run, items, List.of(employee), Map.of());
+
+        Assertions.assertEquals(1, items.size());
+        BigDecimal latePenaltyAmount = items.get(0).getDeductions().stream()
+                .filter(line -> line.getDeductionType() == DeductionType.LATE_PENALTY)
+                .map(line -> line.getAmount())
+                .findFirst()
+                .orElse(BigDecimal.ZERO);
+
+        BigDecimal expectedOneHourDeduction = payrollCalculator.computeHourlyRate(employee.getYearlySalary())
+                .setScale(2, java.math.RoundingMode.HALF_UP);
+        assertBigDecimalEquals(expectedOneHourDeduction.toPlainString(), latePenaltyAmount);
+        Assertions.assertTrue(items.get(0).getDeductions().stream()
+                .noneMatch(line -> line.getDeductionType() == DeductionType.ABSENT_DEDUCTION));
     }
 
     @Test

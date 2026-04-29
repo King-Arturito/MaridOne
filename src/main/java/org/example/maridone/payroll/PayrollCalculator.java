@@ -383,12 +383,41 @@ public class PayrollCalculator {
         return CommonCalculator.deductUnpaidLunchHour(rawHours);
     }
 
+    public BigDecimal calculatePayableScheduledHours(List<DailyShiftSchedule> schedules) {
+        BigDecimal rawHours = calculateHours(schedules);
+        return applyLunchDeductionForSchedules(rawHours, schedules);
+    }
+
+    public BigDecimal calculatePayableWorkedHoursWithinSchedules(
+            List<DailyShiftSchedule> schedules,
+            List<AttendanceSession> attendanceSessions
+    ) {
+        BigDecimal rawHours = calculateWorkedHoursWithinSchedules(schedules, attendanceSessions);
+        return applyLunchDeductionForSchedules(rawHours, schedules);
+    }
+
     public BigDecimal calculateExpectedShiftHours(List<DailyShiftSchedule> schedules) {
         if (schedules == null || schedules.isEmpty()) {
             return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
         }
 
-        return deductUnpaidLunchHour(calculateHours(schedules));
+        return calculatePayableScheduledHours(schedules);
+    }
+
+    private BigDecimal applyLunchDeductionForSchedules(BigDecimal rawHours, List<DailyShiftSchedule> schedules) {
+        if (rawHours == null) {
+            return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+        }
+
+        if (hasExplicitScheduleBreak(schedules)) {
+            return rawHours.setScale(2, RoundingMode.HALF_UP);
+        }
+
+        return deductUnpaidLunchHour(rawHours);
+    }
+
+    private boolean hasExplicitScheduleBreak(List<DailyShiftSchedule> schedules) {
+        return schedules != null && schedules.size() > 1;
     }
 
     public long calculateLateMinutes(DailyShiftSchedule schedule, AttendanceLog inLog, LeaveRequest leave) {

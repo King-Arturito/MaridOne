@@ -17,6 +17,7 @@ import org.example.maridone.exception.unauthorized.InvalidActionException;
 import org.example.maridone.leave.request.LeaveRequestRepository;
 import org.example.maridone.notification.NotificationService;
 import org.example.maridone.schedule.dto.DailyShiftOverrideRequestDto;
+import org.example.maridone.schedule.dto.DailyShiftSegmentDto;
 import org.example.maridone.schedule.dto.ShiftRequestDto;
 import org.example.maridone.schedule.dto.ShiftResponseDto;
 import org.example.maridone.schedule.mapper.ScheduleMapper;
@@ -142,7 +143,7 @@ class ShiftServiceTest {
                 workDate.atStartOfDay(),
                 workDate.plusDays(1).atStartOfDay()
         )).thenReturn(List.of(existingDailyShift));
-        when(dailyShiftRepository.save(any(DailyShiftSchedule.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(dailyShiftRepository.saveAll(anyList())).thenAnswer(invocation -> invocation.getArgument(0));
 
         DailyShiftSchedule saved = shiftService.upsertDailyShiftOverride(payload);
 
@@ -177,7 +178,7 @@ class ShiftServiceTest {
                 workDate.atStartOfDay(),
                 workDate.plusDays(1).atStartOfDay()
         )).thenReturn(List.of());
-        when(dailyShiftRepository.save(any(DailyShiftSchedule.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(dailyShiftRepository.saveAll(anyList())).thenAnswer(invocation -> invocation.getArgument(0));
 
         DailyShiftSchedule saved = shiftService.upsertDailyShiftOverride(payload);
 
@@ -227,6 +228,105 @@ class ShiftServiceTest {
                 "Your shift for " + workDate.format(java.time.format.DateTimeFormatter.ofPattern("MMMM d, yyyy")) + " was marked as day off.",
                 "HIGH"
         );
+    }
+
+    @Test
+    void upsertDailyShiftOverrides_ShouldPersistMultipleCustomSegmentsForSameDate() {
+        Long empId = 1L;
+        LocalDate workDate = LocalDate.now(MANILA).plusDays(17);
+
+        Employee employee = new Employee();
+        ReflectionTestUtils.setField(employee, "employeeId", empId);
+
+        TemplateShiftSchedule template = new TemplateShiftSchedule();
+        template.setEmployee(employee);
+        template.setDayOfWeek(workDate.getDayOfWeek());
+        template.setStartTime(LocalTime.of(8, 0));
+        template.setEndTime(LocalTime.of(17, 0));
+
+        DailyShiftSegmentDto morning = new DailyShiftSegmentDto();
+        morning.setStartTime(LocalTime.of(8, 0));
+        morning.setEndTime(LocalTime.of(12, 0));
+
+        DailyShiftSegmentDto afternoon = new DailyShiftSegmentDto();
+        afternoon.setStartTime(LocalTime.of(13, 0));
+        afternoon.setEndTime(LocalTime.of(17, 0));
+
+        DailyShiftOverrideRequestDto payload = new DailyShiftOverrideRequestDto();
+        payload.setEmpId(empId);
+        payload.setWorkDate(workDate);
+        payload.setSegments(List.of(morning, afternoon));
+
+        when(defaultConfig.getTimeZone()).thenReturn(MANILA);
+        when(employeeRepository.findById(empId)).thenReturn(Optional.of(employee));
+        when(templateShiftRepository.findByEmployeeIdAndDayOfWeek(empId, workDate.getDayOfWeek()))
+                .thenReturn(Optional.of(template));
+        when(dailyShiftRepository.findAllByEmployeeIdAndPeriod(
+                empId,
+                workDate.atStartOfDay(),
+                workDate.plusDays(1).atStartOfDay()
+        )).thenReturn(List.of());
+        when(dailyShiftRepository.saveAll(anyList())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        List<DailyShiftSchedule> saved = shiftService.upsertDailyShiftOverrides(payload);
+
+        Assertions.assertEquals(2, saved.size());
+        Assertions.assertEquals(LocalDateTime.of(workDate, LocalTime.of(8, 0)), saved.get(0).getStartDateTime());
+        Assertions.assertEquals(LocalDateTime.of(workDate, LocalTime.of(12, 0)), saved.get(0).getEndDateTime());
+        Assertions.assertEquals(LocalDateTime.of(workDate, LocalTime.of(13, 0)), saved.get(1).getStartDateTime());
+        Assertions.assertEquals(LocalDateTime.of(workDate, LocalTime.of(17, 0)), saved.get(1).getEndDateTime());
+        verify(notificationService).createNotification(
+                employee,
+                "Your shift for " + workDate.format(java.time.format.DateTimeFormatter.ofPattern("MMMM d, yyyy"))
+                        + " was updated to 8:00 AM - 12:00 PM, 1:00 PM - 5:00 PM.",
+                "HIGH"
+        );
+    }
+
+    @Test
+    void upsertDailyShiftOverrides_ShouldRejectOverlappingCustomSegments() {
+        Long empId = 1L;
+        LocalDate workDate = LocalDate.now(MANILA).plusDays(18);
+
+        Employee employee = new Employee();
+        ReflectionTestUtils.setField(employee, "employeeId", empId);
+
+        TemplateShiftSchedule template = new TemplateShiftSchedule();
+        template.setEmployee(employee);
+        template.setDayOfWeek(workDate.getDayOfWeek());
+        template.setStartTime(LocalTime.of(8, 0));
+        template.setEndTime(LocalTime.of(17, 0));
+
+        DailyShiftSegmentDto first = new DailyShiftSegmentDto();
+        first.setStartTime(LocalTime.of(8, 0));
+        first.setEndTime(LocalTime.of(12, 0));
+
+        DailyShiftSegmentDto overlapping = new DailyShiftSegmentDto();
+        overlapping.setStartTime(LocalTime.of(11, 0));
+        overlapping.setEndTime(LocalTime.of(15, 0));
+
+        DailyShiftOverrideRequestDto payload = new DailyShiftOverrideRequestDto();
+        payload.setEmpId(empId);
+        payload.setWorkDate(workDate);
+        payload.setSegments(List.of(first, overlapping));
+
+        when(defaultConfig.getTimeZone()).thenReturn(MANILA);
+        when(employeeRepository.findById(empId)).thenReturn(Optional.of(employee));
+        when(templateShiftRepository.findByEmployeeIdAndDayOfWeek(empId, workDate.getDayOfWeek()))
+                .thenReturn(Optional.of(template));
+        when(dailyShiftRepository.findAllByEmployeeIdAndPeriod(
+                empId,
+                workDate.atStartOfDay(),
+                workDate.plusDays(1).atStartOfDay()
+        )).thenReturn(List.of());
+
+        InvalidActionException exception = Assertions.assertThrows(
+                InvalidActionException.class,
+                () -> shiftService.upsertDailyShiftOverrides(payload)
+        );
+
+        Assertions.assertEquals("Custom shift segments cannot overlap each other.", exception.getMessage());
+        verify(dailyShiftRepository, never()).saveAll(anyList());
     }
 
     @Test

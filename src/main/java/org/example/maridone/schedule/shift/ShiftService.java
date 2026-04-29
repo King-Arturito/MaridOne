@@ -15,6 +15,7 @@ import org.example.maridone.leave.request.LeaveRequest;
 import org.example.maridone.leave.request.LeaveRequestRepository;
 import org.example.maridone.notification.NotificationService;
 import org.example.maridone.schedule.dto.DailyShiftOverrideRequestDto;
+import org.example.maridone.schedule.dto.DailyShiftSegmentDto;
 import org.example.maridone.schedule.dto.ShiftRequestDto;
 import org.example.maridone.schedule.dto.ShiftResponseDto;
 import org.example.maridone.schedule.mapper.ScheduleMapper;
@@ -29,9 +30,11 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -194,15 +197,20 @@ public class ShiftService {
         Employee employee = employeeRepository.findById(payload.getEmpId())
                 .orElseThrow(() -> new EmployeeNotFoundException(payload.getEmpId()));
 
-        DailyShiftSchedule shift = upsertDailyShiftOverride(
-                employee,
-                payload.getWorkDate(),
-                payload.getStartTime(),
-                payload.getEndTime(),
-                payload.isDayOff()
-        );
+        DailyShiftSchedule shift = upsertDailyShiftOverrides(employee, payload).get(0);
         notifyDailyShiftOverride(employee, payload.getWorkDate(), payload.getStartTime(), payload.getEndTime(), payload.isDayOff());
         return shift;
+    }
+
+    @Transactional
+    @ExecutionTime
+    public List<DailyShiftSchedule> upsertDailyShiftOverrides(DailyShiftOverrideRequestDto payload) {
+        Employee employee = employeeRepository.findById(payload.getEmpId())
+                .orElseThrow(() -> new EmployeeNotFoundException(payload.getEmpId()));
+
+        List<DailyShiftSchedule> shifts = upsertDailyShiftOverrides(employee, payload);
+        notifyDailyShiftOverrides(employee, payload.getWorkDate(), shifts);
+        return shifts;
     }
 
     /*
@@ -321,13 +329,8 @@ public class ShiftService {
         return daily;
     }
 
-    private DailyShiftSchedule upsertDailyShiftOverride(
-            Employee employee,
-            LocalDate workDate,
-            LocalTime startTime,
-            LocalTime endTime,
-            boolean dayOff
-    ) {
+    private List<DailyShiftSchedule> upsertDailyShiftOverrides(Employee employee, DailyShiftOverrideRequestDto payload) {
+        LocalDate workDate = payload.getWorkDate();
         assertEditableWorkDate(workDate);
         TemplateShiftSchedule templateSchedule = resolveTemplateSchedule(employee, workDate);
 
@@ -343,22 +346,74 @@ public class ShiftService {
             dailyShiftRepository.deleteAll(existingShifts);
         }
 
-        DailyShiftSchedule overrideShift = new DailyShiftSchedule();
-        overrideShift.setTemplateShiftSchedule(templateSchedule);
-        overrideShift.setDayOff(dayOff);
-
-        if (dayOff) {
-            overrideShift.setStartDateTime(rangeStart);
-            overrideShift.setEndDateTime(rangeStart);
-        } else {
-            assertValidOverrideTimes(startTime, endTime);
-            overrideShift.setStartDateTime(LocalDateTime.of(workDate, startTime));
-            overrideShift.setEndDateTime(LocalDateTime.of(workDate, endTime).plusDays(
-                    endTime.isBefore(startTime) ? 1 : 0
-            ));
+        if (payload.isDayOff()) {
+            DailyShiftSchedule dayOffShift = new DailyShiftSchedule();
+            dayOffShift.setTemplateShiftSchedule(templateSchedule);
+            dayOffShift.setDayOff(true);
+            dayOffShift.setStartDateTime(rangeStart);
+            dayOffShift.setEndDateTime(rangeStart);
+            return List.of(dailyShiftRepository.save(dayOffShift));
         }
 
-        return dailyShiftRepository.save(overrideShift);
+        List<DailyShiftSegmentDto> requestedSegments = normalizeRequestedSegments(payload);
+        List<ShiftWindow> shiftWindows = requestedSegments.stream()
+                .map(segment -> toShiftWindow(workDate, segment))
+                .sorted(Comparator.comparing(ShiftWindow::start))
+                .toList();
+
+        assertNoOverlappingOverrideWindows(shiftWindows);
+
+        List<DailyShiftSchedule> overrideShifts = shiftWindows.stream()
+                .map(window -> buildOverrideShift(templateSchedule, window))
+                .toList();
+
+        return dailyShiftRepository.saveAll(overrideShifts);
+    }
+
+    private List<DailyShiftSegmentDto> normalizeRequestedSegments(DailyShiftOverrideRequestDto payload) {
+        List<DailyShiftSegmentDto> segments = payload.getSegments();
+        if (segments != null && !segments.isEmpty()) {
+            List<DailyShiftSegmentDto> normalized = segments.stream()
+                    .filter(Objects::nonNull)
+                    .toList();
+            if (normalized.isEmpty()) {
+                throw new InvalidActionException("At least one shift segment is required unless the date is marked as day off.");
+            }
+            return normalized;
+        }
+
+        DailyShiftSegmentDto singleSegment = new DailyShiftSegmentDto();
+        singleSegment.setStartTime(payload.getStartTime());
+        singleSegment.setEndTime(payload.getEndTime());
+        return List.of(singleSegment);
+    }
+
+    private ShiftWindow toShiftWindow(LocalDate workDate, DailyShiftSegmentDto segment) {
+        assertValidOverrideTimes(segment.getStartTime(), segment.getEndTime());
+        LocalDateTime start = LocalDateTime.of(workDate, segment.getStartTime());
+        LocalDateTime end = LocalDateTime.of(workDate, segment.getEndTime()).plusDays(
+                segment.getEndTime().isBefore(segment.getStartTime()) ? 1 : 0
+        );
+        return new ShiftWindow(start, end);
+    }
+
+    private void assertNoOverlappingOverrideWindows(List<ShiftWindow> shiftWindows) {
+        for (int index = 1; index < shiftWindows.size(); index++) {
+            ShiftWindow previous = shiftWindows.get(index - 1);
+            ShiftWindow current = shiftWindows.get(index);
+            if (current.start().isBefore(previous.end())) {
+                throw new InvalidActionException("Custom shift segments cannot overlap each other.");
+            }
+        }
+    }
+
+    private DailyShiftSchedule buildOverrideShift(TemplateShiftSchedule templateSchedule, ShiftWindow window) {
+        DailyShiftSchedule overrideShift = new DailyShiftSchedule();
+        overrideShift.setTemplateShiftSchedule(templateSchedule);
+        overrideShift.setDayOff(false);
+        overrideShift.setStartDateTime(window.start());
+        overrideShift.setEndDateTime(window.end());
+        return overrideShift;
     }
 
     private TemplateShiftSchedule resolveTemplateSchedule(Employee employee, LocalDate workDate) {
@@ -450,6 +505,25 @@ public class ShiftService {
         notificationService.createNotification(employee, message, "HIGH");
     }
 
+    private void notifyDailyShiftOverrides(Employee employee, LocalDate workDate, List<DailyShiftSchedule> shifts) {
+        if (employee == null || workDate == null || shifts == null || shifts.isEmpty()) {
+            return;
+        }
+
+        boolean isDayOff = shifts.stream().anyMatch(DailyShiftSchedule::isDayOff);
+        String message = isDayOff
+                ? String.format("Your shift for %s was marked as day off.", DATE_FORMATTER.format(workDate))
+                : String.format(
+                "Your shift for %s was updated to %s.",
+                DATE_FORMATTER.format(workDate),
+                shifts.stream()
+                        .sorted(Comparator.comparing(DailyShiftSchedule::getStartDateTime))
+                        .map(shift -> formatTimeRange(shift.getStartTime(), shift.getEndTime()))
+                        .collect(Collectors.joining(", "))
+        );
+        notificationService.createNotification(employee, message, "HIGH");
+    }
+
     private String formatDayOfWeek(DayOfWeek dayOfWeek) {
         String lower = dayOfWeek.name().toLowerCase();
         return Character.toUpperCase(lower.charAt(0)) + lower.substring(1);
@@ -458,4 +532,6 @@ public class ShiftService {
     private String formatTimeRange(LocalTime startTime, LocalTime endTime) {
         return TIME_FORMATTER.format(startTime) + " - " + TIME_FORMATTER.format(endTime);
     }
+
+    private record ShiftWindow(LocalDateTime start, LocalDateTime end) {}
 }

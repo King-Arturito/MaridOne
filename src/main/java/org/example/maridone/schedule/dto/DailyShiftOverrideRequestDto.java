@@ -4,6 +4,7 @@ import jakarta.validation.constraints.NotNull;
 
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.util.List;
 
 public class DailyShiftOverrideRequestDto {
 
@@ -18,6 +19,8 @@ public class DailyShiftOverrideRequestDto {
     private LocalTime endTime;
 
     private Boolean dayOff = false;
+
+    private List<DailyShiftSegmentDto> segments;
 
     public Long getEmpId() {
         return empId;
@@ -57,5 +60,13 @@ public class DailyShiftOverrideRequestDto {
 
     public void setDayOff(Boolean dayOff) {
         this.dayOff = dayOff;
+    }
+
+    public List<DailyShiftSegmentDto> getSegments() {
+        return segments;
+    }
+
+    public void setSegments(List<DailyShiftSegmentDto> segments) {
+        this.segments = segments;
     }
 }

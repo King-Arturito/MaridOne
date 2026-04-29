@@ -113,14 +113,29 @@ public class ShiftController {
     public ResponseEntity<DailyShiftResponse> upsertDailyShiftOverride(
             @RequestBody @Validated DailyShiftOverrideRequestDto payload) {
         DailyShiftSchedule shift = shiftService.upsertDailyShiftOverride(payload);
-        return ResponseEntity.ok(new DailyShiftResponse(
+        return ResponseEntity.ok(toDailyShiftResponse(shift));
+    }
+
+    @PutMapping("/daily/override/batch")
+    @PreAuthorize("hasRole('HR') or @managedEmployeeCheck.canManageEmployee(#payload.empId, authentication.name)")
+    @AuditLog
+    public ResponseEntity<List<DailyShiftResponse>> upsertDailyShiftOverrides(
+            @RequestBody @Validated DailyShiftOverrideRequestDto payload) {
+        List<DailyShiftSchedule> shifts = shiftService.upsertDailyShiftOverrides(payload);
+        return ResponseEntity.ok(shifts.stream()
+                .map(this::toDailyShiftResponse)
+                .toList());
+    }
+
+    private DailyShiftResponse toDailyShiftResponse(DailyShiftSchedule shift) {
+        return new DailyShiftResponse(
                 shift.getDailyShiftId(),
                 shift.getEmployeeId(),
                 shift.getWorkDate(),
                 shift.getStartDateTime(),
                 shift.getEndDateTime(),
                 shift.isDayOff()
-        ));
+        );
     }
 
     public record DailyShiftResponse(

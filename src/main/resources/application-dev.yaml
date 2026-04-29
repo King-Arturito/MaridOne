@@ -2,7 +2,7 @@ spring:
   datasource:
     url: jdbc:postgresql://localhost:5432/MaridOne
     username: postgres
-    password: admin
+    password: 1234
     driver-class-name: org.postgresql.Driver
   jpa:
     hibernate:
@@ -33,7 +33,7 @@ default:
 
 holiday:
   enabled: true
-  api-key: ${CALENDARIFIC_API_KEY:}
+  api-key: zvNhVorp5Dro7tXMVV7WxoHNAYDd4PPK
   country: PH
   base-url: https://calendarific.com/api/v2/holidays
   cache-dir: .cache/holidays

@@ -485,7 +485,7 @@ public class PayrollService {
                     }
                 } else {
                     // ordinary workdays compare all attendance sessions against the split daily-shift segments.
-                    BigDecimal expectedHours = payrollCalculator.calculateExpectedShiftHours(todaysSchedules);
+                    BigDecimal expectedHours = payrollCalculator.calculatePayableScheduledHours(todaysSchedules);
                     if (expectedHours.compareTo(BigDecimal.ZERO) <= 0) {
                         // leave this day alone if the generated schedules carry no payable hours.
                     } else if (!hasCompleteAttendancePair) {
@@ -495,11 +495,9 @@ public class PayrollService {
                         }
                     } else {
                         // only count overlap inside the scheduled segments so split-leave days stay accurate.
-                        BigDecimal actualHours = payrollCalculator.deductUnpaidLunchHour(
-                                payrollCalculator.calculateWorkedHoursWithinSchedules(
-                                        todaysSchedules,
-                                        attendanceSessions
-                                )
+                        BigDecimal actualHours = payrollCalculator.calculatePayableWorkedHoursWithinSchedules(
+                                todaysSchedules,
+                                attendanceSessions
                         );
                         if (actualHours.compareTo(expectedHours) < 0) {
                             BigDecimal missingHours = expectedHours.subtract(actualHours);

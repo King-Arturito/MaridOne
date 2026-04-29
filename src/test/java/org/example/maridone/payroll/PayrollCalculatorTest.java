@@ -1,7 +1,10 @@
 package org.example.maridone.payroll;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.List;
 
 import org.example.maridone.config.DefaultConfig;
@@ -13,6 +16,7 @@ import org.example.maridone.payroll.item.PayrollItem;
 import org.example.maridone.payroll.item.component.DeductionsLine;
 import org.example.maridone.payroll.item.component.EarningsLine;
 import org.example.maridone.payroll.run.PayrollRun;
+import org.example.maridone.schedule.shift.DailyShiftSchedule;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -20,8 +24,13 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.when;
+
 @ExtendWith(MockitoExtension.class)
 class PayrollCalculatorTest {
+
+    private static final java.time.ZoneId MANILA = java.time.ZoneId.of("Asia/Manila");
 
     @Mock
     private DefaultConfig defaultConfig;
@@ -38,6 +47,7 @@ class PayrollCalculatorTest {
                 defaultConfig,
                 payrollConfig
         );
+        lenient().when(defaultConfig.getTimeZone()).thenReturn(MANILA);
     }
 
     @Test
@@ -196,6 +206,40 @@ class PayrollCalculatorTest {
         Assertions.assertTrue(deductions.isEmpty());
     }
 
+    @Test
+    void calculatePayableScheduledHours_ShouldNotDeductLunchAgain_ForBrokenShift() {
+        List<DailyShiftSchedule> schedules = List.of(
+                buildDailyShift(LocalDateTime.of(2026, 5, 4, 8, 0), LocalDateTime.of(2026, 5, 4, 12, 0)),
+                buildDailyShift(LocalDateTime.of(2026, 5, 4, 13, 0), LocalDateTime.of(2026, 5, 4, 17, 0))
+        );
+
+        BigDecimal payableHours = payrollCalculator.calculatePayableScheduledHours(schedules);
+
+        assertBigDecimalEquals("8.00", payableHours);
+    }
+
+    @Test
+    void calculatePayableWorkedHoursWithinSchedules_ShouldNotDeductLunchAgain_ForBrokenShift() {
+        List<DailyShiftSchedule> schedules = List.of(
+                buildDailyShift(LocalDateTime.of(2026, 5, 4, 8, 0), LocalDateTime.of(2026, 5, 4, 12, 0)),
+                buildDailyShift(LocalDateTime.of(2026, 5, 4, 13, 0), LocalDateTime.of(2026, 5, 4, 17, 0))
+        );
+        List<PayrollCalculator.AttendanceSession> sessions = List.of(
+                buildAttendanceSession(
+                        LocalDateTime.of(2026, 5, 4, 8, 0),
+                        LocalDateTime.of(2026, 5, 4, 12, 0)
+                ),
+                buildAttendanceSession(
+                        LocalDateTime.of(2026, 5, 4, 13, 0),
+                        LocalDateTime.of(2026, 5, 4, 17, 0)
+                )
+        );
+
+        BigDecimal payableHours = payrollCalculator.calculatePayableWorkedHoursWithinSchedules(schedules, sessions);
+
+        assertBigDecimalEquals("8.00", payableHours);
+    }
+
     private Employee buildEmployee(ExemptionStatus exemptionStatus, String yearlySalary) {
         Employee emp = new Employee();
         emp.setExemptionStatus(exemptionStatus);
@@ -219,6 +263,25 @@ class PayrollCalculatorTest {
                 .findFirst()
                 .orElseThrow(() -> new AssertionError("Missing deduction type: " + type));
         assertBigDecimalEquals(expectedAmount, line.getAmount());
+    }
+
+    private DailyShiftSchedule buildDailyShift(LocalDateTime start, LocalDateTime end) {
+        DailyShiftSchedule shift = new DailyShiftSchedule();
+        shift.setStartDateTime(start);
+        shift.setEndDateTime(end);
+        return shift;
+    }
+
+    private PayrollCalculator.AttendanceSession buildAttendanceSession(LocalDateTime in, LocalDateTime out) {
+        org.example.maridone.log.attendance.AttendanceLog inLog = new org.example.maridone.log.attendance.AttendanceLog();
+        inLog.setTimestamp(in.atZone(MANILA).toInstant());
+        inLog.setDirection("IN");
+
+        org.example.maridone.log.attendance.AttendanceLog outLog = new org.example.maridone.log.attendance.AttendanceLog();
+        outLog.setTimestamp(out.atZone(MANILA).toInstant());
+        outLog.setDirection("OUT");
+
+        return new PayrollCalculator.AttendanceSession(inLog, outLog);
     }
 
     private void assertBigDecimalEquals(String expected, BigDecimal actual) {
