@@ -37,6 +37,7 @@ import org.example.maridone.payroll.dto.PayrollRunViewDto;
 import org.example.maridone.payroll.dto.RunCreateDto;
 import org.example.maridone.payroll.item.PayrollItem;
 import org.example.maridone.payroll.item.PayrollItemService;
+import org.example.maridone.payroll.item.component.DeductionsLine;
 import org.example.maridone.payroll.item.component.EarningsLine;
 import org.example.maridone.schedule.shift.DailyShiftRepository;
 import org.example.maridone.schedule.shift.DailyShiftSchedule;
@@ -929,10 +930,59 @@ class PayrollServiceTest {
         verifyNoInteractions(payrollItemService);
     }
 
+    @Test
+    void processPayrollExempt_30thShouldUsePriorRegularCutoffForMonthlyTaxes() {
+        LocalDate workDate = LocalDate.of(2026, 4, 30);
+        PayrollRun run = buildSingleDayRun(workDate);
+        Employee employee = buildEmployee(31L, ExemptionStatus.EXEMPT, "624000.00");
+        DailyShiftSchedule dailyShift = buildDailyShift(employee, workDate, LocalTime.of(8, 0), LocalTime.of(17, 0));
+        LeaveRequest paidLeave = buildLeave(employee, workDate.atTime(8, 0), workDate.atTime(17, 0), true);
+
+        PayrollItem priorItem = new PayrollItem();
+        priorItem.setEmployee(employee);
+        priorItem.setGrossPay(new BigDecimal("26000.00"));
+        priorItem.setDeductions(List.of(
+                buildDeductionLine(priorItem, DeductionType.BRACKET_LEVEL_THREE, "2479.10")
+        ));
+
+        PayrollRun priorRun = new PayrollRun();
+        priorRun.setRunType(RunType.REGULAR);
+        priorRun.setPayrollStatus(PayrollStatus.POSTED);
+        priorRun.setPaymentDate(LocalDate.of(2026, 4, 15));
+        priorRun.setPeriodStart(LocalDate.of(2026, 4, 1));
+        priorRun.setPeriodEnd(LocalDate.of(2026, 4, 15));
+        priorItem.setPayrollRun(priorRun);
+
+        when(defaultConfig.getTimeZone()).thenReturn(ZONE);
+        when(attendanceLogRepository.findByEmployeeIdInAndTimestampBetween(anyList(), any(Instant.class), any(Instant.class), any()))
+                .thenReturn(List.of());
+        when(dailyShiftRepository.findAllByEmployeeIdsAndPeriod(anyList(), any(LocalDateTime.class), any(LocalDateTime.class)))
+                .thenReturn(List.of(dailyShift));
+        when(leaveRequestRepository.findApprovedLeavesForPeriod(anyList(), any(LocalDateTime.class), any(LocalDateTime.class)))
+                .thenReturn(List.of(paidLeave));
+        when(holidayService.getHolidayLookup(any(LocalDate.class), any(LocalDate.class)))
+                .thenReturn(HolidayLookup.empty());
+        when(payrollItemRepository.findByEmployee_EmployeeIdAndPayrollRun_PayrollStatusAndPayrollRun_RunTypeNotOrderByPayrollRun_PeriodEndDescItemIdDesc(
+                employee.getEmployeeId(),
+                PayrollStatus.POSTED,
+                RunType.ADJUSTMENT
+        )).thenReturn(List.of(priorItem));
+
+        List<PayrollItem> items = payrollService.processPayrollExempt(run, List.of(employee), Map.of());
+
+        Assertions.assertEquals(1, items.size());
+        assertDeduction(items.get(0), DeductionType.SSS, "1750.00");
+        assertDeduction(items.get(0), DeductionType.PHILHEALTH, "1300.00");
+        assertDeduction(items.get(0), DeductionType.PAGIBIG, "200.00");
+        assertDeduction(items.get(0), DeductionType.BRACKET_LEVEL_THREE, "2479.10");
+    }
+
     private PayrollRun buildSingleDayRun(LocalDate date) {
         PayrollRun run = new PayrollRun();
         run.setPeriodStart(date);
         run.setPeriodEnd(date);
+        run.setPaymentDate(date);
+        run.setRunType(RunType.REGULAR);
         return run;
     }
 
@@ -1045,6 +1095,22 @@ class PayrollServiceTest {
         templateShiftSchedule.setStartTime(LocalTime.of(8, 0));
         templateShiftSchedule.setEndTime(LocalTime.of(17, 0));
         return templateShiftSchedule;
+    }
+
+    private DeductionsLine buildDeductionLine(PayrollItem item, DeductionType type, String amount) {
+        DeductionsLine line = new DeductionsLine();
+        line.setPayrollItem(item);
+        line.setDeductionType(type);
+        line.setAmount(new BigDecimal(amount));
+        return line;
+    }
+
+    private void assertDeduction(PayrollItem item, DeductionType type, String expectedAmount) {
+        DeductionsLine line = item.getDeductions().stream()
+                .filter(deduction -> deduction.getDeductionType() == type)
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("Missing deduction type: " + type));
+        assertBigDecimalEquals(expectedAmount, line.getAmount());
     }
 
     private void assertBigDecimalEquals(String expected, BigDecimal actual) {

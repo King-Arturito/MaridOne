@@ -10,6 +10,7 @@ import java.time.LocalTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -26,6 +27,7 @@ import org.example.maridone.config.DefaultConfig;
 import org.example.maridone.config.PayrollConfig;
 import org.example.maridone.core.employee.Employee;
 import org.example.maridone.core.employee.EmployeeRepository;
+import org.example.maridone.enums.DeductionType;
 import org.example.maridone.enums.EarningsType;
 import org.example.maridone.enums.EmploymentStatus;
 import org.example.maridone.enums.ExemptionStatus;
@@ -65,6 +67,18 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class PayrollService {
+    private static final Set<DeductionType> ATTENDANCE_DEDUCTION_TYPES = EnumSet.of(
+            DeductionType.ABSENT_DEDUCTION,
+            DeductionType.LATE_PENALTY
+    );
+    private static final Set<DeductionType> WITHHOLDING_TYPES = EnumSet.of(
+            DeductionType.BRACKET_LEVEL_ONE,
+            DeductionType.BRACKET_LEVEL_TWO,
+            DeductionType.BRACKET_LEVEL_THREE,
+            DeductionType.BRACKET_LEVEL_FOUR,
+            DeductionType.BRACKET_LEVEL_FIVE,
+            DeductionType.BRACKET_LEVEL_SIX
+    );
 
     private final PayrollRunRepository payrollRunRepository;
     private final PayrollItemRepository payrollItemRepository;
@@ -295,11 +309,13 @@ public class PayrollService {
                     item.setGrossPay(semiMonthlySalary);
                     item.setDisputes(new ArrayList<>());
                     item.setEarnings(payrollCalculator.setEarnings(emp, item));
+                    PayrollCalculator.RegularTaxContext taxContext = resolveRegularTaxContext(emp, run);
                     List<DeductionsLine> deductions = payrollCalculator.setDeductions(
                             emp,
                             item,
                             attendanceDeductions.absentDeduction(),
-                            attendanceDeductions.lateDeduction()
+                            attendanceDeductions.lateDeduction(),
+                            taxContext
                     );
                     item.setDeductions(deductions);
                     BigDecimal totalDeductions = sumDeductionAmounts(deductions);
@@ -597,11 +613,13 @@ public class PayrollService {
             BigDecimal grossPay = earningsTotal.setScale(2, RoundingMode.HALF_UP);
             item.setGrossPay(grossPay);
 
+            PayrollCalculator.RegularTaxContext taxContext = resolveRegularTaxContext(emp, run);
             List<DeductionsLine> calculatedDeductions = payrollCalculator.setDeductions(
                     emp,
                     item,
                     absentDeductAmount,
-                    lateDeductAmount
+                    lateDeductAmount,
+                    taxContext
             );
             if (calculatedDeductions == null) {
                 calculatedDeductions = List.of();
@@ -1027,6 +1045,81 @@ public class PayrollService {
                 .map(DeductionsLine::getAmount)
                 .filter(amount -> amount != null)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
+
+    private PayrollCalculator.RegularTaxContext resolveRegularTaxContext(Employee employee, PayrollRun run) {
+        if (employee == null
+                || employee.getEmployeeId() == null
+                || run == null
+                || run.getRunType() == RunType.ADJUSTMENT) {
+            return PayrollCalculator.RegularTaxContext.empty();
+        }
+
+        LocalDate paymentDate = run.getPaymentDate() != null ? run.getPaymentDate() : run.getPeriodEnd();
+        if (paymentDate == null || paymentDate.getDayOfMonth() != 30) {
+            return PayrollCalculator.RegularTaxContext.empty();
+        }
+
+        List<PayrollItem> priorItems =
+                safeList(payrollItemRepository.findByEmployee_EmployeeIdAndPayrollRun_PayrollStatusAndPayrollRun_RunTypeNotOrderByPayrollRun_PeriodEndDescItemIdDesc(
+                        employee.getEmployeeId(),
+                        PayrollStatus.POSTED,
+                        RunType.ADJUSTMENT
+                ));
+
+        BigDecimal priorMonthPayAfterAttendance = BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+        BigDecimal priorMonthWithholding = BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+        boolean hasPriorRegularCutoff = false;
+
+        for (PayrollItem priorItem : priorItems) {
+            if (!isPriorRegularCutoffInSameMonth(priorItem, paymentDate)) {
+                continue;
+            }
+
+            hasPriorRegularCutoff = true;
+            BigDecimal priorGrossPay = CommonCalculator.normalize(priorItem.getGrossPay());
+            BigDecimal priorAttendanceDeductions = sumMatchingDeductionAmounts(
+                    priorItem.getDeductions(),
+                    ATTENDANCE_DEDUCTION_TYPES
+            );
+            priorMonthPayAfterAttendance = priorMonthPayAfterAttendance.add(
+                    CommonCalculator.normalizeNonNegative(priorGrossPay.subtract(priorAttendanceDeductions))
+            );
+            priorMonthWithholding = priorMonthWithholding.add(
+                    sumMatchingDeductionAmounts(priorItem.getDeductions(), WITHHOLDING_TYPES)
+            );
+        }
+
+        return new PayrollCalculator.RegularTaxContext(
+                priorMonthPayAfterAttendance,
+                priorMonthWithholding,
+                hasPriorRegularCutoff
+        );
+    }
+
+    private boolean isPriorRegularCutoffInSameMonth(PayrollItem priorItem, LocalDate currentPaymentDate) {
+        if (priorItem == null || priorItem.getPayrollRun() == null || currentPaymentDate == null) {
+            return false;
+        }
+
+        PayrollRun priorRun = priorItem.getPayrollRun();
+        LocalDate priorPaymentDate = priorRun.getPaymentDate() != null ? priorRun.getPaymentDate() : priorRun.getPeriodEnd();
+        if (priorPaymentDate == null) {
+            return false;
+        }
+
+        return priorRun.getRunType() == RunType.REGULAR
+                && priorPaymentDate.getYear() == currentPaymentDate.getYear()
+                && priorPaymentDate.getMonth() == currentPaymentDate.getMonth()
+                && priorPaymentDate.isBefore(currentPaymentDate);
+    }
+
+    private BigDecimal sumMatchingDeductionAmounts(List<DeductionsLine> deductions, Set<DeductionType> types) {
+        return safeList(deductions).stream()
+                .filter(line -> line != null && line.getDeductionType() != null && types.contains(line.getDeductionType()))
+                .map(DeductionsLine::getAmount)
+                .filter(amount -> amount != null)
+                .reduce(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP), BigDecimal::add);
     }
 
     private void assertValidPeriod(RunCreateDto payload) {

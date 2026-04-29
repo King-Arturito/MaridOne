@@ -134,7 +134,70 @@ class PayrollCalculatorTest {
     }
 
     @Test
-    void setDeductions_ShouldReturnExpectedLines_WithAttendanceDeductions() {
+    void setDeductions_ShouldReturnFirstHalfWithholdingOnly_WithAttendanceDeductions() {
+        Employee emp = buildEmployee(ExemptionStatus.NON_EXEMPT, "624000.00");
+        PayrollItem item = buildItem("26000.00", LocalDate.of(2026, 4, 15));
+
+        List<DeductionsLine> deductions = payrollCalculator.setDeductions(
+                emp,
+                item,
+                new BigDecimal("500.25"),
+                new BigDecimal("120.75")
+        );
+
+        Assertions.assertEquals(3, deductions.size());
+        assertDeduction(deductions, DeductionType.BRACKET_LEVEL_THREE, "2679.90");
+        assertDeduction(deductions, DeductionType.ABSENT_DEDUCTION, "500.25");
+        assertDeduction(deductions, DeductionType.LATE_PENALTY, "120.75");
+        Assertions.assertTrue(deductions.stream().noneMatch(d -> d.getDeductionType() == DeductionType.SSS));
+        Assertions.assertTrue(deductions.stream().noneMatch(d -> d.getDeductionType() == DeductionType.PHILHEALTH));
+        Assertions.assertTrue(deductions.stream().noneMatch(d -> d.getDeductionType() == DeductionType.PAGIBIG));
+        deductions.forEach(line -> Assertions.assertSame(item, line.getPayrollItem()));
+    }
+
+    @Test
+    void setDeductions_ShouldReturnMonthlyStatutoryAndSemimonthlyWithholding_OnSecondHalfPayroll() {
+        Employee emp = buildEmployee(ExemptionStatus.EXEMPT, "624000.00");
+        PayrollItem item = buildItem("26000.00", LocalDate.of(2026, 4, 30));
+
+        List<DeductionsLine> deductions = payrollCalculator.setDeductions(
+                emp,
+                item,
+                BigDecimal.ZERO,
+                BigDecimal.ZERO,
+                new PayrollCalculator.RegularTaxContext(
+                        new BigDecimal("26000.00"),
+                        new BigDecimal("2479.10"),
+                        true
+                )
+        );
+
+        Assertions.assertEquals(4, deductions.size());
+        assertDeduction(deductions, DeductionType.SSS, "1750.00");
+        assertDeduction(deductions, DeductionType.PHILHEALTH, "1300.00");
+        assertDeduction(deductions, DeductionType.PAGIBIG, "200.00");
+        assertDeduction(deductions, DeductionType.BRACKET_LEVEL_THREE, "2154.10");
+        deductions.forEach(line -> Assertions.assertSame(item, line.getPayrollItem()));
+    }
+
+    @Test
+    void setDeductions_ShouldResolveBracketUsingSemimonthlyFirstHalfTaxableIncome() {
+        Employee emp = buildEmployee(ExemptionStatus.NON_EXEMPT, "820000.00");
+        PayrollItem item = buildItem("34166.67", LocalDate.of(2026, 4, 15));
+
+        List<DeductionsLine> deductions = payrollCalculator.setDeductions(
+                emp,
+                item,
+                BigDecimal.ZERO,
+                BigDecimal.ZERO
+        );
+
+        assertDeduction(deductions, DeductionType.BRACKET_LEVEL_FOUR, "4479.25");
+        Assertions.assertTrue(deductions.stream().noneMatch(d -> d.getDeductionType() == DeductionType.BRACKET_LEVEL_THREE));
+    }
+
+    @Test
+    void setDeductions_ShouldSkipRegularTaxes_WhenPaymentDateIsNot15thOr30th() {
         Employee emp = buildEmployee(ExemptionStatus.NON_EXEMPT, "624000.00");
         PayrollItem item = buildItem("26000.00", LocalDate.of(2026, 4, 1));
 
@@ -145,56 +208,18 @@ class PayrollCalculatorTest {
                 new BigDecimal("120.75")
         );
 
-        Assertions.assertEquals(6, deductions.size());
-        assertDeduction(deductions, DeductionType.SSS, "875.00");
-        assertDeduction(deductions, DeductionType.PHILHEALTH, "650.00");
-        assertDeduction(deductions, DeductionType.PAGIBIG, "100.00");
-        assertDeduction(deductions, DeductionType.BRACKET_LEVEL_THREE, "2354.90");
+        Assertions.assertEquals(2, deductions.size());
         assertDeduction(deductions, DeductionType.ABSENT_DEDUCTION, "500.25");
         assertDeduction(deductions, DeductionType.LATE_PENALTY, "120.75");
-        deductions.forEach(line -> Assertions.assertSame(item, line.getPayrollItem()));
-    }
-
-    @Test
-    void setDeductions_ShouldReturnExpectedLines_ForExemptEmployee() {
-        Employee emp = buildEmployee(ExemptionStatus.EXEMPT, "624000.00");
-        PayrollItem item = buildItem("26000.00", LocalDate.of(2026, 4, 1));
-
-        List<DeductionsLine> deductions = payrollCalculator.setDeductions(
-                emp,
-                item,
-                BigDecimal.ZERO,
-                BigDecimal.ZERO
-        );
-
-        Assertions.assertEquals(4, deductions.size());
-        assertDeduction(deductions, DeductionType.SSS, "875.00");
-        assertDeduction(deductions, DeductionType.PHILHEALTH, "650.00");
-        assertDeduction(deductions, DeductionType.PAGIBIG, "100.00");
-        assertDeduction(deductions, DeductionType.BRACKET_LEVEL_THREE, "2479.10");
-        deductions.forEach(line -> Assertions.assertSame(item, line.getPayrollItem()));
-    }
-
-    @Test
-    void setDeductions_ShouldResolveBracketUsingTaxableIncome() {
-        Employee emp = buildEmployee(ExemptionStatus.NON_EXEMPT, "820000.00");
-        PayrollItem item = buildItem("34166.67", LocalDate.of(2026, 4, 1));
-
-        List<DeductionsLine> deductions = payrollCalculator.setDeductions(
-                emp,
-                item,
-                BigDecimal.ZERO,
-                BigDecimal.ZERO
-        );
-
-        assertDeduction(deductions, DeductionType.BRACKET_LEVEL_THREE, "4071.60");
-        Assertions.assertTrue(deductions.stream().noneMatch(d -> d.getDeductionType() == DeductionType.BRACKET_LEVEL_FOUR));
+        Assertions.assertTrue(deductions.stream().noneMatch(d -> d.getDeductionType() == DeductionType.SSS));
+        Assertions.assertTrue(deductions.stream().noneMatch(d -> d.getDeductionType() == DeductionType.PHILHEALTH));
+        Assertions.assertTrue(deductions.stream().noneMatch(d -> d.getDeductionType() == DeductionType.PAGIBIG));
     }
 
     @Test
     void setDeductions_ShouldReturnEmpty_WhenYearlySalaryIsZeroOrLess() {
         Employee emp = buildEmployee(ExemptionStatus.NON_EXEMPT, "0.00");
-        PayrollItem item = buildItem("0.00", LocalDate.of(2026, 4, 1));
+        PayrollItem item = buildItem("0.00", LocalDate.of(2026, 4, 15));
 
         List<DeductionsLine> deductions = payrollCalculator.setDeductions(
                 emp,
@@ -250,6 +275,7 @@ class PayrollCalculatorTest {
     private PayrollItem buildItem(String grossPay, LocalDate periodEnd) {
         PayrollRun run = new PayrollRun();
         run.setPeriodEnd(periodEnd);
+        run.setPaymentDate(periodEnd);
 
         PayrollItem item = new PayrollItem();
         item.setGrossPay(new BigDecimal(grossPay));

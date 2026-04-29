@@ -30,6 +30,27 @@ import org.springframework.stereotype.Component;
 public class PayrollCalculator {
 
     public record AttendanceSession(AttendanceLog inLog, AttendanceLog outLog) {}
+    public record RegularTaxContext(
+            BigDecimal priorMonthPayAfterAttendance,
+            BigDecimal priorMonthWithholding,
+            boolean hasPriorRegularCutoff
+    ) {
+        public RegularTaxContext {
+            priorMonthPayAfterAttendance = CommonCalculator.normalize(priorMonthPayAfterAttendance);
+            priorMonthWithholding = CommonCalculator.normalize(priorMonthWithholding);
+        }
+
+        public static RegularTaxContext empty() {
+            return new RegularTaxContext(BigDecimal.ZERO, BigDecimal.ZERO, false);
+        }
+    }
+
+    private enum RegularTaxSchedule {
+        LEGACY_PER_CUTOFF,
+        FIRST_HALF,
+        SECOND_HALF,
+        NONE
+    }
 
     private final BracketService bracketService;
     private final DefaultConfig defaultConfig;
@@ -96,6 +117,32 @@ public class PayrollCalculator {
         return LocalDate.now();
     }
 
+    private LocalDate resolvePaymentDate(PayrollItem item) {
+        if (item == null || item.getPayrollRun() == null) {
+            return null;
+        }
+        if (item.getPayrollRun().getPaymentDate() != null) {
+            return item.getPayrollRun().getPaymentDate();
+        }
+        return item.getPayrollRun().getPeriodEnd();
+    }
+
+    private RegularTaxSchedule resolveRegularTaxSchedule(PayrollItem item) {
+        LocalDate paymentDate = resolvePaymentDate(item);
+        if (paymentDate == null) {
+            return RegularTaxSchedule.LEGACY_PER_CUTOFF;
+        }
+
+        int dayOfMonth = paymentDate.getDayOfMonth();
+        if (dayOfMonth == 15) {
+            return RegularTaxSchedule.FIRST_HALF;
+        }
+        if (dayOfMonth == 30) {
+            return RegularTaxSchedule.SECOND_HALF;
+        }
+        return RegularTaxSchedule.NONE;
+    }
+
     public List<EarningsLine> setEarnings(Employee emp, PayrollItem item) {
         List<EarningsLine> earnings =  new ArrayList<>();
         BigDecimal grossPay = CommonCalculator.normalize(item.getGrossPay());
@@ -155,6 +202,16 @@ public class PayrollCalculator {
             BigDecimal absentDeductAmount,
             BigDecimal lateDeductAmount
     ) {
+        return setDeductions(emp, item, absentDeductAmount, lateDeductAmount, RegularTaxContext.empty());
+    }
+
+    public List<DeductionsLine> setDeductions(
+            Employee emp,
+            PayrollItem item,
+            BigDecimal absentDeductAmount,
+            BigDecimal lateDeductAmount,
+            RegularTaxContext taxContext
+    ) {
         List<DeductionsLine> deductions = new ArrayList<>();
         BigDecimal yearlySalary = CommonCalculator.normalize(emp.getYearlySalary());
         BigDecimal grossPay = item != null ? CommonCalculator.normalize(item.getGrossPay()) : BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
@@ -174,22 +231,52 @@ public class PayrollCalculator {
 
         BigDecimal payAfterAttendance = grossPay.subtract(collectedAbsent).subtract(collectedLate);
         BigDecimal monthlyBasicPay = computeMonthlyBasicPay(yearlySalary);
-        BigDecimal sssDue = computeSssEmployeeSharePerCutoff(monthlyBasicPay);
-        BigDecimal philHealthDue = computePhilHealthEmployeeSharePerCutoff(monthlyBasicPay);
-        BigDecimal pagibigDue = computePagibigEmployeeSharePerCutoff(monthlyBasicPay);
+        BigDecimal cutoffSssDue = computeSssEmployeeSharePerCutoff(monthlyBasicPay);
+        BigDecimal cutoffPhilHealthDue = computePhilHealthEmployeeSharePerCutoff(monthlyBasicPay);
+        BigDecimal cutoffPagibigDue = computePagibigEmployeeSharePerCutoff(monthlyBasicPay);
+        BigDecimal cutoffStatutoryTotal = CommonCalculator.normalize(
+                cutoffSssDue.add(cutoffPhilHealthDue).add(cutoffPagibigDue)
+        );
 
-        BigDecimal nti = payAfterAttendance.subtract(sssDue).subtract(philHealthDue).subtract(pagibigDue);
-        if (nti.compareTo(BigDecimal.ZERO) < 0) {
-            nti = BigDecimal.ZERO;
+        RegularTaxSchedule schedule = resolveRegularTaxSchedule(item);
+        if (schedule == RegularTaxSchedule.NONE) {
+            return deductions;
         }
-        nti = CommonCalculator.normalize(nti);
 
+        if (schedule == RegularTaxSchedule.FIRST_HALF) {
+            BigDecimal nti = CommonCalculator.normalizeNonNegative(payAfterAttendance);
+            BigDecimal withholdingDue = bracketService.computeWithholdingTaxPerCutoff(nti);
+            DeductionType withholdingType = bracketService.resolveWithholdingDeductionType(nti);
+            addDeductionLine(deductions, item, withholdingType, withholdingDue);
+            return deductions;
+        }
+
+        if (schedule == RegularTaxSchedule.SECOND_HALF) {
+            BigDecimal monthlySssDue = computeSssEmployeeShareMonthly(monthlyBasicPay);
+            BigDecimal monthlyPhilHealthDue = computePhilHealthEmployeeShareMonthly(monthlyBasicPay);
+            BigDecimal monthlyPagibigDue = computePagibigEmployeeShareMonthly(monthlyBasicPay);
+            BigDecimal monthlyStatutoryTotal = CommonCalculator.normalize(
+                    monthlySssDue.add(monthlyPhilHealthDue).add(monthlyPagibigDue)
+            );
+
+            BigDecimal nti = CommonCalculator.normalizeNonNegative(payAfterAttendance.subtract(monthlyStatutoryTotal));
+            BigDecimal withholdingDue = bracketService.computeWithholdingTaxPerCutoff(nti);
+            DeductionType withholdingType = bracketService.resolveWithholdingDeductionType(nti);
+
+            addDeductionLine(deductions, item, DeductionType.SSS, monthlySssDue);
+            addDeductionLine(deductions, item, DeductionType.PHILHEALTH, monthlyPhilHealthDue);
+            addDeductionLine(deductions, item, DeductionType.PAGIBIG, monthlyPagibigDue);
+            addDeductionLine(deductions, item, withholdingType, withholdingDue);
+            return deductions;
+        }
+
+        BigDecimal nti = CommonCalculator.normalizeNonNegative(payAfterAttendance.subtract(cutoffStatutoryTotal));
         BigDecimal withholdingDue = bracketService.computeWithholdingTaxPerCutoff(nti);
         DeductionType withholdingType = bracketService.resolveWithholdingDeductionType(nti);
 
-        addDeductionLine(deductions, item, DeductionType.SSS, sssDue);
-        addDeductionLine(deductions, item, DeductionType.PHILHEALTH, philHealthDue);
-        addDeductionLine(deductions, item, DeductionType.PAGIBIG, pagibigDue);
+        addDeductionLine(deductions, item, DeductionType.SSS, cutoffSssDue);
+        addDeductionLine(deductions, item, DeductionType.PHILHEALTH, cutoffPhilHealthDue);
+        addDeductionLine(deductions, item, DeductionType.PAGIBIG, cutoffPagibigDue);
         addDeductionLine(deductions, item, withholdingType, withholdingDue);
 
         return deductions;
@@ -591,26 +678,39 @@ public class PayrollCalculator {
     }
 
     public BigDecimal computeSssEmployeeSharePerCutoff(BigDecimal monthlyCompensation) {
+        BigDecimal monthlyEmployeeShare = computeSssEmployeeShareMonthly(monthlyCompensation);
+        return monthlyEmployeeShare.divide(BigDecimal.valueOf(2), 2, RoundingMode.HALF_UP);
+    }
+
+    public BigDecimal computeSssEmployeeShareMonthly(BigDecimal monthlyCompensation) {
         BigDecimal msc = resolveSssMsc(monthlyCompensation);
         if (msc.compareTo(BigDecimal.ZERO) <= 0) {
             return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
         }
-        BigDecimal monthlyEmployeeShare = msc.multiply(payrollConfig.getSssEmployeeRate());
-        return monthlyEmployeeShare.divide(BigDecimal.valueOf(2), 2, RoundingMode.HALF_UP);
+        return CommonCalculator.normalize(msc.multiply(payrollConfig.getSssEmployeeRate()));
     }
 
     public BigDecimal computePhilHealthEmployeeSharePerCutoff(BigDecimal monthlyCompensation) {
+        BigDecimal employeeMonthlyShare = computePhilHealthEmployeeShareMonthly(monthlyCompensation);
+        return employeeMonthlyShare.divide(BigDecimal.valueOf(2), 2, RoundingMode.HALF_UP);
+    }
+
+    public BigDecimal computePhilHealthEmployeeShareMonthly(BigDecimal monthlyCompensation) {
         BigDecimal monthly = CommonCalculator.normalize(monthlyCompensation);
         if (monthly.compareTo(BigDecimal.ZERO) <= 0) {
             return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
         }
 
         BigDecimal adjustedMonthly = monthly.max(payrollConfig.getPhilHealthFloor()).min(payrollConfig.getPhilHealthCeiling());
-        BigDecimal employeeMonthlyShare = adjustedMonthly.multiply(payrollConfig.getPhilHealthEmployeeRate());
-        return employeeMonthlyShare.divide(BigDecimal.valueOf(2), 2, RoundingMode.HALF_UP);
+        return CommonCalculator.normalize(adjustedMonthly.multiply(payrollConfig.getPhilHealthEmployeeRate()));
     }
 
     public BigDecimal computePagibigEmployeeSharePerCutoff(BigDecimal monthlyCompensation) {
+        BigDecimal monthlyShare = computePagibigEmployeeShareMonthly(monthlyCompensation);
+        return monthlyShare.divide(BigDecimal.valueOf(2), 2, RoundingMode.HALF_UP);
+    }
+
+    public BigDecimal computePagibigEmployeeShareMonthly(BigDecimal monthlyCompensation) {
         BigDecimal monthly = CommonCalculator.normalize(monthlyCompensation);
         if (monthly.compareTo(BigDecimal.ZERO) <= 0) {
             return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
@@ -622,7 +722,24 @@ public class PayrollCalculator {
                 : payrollConfig.getPagibigHigherRate();
 
         BigDecimal monthlyShare = mfs.multiply(rate);
-        return monthlyShare.divide(BigDecimal.valueOf(2), 2, RoundingMode.HALF_UP);
+        return CommonCalculator.normalize(monthlyShare);
+    }
+
+    public BigDecimal computeWithholdingTaxPerMonth(BigDecimal taxableCompensationPerMonth) {
+        BigDecimal monthlyNti = CommonCalculator.normalize(taxableCompensationPerMonth).max(BigDecimal.ZERO.setScale(2));
+        if (monthlyNti.compareTo(BigDecimal.ZERO) <= 0) {
+            return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+        }
+
+        BigDecimal ntiPerCutoff = monthlyNti.divide(BigDecimal.valueOf(2), 2, RoundingMode.HALF_UP);
+        BigDecimal withholdingPerCutoff = bracketService.computeWithholdingTaxPerCutoff(ntiPerCutoff);
+        return CommonCalculator.normalize(withholdingPerCutoff.multiply(BigDecimal.valueOf(2)));
+    }
+
+    public DeductionType resolveWithholdingDeductionTypePerMonth(BigDecimal taxableCompensationPerMonth) {
+        BigDecimal monthlyNti = CommonCalculator.normalize(taxableCompensationPerMonth).max(BigDecimal.ZERO.setScale(2));
+        BigDecimal ntiPerCutoff = monthlyNti.divide(BigDecimal.valueOf(2), 2, RoundingMode.HALF_UP);
+        return bracketService.resolveWithholdingDeductionType(ntiPerCutoff);
     }
 
     public BigDecimal computeExemptDailyAbsenceRate(BigDecimal yearlyCompensation) {
