@@ -69,6 +69,25 @@ public class WorkflowEmailService {
         sendAfterCommit(List.of(manager.getEmail()), subject, body);
     }
 
+    public void sendLeaveSubmittedToManagement(Employee employee, LeaveRequestDto payload) {
+        if (employee == null || payload == null) {
+            return;
+        }
+
+        String employeeName = NotificationMessageFormatter.formatEmployeeName(employee);
+        String leaveType = payload.getLeaveType() == null ? "Leave" : formatLabel(payload.getLeaveType().name());
+        String leaveDates = NotificationMessageFormatter.formatDateRange(
+                safeDate(payload.getStartDateTime()),
+                safeDate(payload.getEndDateTime())
+        );
+        String subject = "New Leave Request Awaiting Management Review";
+        String body = employeeName + " submitted a " + leaveType + " request for " + leaveDates + "."
+                + "\nReason: " + safeText(payload.getReason(), "No reason provided.")
+                + portalFooter("Please log in to MaridOne to review this leave request.");
+
+        sendAfterCommit(resolveManagementEmails(), subject, body);
+    }
+
     public void sendLeaveForwardedToHr(LeaveRequest request) {
         if (request == null) {
             return;
@@ -79,10 +98,12 @@ public class WorkflowEmailService {
                 safeDate(request.getStartDateTime()),
                 safeDate(request.getEndDateTime())
         );
+        String firstLevelApproverTitle = firstLevelApproverTitle(request.getEmployee());
         String subject = "Leave Request Ready for HR Review";
         String body = employeeName + "'s leave request for " + leaveDates + " is ready for HR review."
                 + "\nLeave type: " + safeText(request.getLeaveType() == null ? null : formatLabel(request.getLeaveType().name()), "Unspecified")
-                + "\nManager note: " + safeText(request.getManagerApproverReason(), "No manager note provided.")
+                + "\n" + firstLevelApproverTitle + " note: "
+                + safeText(request.getManagerApproverReason(), "No " + firstLevelApproverTitle.toLowerCase() + " note provided.")
                 + "\nSuggested pay treatment: " + (Boolean.TRUE.equals(request.getSuggestedPaid()) ? "Paid" : "Unpaid")
                 + portalFooter("Please log in to MaridOne to review and finalize this leave request.");
 
@@ -99,9 +120,12 @@ public class WorkflowEmailService {
                 safeDate(request.getStartDateTime()),
                 safeDate(request.getEndDateTime())
         );
+        String firstLevelApproverLabel = firstLevelApproverLabel(request.getEmployee());
+        String firstLevelApproverTitle = firstLevelApproverTitle(request.getEmployee());
         String subject = "Your Leave Request Is Waiting for HR Review";
-        String body = "Your leave request for " + leaveDates + " was endorsed by your manager and is now waiting for HR review."
-                + "\nManager note: " + safeText(request.getManagerApproverReason(), "No manager note provided.");
+        String body = "Your leave request for " + leaveDates + " was endorsed by " + firstLevelApproverLabel + " and is now waiting for HR review."
+                + "\n" + firstLevelApproverTitle + " note: "
+                + safeText(request.getManagerApproverReason(), "No " + firstLevelApproverTitle.toLowerCase() + " note provided.");
 
         sendAfterCommit(List.of(request.getEmployee().getEmail()), subject, body + portalFooter("Please log in to MaridOne for details."));
     }
@@ -116,9 +140,12 @@ public class WorkflowEmailService {
                 safeDate(request.getStartDateTime()),
                 safeDate(request.getEndDateTime())
         );
-        String subject = "Your Leave Request Was Rejected by Your Manager";
-        String body = "Your leave request for " + leaveDates + " was rejected by your manager."
-                + "\nManager note: " + safeText(request.getApproverReason(), "No manager note provided.");
+        String firstLevelApproverLabel = firstLevelApproverLabel(request.getEmployee());
+        String firstLevelApproverTitle = firstLevelApproverTitle(request.getEmployee());
+        String subject = "Your Leave Request Was Rejected by " + firstLevelApproverTitle;
+        String body = "Your leave request for " + leaveDates + " was rejected by " + firstLevelApproverLabel + "."
+                + "\n" + firstLevelApproverTitle + " note: "
+                + safeText(request.getApproverReason(), "No " + firstLevelApproverTitle.toLowerCase() + " note provided.");
 
         sendAfterCommit(List.of(request.getEmployee().getEmail()), subject, body + portalFooter("Please log in to MaridOne for details."));
     }
@@ -169,6 +196,22 @@ public class WorkflowEmailService {
         sendAfterCommit(List.of(manager.getEmail()), subject, body);
     }
 
+    public void sendOvertimeSubmittedToManagement(OvertimeRequest request) {
+        if (request == null || request.getEmployee() == null) {
+            return;
+        }
+
+        String employeeName = NotificationMessageFormatter.formatEmployeeName(request.getEmployee());
+        String workDate = NotificationMessageFormatter.formatDate(request.getWorkDate());
+        String subject = "New Overtime Request Awaiting Management Review";
+        String body = employeeName + " submitted an overtime request for " + workDate + "."
+                + "\nSchedule: " + request.getStartTime().toLocalTime() + " to " + request.getEndTime().toLocalTime()
+                + "\nReason: " + safeText(request.getReason(), "No reason provided.")
+                + portalFooter("Please log in to MaridOne to review this overtime request.");
+
+        sendAfterCommit(resolveManagementEmails(), subject, body);
+    }
+
     public void sendOvertimeForwardedToHr(OvertimeRequest request) {
         if (request == null) {
             return;
@@ -176,10 +219,12 @@ public class WorkflowEmailService {
 
         String employeeName = NotificationMessageFormatter.formatEmployeeName(request.getEmployee());
         String workDate = NotificationMessageFormatter.formatDate(request.getWorkDate());
+        String firstLevelApproverTitle = firstLevelApproverTitle(request.getEmployee());
         String subject = "Overtime Request Ready for HR Review";
         String body = employeeName + "'s overtime request for " + workDate + " is ready for HR review."
                 + "\nWork window: " + request.getStartTime().toLocalTime() + " to " + request.getEndTime().toLocalTime()
-                + "\nManager note: " + safeText(request.getManagerApproveReason(), "No manager note provided.")
+                + "\n" + firstLevelApproverTitle + " note: "
+                + safeText(request.getManagerApproveReason(), "No " + firstLevelApproverTitle.toLowerCase() + " note provided.")
                 + "\nSuggested pay treatment: " + (Boolean.TRUE.equals(request.getSuggestedPaid()) ? "Paid" : "Unpaid")
                 + portalFooter("Please log in to MaridOne to review and finalize this overtime request.");
 
@@ -192,9 +237,12 @@ public class WorkflowEmailService {
         }
 
         String workDate = NotificationMessageFormatter.formatDate(request.getWorkDate());
+        String firstLevelApproverLabel = firstLevelApproverLabel(request.getEmployee());
+        String firstLevelApproverTitle = firstLevelApproverTitle(request.getEmployee());
         String subject = "Your Overtime Request Is Waiting for HR Review";
-        String body = "Your overtime request for " + workDate + " was endorsed by your manager and is now waiting for HR review."
-                + "\nManager note: " + safeText(request.getManagerApproveReason(), "No manager note provided.");
+        String body = "Your overtime request for " + workDate + " was endorsed by " + firstLevelApproverLabel + " and is now waiting for HR review."
+                + "\n" + firstLevelApproverTitle + " note: "
+                + safeText(request.getManagerApproveReason(), "No " + firstLevelApproverTitle.toLowerCase() + " note provided.");
 
         sendAfterCommit(List.of(request.getEmployee().getEmail()), subject, body + portalFooter("Please log in to MaridOne for details."));
     }
@@ -205,9 +253,12 @@ public class WorkflowEmailService {
         }
 
         String workDate = NotificationMessageFormatter.formatDate(request.getWorkDate());
-        String subject = "Your Overtime Request Was Rejected by Your Manager";
-        String body = "Your overtime request for " + workDate + " was rejected by your manager."
-                + "\nManager note: " + safeText(request.getApproveReason(), "No manager note provided.");
+        String firstLevelApproverLabel = firstLevelApproverLabel(request.getEmployee());
+        String firstLevelApproverTitle = firstLevelApproverTitle(request.getEmployee());
+        String subject = "Your Overtime Request Was Rejected by " + firstLevelApproverTitle;
+        String body = "Your overtime request for " + workDate + " was rejected by " + firstLevelApproverLabel + "."
+                + "\n" + firstLevelApproverTitle + " note: "
+                + safeText(request.getApproveReason(), "No " + firstLevelApproverTitle.toLowerCase() + " note provided.");
 
         sendAfterCommit(List.of(request.getEmployee().getEmail()), subject, body + portalFooter("Please log in to MaridOne for details."));
     }
@@ -285,6 +336,27 @@ public class WorkflowEmailService {
                 .map(Employee::getEmail)
                 .filter(StringUtils::hasText)
                 .toList();
+    }
+
+    private Collection<String> resolveManagementEmails() {
+        return employeeRepository
+                .findByPositionAndEmploymentStatusNotOrderByLastNameAscFirstNameAsc(Position.MANAGEMENT, EmploymentStatus.TERMINATED)
+                .stream()
+                .map(Employee::getEmail)
+                .filter(StringUtils::hasText)
+                .toList();
+    }
+
+    private String firstLevelApproverLabel(Employee employee) {
+        return isManagementFirstLevelReview(employee) ? "management" : "your manager";
+    }
+
+    private String firstLevelApproverTitle(Employee employee) {
+        return isManagementFirstLevelReview(employee) ? "Management" : "Manager";
+    }
+
+    private boolean isManagementFirstLevelReview(Employee employee) {
+        return employee != null && employee.getManager() == null;
     }
 
     @ExecutionTime

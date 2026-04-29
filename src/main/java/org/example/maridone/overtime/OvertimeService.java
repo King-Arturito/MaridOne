@@ -13,6 +13,7 @@ import org.example.maridone.enums.Position;
 import org.example.maridone.enums.Status;
 import org.example.maridone.exception.conflict.OverlappingDatesException;
 import org.example.maridone.exception.notfound.AccountNotFoundException;
+import org.example.maridone.exception.notfound.EmployeeNotFoundException;
 import org.example.maridone.exception.unauthorized.InvalidActionException;
 import org.example.maridone.exception.unauthorized.OvertimeException;
 import org.example.maridone.leave.request.LeaveRequestRepository;
@@ -95,7 +96,7 @@ public class OvertimeService {
         }
         OvertimeRequest request = overtimeMapper.toOvertimeRequest(requestDto);
         request.setEmployee(emp);
-        request.setRequestStatus(emp.getManager() == null ? Status.PENDING_HR : Status.PENDING_MANAGER);
+        request.setRequestStatus(Status.PENDING_MANAGER);
         request.setSuggestedPaid(true);
         request.setPaid(true);
 
@@ -108,11 +109,9 @@ public class OvertimeService {
             );
             workflowEmailService.sendOvertimeSubmittedToManager(savedRequest);
         } else {
-            notifyHr("New overtime request from " + emp.getFirstName() + " " + emp.getLastName()
-                    + " for " + requestDto.getWorkDate() + " is waiting for HR review.");
-            
-            // Send email to HR for manager-less request
-            workflowEmailService.sendOvertimeForwardedToHr(savedRequest);
+            notifyManagement("New overtime request from " + emp.getFirstName() + " " + emp.getLastName()
+                    + " for " + requestDto.getWorkDate() + " is waiting for management review.");
+            workflowEmailService.sendOvertimeSubmittedToManagement(savedRequest);
         }
         return savedRequest;
     }
@@ -137,10 +136,13 @@ public class OvertimeService {
         if (emp.getPosition() == Position.MANAGER) {
             return handleManagerOvertimeReview(req, updateDto, emp);
         }
+        if (emp.getPosition() == Position.MANAGEMENT) {
+            return handleManagerOvertimeReview(req, updateDto, emp);
+        }
         if (emp.getPosition() == Position.HR) {
             return handleHrOvertimeReview(req, updateDto, emp);
         }
-        throw new InvalidActionException("Only managers and HR can review overtime requests.");
+        throw new InvalidActionException("Only managers, management, and HR can review overtime requests.");
     }
 
     @ExecutionTime
@@ -221,8 +223,21 @@ public class OvertimeService {
             return;
         }
 
+        if (approver.getPosition() == Position.MANAGEMENT) {
+            if (requestEmployeeId == null) {
+                throw new InvalidActionException("The overtime request is missing its employee reference.");
+            }
+
+            Employee requestEmployee = employeeRepository.findById(requestEmployeeId)
+                    .orElseThrow(() -> new EmployeeNotFoundException(requestEmployeeId));
+            if (requestEmployee.getManager() != null) {
+                throw new InvalidActionException("Management can only review overtime requests from employees without a manager.");
+            }
+            return;
+        }
+
         if (approver.getPosition() != Position.MANAGER) {
-            throw new InvalidActionException("Only managers and HR can review overtime requests.");
+            throw new InvalidActionException("Only managers, management, and HR can review overtime requests.");
         }
 
         if (requestEmployeeId == null) {
@@ -250,6 +265,13 @@ public class OvertimeService {
         }
     }
 
+    private void notifyManagement(String message) {
+        List<Long> managementEmployeeIds = employeeRepository.findEmployeeIdsByPosition(Position.MANAGEMENT, EmploymentStatus.TERMINATED);
+        for (Long employeeId : managementEmployeeIds) {
+            notificationService.createNotification(employeeRepository.getReferenceById(employeeId), message, "HIGH");
+        }
+    }
+
     private OvertimeResponseDto handleManagerOvertimeReview(
             OvertimeRequest request,
             OvertimeUpdateDto updateDto,
@@ -262,6 +284,7 @@ public class OvertimeService {
         Status decision = validateReviewDecision(updateDto.getUpdateStatus());
         String reason = validateDecisionReason(updateDto.getApproveReason(), "Please enter at least 5 characters for the manager review.");
         String approverName = manager.getLastName() + ", " + manager.getFirstName();
+        String reviewerLabel = resolveFirstLevelReviewerLabel(manager.getPosition());
         Instant decisionTime = Instant.now();
 
         request.setManagerApprover(approverName);
@@ -279,7 +302,7 @@ public class OvertimeService {
             notifyHr("Overtime request from " + employeeName + " for " + workDate + " is ready for HR review.");
             notifyEmployee(
                     request.getEmployee(),
-                    "Your overtime request for " + workDate + " was endorsed by your manager and is now waiting for HR review."
+                    "Your overtime request for " + workDate + " was endorsed by " + reviewerLabel + " and is now waiting for HR review."
             );
             workflowEmailService.sendOvertimeForwardedToHr(request);
             workflowEmailService.sendOvertimeForwardedToEmployee(request);
@@ -291,7 +314,7 @@ public class OvertimeService {
             overtimeRequestRepository.save(request);
             notifyEmployee(
                     request.getEmployee(),
-                    "Your overtime request for " + NotificationMessageFormatter.formatDate(request.getWorkDate()) + " was denied by your manager."
+                    "Your overtime request for " + NotificationMessageFormatter.formatDate(request.getWorkDate()) + " was denied by " + reviewerLabel + "."
             );
             workflowEmailService.sendOvertimeManagerDecisionToEmployee(request);
         }
@@ -310,7 +333,7 @@ public class OvertimeService {
             throw new OvertimeException("This overtime request is no longer waiting for HR review.");
         }
 
-        Status decision = validateReviewDecision(updateDto.getUpdateStatus());
+        Status decision = validateHrFinalizeDecision(updateDto.getUpdateStatus());
         String reason = validateDecisionReason(updateDto.getApproveReason(), "Please enter at least 5 characters for the HR decision.");
         String approverName = hr.getLastName() + ", " + hr.getFirstName();
         Instant decisionTime = Instant.now();
@@ -340,12 +363,6 @@ public class OvertimeService {
                     "Your overtime request for " + workDate + " was approved by HR as " + payLabel + " overtime."
             );
             workflowEmailService.sendOvertimeDecisionToEmployee(request);
-        } else {
-            notifyEmployee(
-                    request.getEmployee(),
-                    "Your overtime request for " + workDate + " was denied by HR."
-            );
-            workflowEmailService.sendOvertimeDecisionToEmployee(request);
         }
 
         OvertimeResponseDto response = overtimeMapper.toOvertimeResponseDto(request);
@@ -358,6 +375,17 @@ public class OvertimeService {
             throw new InvalidActionException("Only approve or reject decisions are allowed here.");
         }
         return decision;
+    }
+
+    private Status validateHrFinalizeDecision(Status decision) {
+        if (decision != Status.APPROVED) {
+            throw new InvalidActionException("HR can only finalize requests as approved.");
+        }
+        return decision;
+    }
+
+    private String resolveFirstLevelReviewerLabel(Position position) {
+        return position == Position.MANAGEMENT ? "management" : "your manager";
     }
 
     private String validateDecisionReason(String reason, String message) {

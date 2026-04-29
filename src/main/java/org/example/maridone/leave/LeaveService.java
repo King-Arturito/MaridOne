@@ -348,13 +348,9 @@ public class LeaveService {
             );
             workflowEmailService.sendLeaveSubmittedToManager(emp, payload);
         } else {
-            notifyHr("New leave request from " + emp.getFirstName() + " " + emp.getLastName()
-                    + " (" + payload.getStartDateTime().toLocalDate() + " to " + payload.getEndDateTime().toLocalDate() + ") is waiting for HR review.");
-            
-            // Send email to HR for manager-less request
-            if (!requests.isEmpty()) {
-                workflowEmailService.sendLeaveForwardedToHr(requests.get(0));
-            }
+            notifyManagement("New leave request from " + emp.getFirstName() + " " + emp.getLastName()
+                    + " (" + payload.getStartDateTime().toLocalDate() + " to " + payload.getEndDateTime().toLocalDate() + ") is waiting for management review.");
+            workflowEmailService.sendLeaveSubmittedToManagement(emp, payload);
         }
         return requests;
     }
@@ -399,8 +395,9 @@ public class LeaveService {
 
         return switch (resolveApproverPosition(user)) {
             case MANAGER -> handleManagerLeaveReview(request, payload, user);
+            case MANAGEMENT -> handleManagerLeaveReview(request, payload, user);
             case HR -> handleHrLeaveReview(request, payload, user, requestEmpId);
-            default -> throw new InvalidActionException("Only managers and HR can review leave requests.");
+            default -> throw new InvalidActionException("Only managers, management, and HR can review leave requests.");
         };
     }
 
@@ -441,7 +438,7 @@ public class LeaveService {
             boolean isPaid
     ) {
         LeaveRequest request = new LeaveRequest();
-        request.setRequestStatus(emp.getManager() == null ? Status.PENDING_HR : Status.PENDING_MANAGER);
+        request.setRequestStatus(Status.PENDING_MANAGER);
         request.setStartDateTime(startDateTime);
         request.setEndDateTime(endDateTime);
         request.setEmployee(emp);
@@ -706,8 +703,17 @@ public class LeaveService {
             return;
         }
 
+        if (position == Position.MANAGEMENT) {
+            Employee requestEmployee = employeeRepository.findById(requestEmpId)
+                    .orElseThrow(() -> new EmployeeNotFoundException(requestEmpId));
+            if (requestEmployee.getManager() != null) {
+                throw new InvalidActionException("Management can only review leave requests from employees without a manager.");
+            }
+            return;
+        }
+
         if (position != Position.MANAGER) {
-            throw new InvalidActionException("Only managers and HR can review leave requests.");
+            throw new InvalidActionException("Only managers, management, and HR can review leave requests.");
         }
 
         List<Long> handledEmployeeIds = resolveHandledEmployeeIds(user.getUsername());
@@ -731,6 +737,13 @@ public class LeaveService {
         }
     }
 
+    private void notifyManagement(String message) {
+        List<Long> managementEmployeeIds = employeeRepository.findEmployeeIdsByPosition(Position.MANAGEMENT, EmploymentStatus.TERMINATED);
+        for (Long employeeId : managementEmployeeIds) {
+            notificationService.createNotification(employeeRepository.getReferenceById(employeeId), message, "HIGH");
+        }
+    }
+
     private LeaveRequest handleManagerLeaveReview(LeaveRequest request, LeaveRequestDto payload, UserAccount user) {
         if (request.getRequestStatus() != Status.PENDING_MANAGER && request.getRequestStatus() != Status.PENDING) {
             throw new IllegalStateException("This leave request is no longer waiting for manager review.");
@@ -739,6 +752,7 @@ public class LeaveService {
         Status decision = validateReviewDecision(payload.getRequestStatus());
         String reason = validateDecisionReason(payload.getApproverReason(), "Please enter at least 5 characters for the manager review.");
         String approverName = formatApproverName(user);
+        String reviewerLabel = resolveFirstLevelReviewerLabel(resolveApproverPosition(user));
         Instant decisionTime = Instant.now();
 
         request.setManagerApprover(approverName);
@@ -760,7 +774,7 @@ public class LeaveService {
             notifyHr("Leave request from " + employeeName + " (" + leaveDates + ") is ready for HR review.");
             notifyEmployee(
                     request.getEmployee(),
-                    "Your leave request (" + leaveDates + ") was endorsed by your manager and is now waiting for HR review."
+                    "Your leave request (" + leaveDates + ") was endorsed by " + reviewerLabel + " and is now waiting for HR review."
             );
             workflowEmailService.sendLeaveForwardedToHr(request);
             workflowEmailService.sendLeaveForwardedToEmployee(request);
@@ -777,7 +791,7 @@ public class LeaveService {
                 "Your leave request (" + NotificationMessageFormatter.formatDateRange(
                         request.getStartDateTime().toLocalDate(),
                         request.getEndDateTime().toLocalDate()
-                ) + ") was denied by your manager."
+                ) + ") was denied by " + reviewerLabel + "."
         );
         workflowEmailService.sendLeaveManagerDecisionToEmployee(request);
         return request;
@@ -793,7 +807,7 @@ public class LeaveService {
             throw new IllegalStateException("This leave request is no longer waiting for HR review.");
         }
 
-        Status decision = validateReviewDecision(payload.getRequestStatus());
+        Status decision = validateHrFinalizeDecision(payload.getRequestStatus());
         String reason = validateDecisionReason(payload.getApproverReason(), "Please enter at least 5 characters for the HR decision.");
         String approverName = formatApproverName(user);
         Instant decisionTime = Instant.now();
@@ -841,12 +855,6 @@ public class LeaveService {
                     "Your leave request (" + leaveDates + ") was approved by HR as " + payLabel + " leave."
             );
             workflowEmailService.sendLeaveDecisionToEmployee(request);
-        } else {
-            notifyEmployee(
-                    request.getEmployee(),
-                    "Your leave request (" + leaveDates + ") was denied by HR."
-            );
-            workflowEmailService.sendLeaveDecisionToEmployee(request);
         }
         return request;
     }
@@ -862,6 +870,17 @@ public class LeaveService {
             throw new InvalidActionException("Only approve or reject decisions are allowed here.");
         }
         return decision;
+    }
+
+    private Status validateHrFinalizeDecision(Status decision) {
+        if (decision != Status.APPROVED) {
+            throw new InvalidActionException("HR can only finalize requests as approved.");
+        }
+        return decision;
+    }
+
+    private String resolveFirstLevelReviewerLabel(Position position) {
+        return position == Position.MANAGEMENT ? "management" : "your manager";
     }
 
     private String validateDecisionReason(String reason, String message) {

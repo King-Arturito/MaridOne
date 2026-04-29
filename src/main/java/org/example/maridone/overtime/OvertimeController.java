@@ -49,7 +49,7 @@ public class OvertimeController {
 
     //update Overtime Request status for HR
     @PatchMapping("/update")
-    @PreAuthorize("hasAnyRole('HR', 'MANAGER')")
+    @PreAuthorize("hasAnyRole('HR', 'MANAGER', 'MANAGEMENT')")
     @AuditLog
     public ResponseEntity<OvertimeResponseDto> updateOvertimeRequest(
             @RequestBody @Valid OvertimeUpdateDto updateDto,
@@ -69,7 +69,7 @@ public class OvertimeController {
     }
     //get all overtimes for HR
     @GetMapping("/all")
-    @PreAuthorize("hasRole('HR')")
+    @PreAuthorize("hasAnyRole('HR', 'MANAGEMENT')")
     @AuditLog
     public Page<OvertimeResponseDto> getAllOvertimeRequest(
             OvertimeFilter overtimeFilter,
