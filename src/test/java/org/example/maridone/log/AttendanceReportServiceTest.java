@@ -301,7 +301,7 @@ class AttendanceReportServiceTest {
         employee.setPosition(position);
         employee.setEmploymentStatus(status);
         employee.setEmploymentDateStart(LocalDate.of(2025, 1, 1));
-        employee.setEmail(firstName.toLowerCase() + "@test.com");
+        employee.setCompanyEmail(firstName.toLowerCase() + "@test.com");
         employee.setPhoneNumber("09171234567");
         return employee;
     }

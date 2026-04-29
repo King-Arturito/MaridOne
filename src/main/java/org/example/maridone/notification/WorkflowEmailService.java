@@ -66,7 +66,7 @@ public class WorkflowEmailService {
                 + "\nReason: " + safeText(payload.getReason(), "No reason provided.")
                 + portalFooter("Please log in to MaridOne to review this leave request.");
 
-        sendAfterCommit(List.of(manager.getEmail()), subject, body);
+        sendAfterCommit(resolveEmployeeEmails(manager), subject, body);
     }
 
     public void sendLeaveSubmittedToManagement(Employee employee, LeaveRequestDto payload) {
@@ -127,7 +127,7 @@ public class WorkflowEmailService {
                 + "\n" + firstLevelApproverTitle + " note: "
                 + safeText(request.getManagerApproverReason(), "No " + firstLevelApproverTitle.toLowerCase() + " note provided.");
 
-        sendAfterCommit(List.of(request.getEmployee().getEmail()), subject, body + portalFooter("Please log in to MaridOne for details."));
+        sendAfterCommit(resolveEmployeeEmails(request.getEmployee()), subject, body + portalFooter("Please log in to MaridOne for details."));
     }
 
     @Async
@@ -147,7 +147,7 @@ public class WorkflowEmailService {
                 + "\n" + firstLevelApproverTitle + " note: "
                 + safeText(request.getApproverReason(), "No " + firstLevelApproverTitle.toLowerCase() + " note provided.");
 
-        sendAfterCommit(List.of(request.getEmployee().getEmail()), subject, body + portalFooter("Please log in to MaridOne for details."));
+        sendAfterCommit(resolveEmployeeEmails(request.getEmployee()), subject, body + portalFooter("Please log in to MaridOne for details."));
     }
 
     public void sendLeaveDecisionToEmployee(LeaveRequest request) {
@@ -172,7 +172,7 @@ public class WorkflowEmailService {
                     + "\nHR note: " + safeText(request.getApproverReason(), "No HR note provided.");
         }
 
-        sendAfterCommit(List.of(request.getEmployee().getEmail()), subject, body + portalFooter("Please log in to MaridOne for details."));
+        sendAfterCommit(resolveEmployeeEmails(request.getEmployee()), subject, body + portalFooter("Please log in to MaridOne for details."));
     }
 
     public void sendOvertimeSubmittedToManager(OvertimeRequest request) {
@@ -193,7 +193,7 @@ public class WorkflowEmailService {
                 + "\nReason: " + safeText(request.getReason(), "No reason provided.")
                 + portalFooter("Please log in to MaridOne to review this overtime request.");
 
-        sendAfterCommit(List.of(manager.getEmail()), subject, body);
+        sendAfterCommit(resolveEmployeeEmails(manager), subject, body);
     }
 
     public void sendOvertimeSubmittedToManagement(OvertimeRequest request) {
@@ -244,7 +244,7 @@ public class WorkflowEmailService {
                 + "\n" + firstLevelApproverTitle + " note: "
                 + safeText(request.getManagerApproveReason(), "No " + firstLevelApproverTitle.toLowerCase() + " note provided.");
 
-        sendAfterCommit(List.of(request.getEmployee().getEmail()), subject, body + portalFooter("Please log in to MaridOne for details."));
+        sendAfterCommit(resolveEmployeeEmails(request.getEmployee()), subject, body + portalFooter("Please log in to MaridOne for details."));
     }
 
     public void sendOvertimeManagerDecisionToEmployee(OvertimeRequest request) {
@@ -260,7 +260,7 @@ public class WorkflowEmailService {
                 + "\n" + firstLevelApproverTitle + " note: "
                 + safeText(request.getApproveReason(), "No " + firstLevelApproverTitle.toLowerCase() + " note provided.");
 
-        sendAfterCommit(List.of(request.getEmployee().getEmail()), subject, body + portalFooter("Please log in to MaridOne for details."));
+        sendAfterCommit(resolveEmployeeEmails(request.getEmployee()), subject, body + portalFooter("Please log in to MaridOne for details."));
     }
 
     public void sendOvertimeDecisionToEmployee(OvertimeRequest request) {
@@ -282,7 +282,7 @@ public class WorkflowEmailService {
                     + "\nHR note: " + safeText(request.getApproveReason(), "No HR note provided.");
         }
 
-        sendAfterCommit(List.of(request.getEmployee().getEmail()), subject, body + portalFooter("Please log in to MaridOne for details."));
+        sendAfterCommit(resolveEmployeeEmails(request.getEmployee()), subject, body + portalFooter("Please log in to MaridOne for details."));
     }
 
     public void sendDisputeSubmittedToHr(DisputeRequest request) {
@@ -315,7 +315,7 @@ public class WorkflowEmailService {
                 + "\nResolution note: " + safeText(request.getStatusReason(), "No resolution note provided.");
 
         sendAfterCommit(
-                List.of(request.getPayrollItem().getEmployee().getEmail()),
+                resolveEmployeeEmails(request.getPayrollItem().getEmployee()),
                 subject,
                 body + portalFooter("Please log in to MaridOne for details.")
         );
@@ -323,7 +323,7 @@ public class WorkflowEmailService {
 
     private Employee resolveManagerRecipient(Employee employee) {
         Employee manager = employee == null ? null : employee.getManager();
-        if (manager == null || manager.getPosition() != Position.MANAGER || !StringUtils.hasText(manager.getEmail())) {
+        if (manager == null || manager.getPosition() != Position.MANAGER || resolveEmployeeEmails(manager).isEmpty()) {
             return null;
         }
         return manager;
@@ -333,8 +333,8 @@ public class WorkflowEmailService {
         return employeeRepository
                 .findByPositionAndEmploymentStatusNotOrderByLastNameAscFirstNameAsc(Position.HR, EmploymentStatus.TERMINATED)
                 .stream()
-                .map(Employee::getEmail)
-                .filter(StringUtils::hasText)
+                .map(this::resolveEmployeeEmails)
+                .flatMap(Collection::stream)
                 .toList();
     }
 
@@ -342,8 +342,8 @@ public class WorkflowEmailService {
         return employeeRepository
                 .findByPositionAndEmploymentStatusNotOrderByLastNameAscFirstNameAsc(Position.MANAGEMENT, EmploymentStatus.TERMINATED)
                 .stream()
-                .map(Employee::getEmail)
-                .filter(StringUtils::hasText)
+                .map(this::resolveEmployeeEmails)
+                .flatMap(Collection::stream)
                 .toList();
     }
 
@@ -357,6 +357,17 @@ public class WorkflowEmailService {
 
     private boolean isManagementFirstLevelReview(Employee employee) {
         return employee != null && employee.getManager() == null;
+    }
+
+    private Collection<String> resolveEmployeeEmails(Employee employee) {
+        if (employee == null) {
+            return List.of();
+        }
+
+        return java.util.stream.Stream.of(employee.getCompanyEmail(), employee.getPersonalEmail())
+                .filter(StringUtils::hasText)
+                .map(String::trim)
+                .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
     }
 
     @ExecutionTime

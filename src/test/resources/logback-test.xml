@@ -1,0 +1,14 @@
+<configuration>
+    <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
+    <include resource="org/springframework/boot/logging/logback/console-appender.xml"/>
+
+    <root level="INFO">
+        <appender-ref ref="CONSOLE"/>
+    </root>
+
+    <!-- Suppress noisy PDFBox font warnings about corrupt system fonts -->
+    <logger name="org.apache.pdfbox.pdmodel.font.FileSystemFontProvider" level="ERROR"/>
+    
+    <!-- Suppress expected warnings in HolidayService tests -->
+    <logger name="org.example.maridone.holiday.CalendarificHolidayService" level="ERROR"/>
+</configuration>

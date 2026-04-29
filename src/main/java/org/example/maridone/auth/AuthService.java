@@ -24,9 +24,13 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Set;
 
 @Service
 public class AuthService {
@@ -96,7 +100,10 @@ public class AuthService {
                 .orElseThrow(() -> new AccountNotFoundException("username of: " + username));
 
         String tokenToSend = jwtService.generateEmailVerificationToken(account.getUsername());
-        String email = account.getEmployee().getEmail();
+        String email = resolvePersonalEmail(account);
+        if (!StringUtils.hasText(email)) {
+            throw new IllegalArgumentException("Personal email is required before sending a verification link.");
+        }
         emailService.sendVerificationEmail(email, tokenToSend);
         return null;
     }
@@ -119,8 +126,11 @@ public class AuthService {
                 .orElseThrow(() -> new AccountNotFoundException("username of: " + username));
 
         String tokenToSend = totpService.generateCurrentCode(account.getTwoFactorSecret());
-        String email = account.getEmployee().getEmail();
-        emailService.sendVerificationCode(email, tokenToSend);
+        sendVerificationCodeToEmployeeEmails(
+                account,
+                tokenToSend,
+                "At least one email address is required before sending a login code."
+        );
         return null;
     }
 
@@ -133,8 +143,8 @@ public class AuthService {
             return;
         }
 
-        String email = account.getEmployee().getEmail();
-        if (email == null || email.isBlank()) {
+        List<String> emails = resolveEmployeeEmails(account);
+        if (emails.isEmpty()) {
             return;
         }
 
@@ -144,7 +154,7 @@ public class AuthService {
         userAccountRepository.save(account);
 
         String code = totpService.generateCurrentCode(resetSecret);
-        emailService.sendPasswordResetCode(email, code);
+        emails.forEach(email -> emailService.sendPasswordResetCode(email, code));
     }
     @Transactional
     public AuthResponse refreshToken(RefreshRequest request) {
@@ -284,6 +294,45 @@ public class AuthService {
     private void clearPasswordResetState(UserAccount account) {
         account.setPasswordResetSecret(null);
         account.setPasswordResetExpiresAt(null);
+    }
+
+    private void sendVerificationCodeToEmployeeEmails(UserAccount account, String tokenToSend, String emptyMessage) {
+        List<String> emails = resolveEmployeeEmails(account);
+        if (emails.isEmpty()) {
+            throw new IllegalArgumentException(emptyMessage);
+        }
+        emails.forEach(email -> emailService.sendVerificationCode(email, tokenToSend));
+    }
+
+    private List<String> resolveEmployeeEmails(UserAccount account) {
+        if (account == null || account.getEmployee() == null) {
+            return List.of();
+        }
+
+        Set<String> emails = new LinkedHashSet<>();
+        addEmail(emails, account.getEmployee().getCompanyEmail());
+        addEmail(emails, account.getEmployee().getPersonalEmail());
+        return List.copyOf(emails);
+    }
+
+    private String resolvePersonalEmail(UserAccount account) {
+        return account == null || account.getEmployee() == null
+                ? null
+                : normalizeOptionalValue(account.getEmployee().getPersonalEmail());
+    }
+
+    private void addEmail(Set<String> emails, String value) {
+        String normalized = normalizeOptionalValue(value);
+        if (normalized != null) {
+            emails.add(normalized);
+        }
+    }
+
+    private String normalizeOptionalValue(String value) {
+        if (!StringUtils.hasText(value)) {
+            return null;
+        }
+        return value.trim();
     }
 
     private String normalizeRequiredValue(String value, String message) {

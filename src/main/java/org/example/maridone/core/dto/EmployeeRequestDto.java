@@ -29,9 +29,11 @@ public class EmployeeRequestDto {
     private ExemptionStatus exemptionStatus;
     private LocalDate employmentDateStart;
     private LocalDate employmentDateEnd;
-    @NotBlank(groups = OnCreate.class, message = "Email is required.")
-    @Email(message = "Email must be valid.")
-    private String email;
+    @NotBlank(groups = OnCreate.class, message = "Company email is required.")
+    @Email(message = "Company email must be valid.")
+    private String companyEmail;
+    @Email(message = "Personal email must be valid.")
+    private String personalEmail;
     @NotBlank(groups = OnCreate.class, message = "Phone number is required.")
     @Pattern(regexp = "^\\D*(?:\\d\\D*){11}$", message = "Phone number must be exactly 11 digits.")
     private String phoneNumber;
@@ -118,12 +120,20 @@ public class EmployeeRequestDto {
         this.employmentDateEnd = employmentDateEnd;
     }
 
-    public String getEmail() {
-        return email;
+    public String getCompanyEmail() {
+        return companyEmail;
     }
 
-    public void setEmail(String email) {
-        this.email = email;
+    public void setCompanyEmail(String companyEmail) {
+        this.companyEmail = companyEmail;
+    }
+
+    public String getPersonalEmail() {
+        return personalEmail;
+    }
+
+    public void setPersonalEmail(String personalEmail) {
+        this.personalEmail = personalEmail;
     }
 
     public String getPhoneNumber() {

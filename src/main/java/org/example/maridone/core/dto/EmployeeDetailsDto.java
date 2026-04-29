@@ -21,7 +21,8 @@ public class EmployeeDetailsDto {
     private LocalDate employmentDateStart;
     private LocalDate employmentDateEnd;
     private BigDecimal yearlySalary;
-    private String email;
+    private String companyEmail;
+    private String personalEmail;
     private String isVerified;
     private String phoneNumber;
     private Position position;
@@ -118,12 +119,20 @@ public class EmployeeDetailsDto {
         this.employmentDateStart = employmentDateStart;
     }
 
-    public String getEmail() {
-        return email;
+    public String getCompanyEmail() {
+        return companyEmail;
     }
 
-    public void setEmail(String email) {
-        this.email = email;
+    public void setCompanyEmail(String companyEmail) {
+        this.companyEmail = companyEmail;
+    }
+
+    public String getPersonalEmail() {
+        return personalEmail;
+    }
+
+    public void setPersonalEmail(String personalEmail) {
+        this.personalEmail = personalEmail;
     }
 
     public String getPhoneNumber() {

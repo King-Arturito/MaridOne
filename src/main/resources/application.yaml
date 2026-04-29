@@ -34,4 +34,5 @@ jwt:
 
 default:
   url: ${URL_HOST}
+  api-url: ${API_URL:}
 

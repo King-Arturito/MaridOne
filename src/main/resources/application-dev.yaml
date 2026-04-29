@@ -2,7 +2,7 @@ spring:
   datasource:
     url: jdbc:postgresql://localhost:5432/MaridOne
     username: postgres
-    password: 1234
+    password: admin
     driver-class-name: org.postgresql.Driver
   jpa:
     hibernate:
@@ -30,6 +30,7 @@ jwt:
 
 default:
   url: http://localhost:5173
+  api-url: http://localhost:8080
 
 holiday:
   enabled: true

@@ -3,9 +3,14 @@ package org.example.maridone.auth;
 import org.example.maridone.auth.dto.*;
 import org.example.maridone.auth.twofactor.TwoFactorService;
 import org.example.maridone.auth.twofactor.TwoFactorSetupResponse;
+import org.example.maridone.config.DefaultConfig;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.util.UriComponentsBuilder;
+
+import java.net.URI;
 
 @RestController
 @RequestMapping("/api")
@@ -13,10 +18,12 @@ public class AuthController {
 
     private final AuthService authService;
     private final TwoFactorService twoFactorService;
+    private final DefaultConfig defaultConfig;
 
-    public AuthController(AuthService authService, TwoFactorService twoFactorService) {
+    public AuthController(AuthService authService, TwoFactorService twoFactorService, DefaultConfig defaultConfig) {
         this.authService = authService;
         this.twoFactorService = twoFactorService;
+        this.defaultConfig = defaultConfig;
     }
 
     @PostMapping("/auth/login")
@@ -62,6 +69,20 @@ public class AuthController {
         return ResponseEntity.ok("Email successfully verified");
     }
 
+    @GetMapping("/auth/verify-email")
+    public ResponseEntity<Void> verifyEmailFromLink(@RequestParam("token") String token) {
+        try {
+            authService.verifyEmail(token);
+            return ResponseEntity.status(HttpStatus.FOUND)
+                    .location(buildEmailVerificationRedirect("success", "Email successfully verified"))
+                    .build();
+        } catch (RuntimeException error) {
+            return ResponseEntity.status(HttpStatus.FOUND)
+                    .location(buildEmailVerificationRedirect("error", error.getMessage()))
+                    .build();
+        }
+    }
+
     @PostMapping("/settings/send-email-verification")
     public ResponseEntity<Void> sendEmailVerification(Authentication authentication) {
         return ResponseEntity.ok(authService.sendEmailVerification(authentication.getName()));
@@ -88,5 +109,14 @@ public class AuthController {
 
         twoFactorService.confirmAndEnable2fa(authentication.getName(), code);
         return ResponseEntity.ok("Two-Factor Authentication successfully enabled.");
+    }
+
+    private URI buildEmailVerificationRedirect(String status, String message) {
+        return UriComponentsBuilder.fromUriString(defaultConfig.getUrl())
+                .path("/verify-email")
+                .queryParam("status", status)
+                .queryParam("message", message)
+                .build()
+                .toUri();
     }
 }

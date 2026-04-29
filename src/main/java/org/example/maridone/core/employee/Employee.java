@@ -61,9 +61,13 @@ public class Employee {
     private BigDecimal yearlySalary;
 
     @NotBlank
-    @Column(name = "email", nullable = false, length = 254, unique = true)
+    @Column(name = "company_email", nullable = false, length = 254, unique = true)
     @Email
-    private String email;
+    private String companyEmail;
+
+    @Column(name = "personal_email", unique = true, length = 254)
+    @Email
+    private String personalEmail;
 
     @Column(name = "is_verified", nullable = false)
     private Boolean isVerified = false;
@@ -220,12 +224,20 @@ public class Employee {
         this.yearlySalary = yearlySalary;
     }
 
-    public String getEmail() {
-        return email;
+    public String getCompanyEmail() {
+        return companyEmail;
     }
 
-    public void setEmail(String email) {
-        this.email = email;
+    public void setCompanyEmail(String companyEmail) {
+        this.companyEmail = companyEmail;
+    }
+
+    public String getPersonalEmail() {
+        return personalEmail;
+    }
+
+    public void setPersonalEmail(String personalEmail) {
+        this.personalEmail = personalEmail;
     }
 
     public Boolean getIsVerified() {

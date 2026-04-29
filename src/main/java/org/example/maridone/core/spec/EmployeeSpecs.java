@@ -28,9 +28,11 @@ public class EmployeeSpecs {
                                 root.get("middleName")), "%" + filter.middleName().toLowerCase() + "%"));
             }
             if (filter.email() != null) {
-                predicates.add(cb.like(
-                        cb.lower(
-                                root.get("email")), "%" + filter.email().toLowerCase() + "%"));
+                String emailFilter = "%" + filter.email().toLowerCase() + "%";
+                predicates.add(cb.or(
+                        cb.like(cb.lower(root.get("companyEmail")), emailFilter),
+                        cb.like(cb.lower(root.get("personalEmail")), emailFilter)
+                ));
             }
             if (filter.employeeId() != null) {
                 predicates.add(cb.equal(root.get("employeeId"), filter.employeeId()));

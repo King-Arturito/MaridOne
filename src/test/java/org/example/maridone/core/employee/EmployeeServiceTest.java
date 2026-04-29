@@ -97,7 +97,7 @@ class EmployeeServiceTest {
         ReflectionTestUtils.setField(employee, "employeeId", 1L);
         employee.setFirstName("Frieren");
         employee.setLastName("Test");
-        employee.setEmail("frieren@example.com");
+        employee.setCompanyEmail("frieren@example.com");
         employee.setPhoneNumber("09171234567");
         employee.setBirthDate(java.time.LocalDate.of(2000, 1, 1));
         employee.setPosition(Position.EMPLOYEE);
@@ -174,7 +174,7 @@ class EmployeeServiceTest {
         Employee employee = new Employee();
         employee.setFirstName("Frieren");
         employee.setLastName("Test");
-        employee.setEmail("frieren@example.com");
+        employee.setCompanyEmail("frieren@example.com");
         employee.setPhoneNumber("0917123456");
         employee.setBirthDate(java.time.LocalDate.of(2000, 1, 1));
         employee.setPosition(Position.EMPLOYEE);
@@ -199,7 +199,7 @@ class EmployeeServiceTest {
         ReflectionTestUtils.setField(employee, "employeeId", 8L);
         employee.setFirstName("Lucas");
         employee.setLastName("Suspended");
-        employee.setEmail("lucas@example.com");
+        employee.setCompanyEmail("lucas@example.com");
         employee.setPhoneNumber("09171234567");
         employee.setBirthDate(java.time.LocalDate.of(2000, 1, 1));
         employee.setPosition(Position.EMPLOYEE);
@@ -228,7 +228,7 @@ class EmployeeServiceTest {
         ReflectionTestUtils.setField(employee, "employeeId", 18L);
         employee.setFirstName("Cecilia");
         employee.setLastName("Reyes");
-        employee.setEmail("cecilia@example.com");
+        employee.setCompanyEmail("cecilia@example.com");
         employee.setPhoneNumber("09171234567");
         employee.setBirthDate(java.time.LocalDate.of(1990, 6, 18));
         employee.setPosition(Position.MANAGER);
@@ -371,7 +371,8 @@ class EmployeeServiceTest {
         stubScheduleDependencies();
         Employee employee = new Employee();
         ReflectionTestUtils.setField(employee, "employeeId", 21L);
-        employee.setEmail("old@example.com");
+        employee.setCompanyEmail("old@company.example.com");
+        employee.setPersonalEmail("old@example.com");
         employee.setPhoneNumber("09170000000");
         employee.setIsVerified(true);
 
@@ -380,7 +381,7 @@ class EmployeeServiceTest {
         employee.setAddress(existingAddress);
 
         EmployeeRequestDto requestDto = new EmployeeRequestDto();
-        requestDto.setEmail("new@example.com");
+        requestDto.setPersonalEmail("new@example.com");
         requestDto.setPhoneNumber("09171234567");
         Address newAddress = new Address();
         newAddress.setCity("Pasig");
@@ -393,7 +394,7 @@ class EmployeeServiceTest {
 
         employeeService.updateSelfEmployeeProfile(21L, requestDto);
 
-        Assertions.assertEquals("new@example.com", employee.getEmail());
+        Assertions.assertEquals("new@example.com", employee.getPersonalEmail());
         Assertions.assertEquals("09171234567", employee.getPhoneNumber());
         Assertions.assertEquals("Pasig", employee.getAddress().getCity());
         Assertions.assertFalse(employee.getIsVerified());

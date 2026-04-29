@@ -149,7 +149,8 @@ public class SampleRows {
         employee.setEmploymentDateStart(resolveSeedEmploymentStart(seed));
         employee.setEmploymentDateEnd(seed.employmentDateEnd());
         employee.setYearlySalary(seed.yearlySalary());
-        employee.setEmail(seed.email());
+        employee.setCompanyEmail(seed.email());
+        employee.setPersonalEmail(buildPersonalEmail(seed.email()));
         employee.setIsVerified(seed.isVerified());
         employee.setPhoneNumber(seed.phoneNumber());
         employee.setEmploymentStatus(seed.employmentStatus());
@@ -549,11 +550,20 @@ public class SampleRows {
     }
 
     private boolean isNightShiftTestEmployee(Employee employee) {
-        return employee != null && NIGHT_SHIFT_TEST_EMAIL.equalsIgnoreCase(employee.getEmail());
+        return employee != null && NIGHT_SHIFT_TEST_EMAIL.equalsIgnoreCase(employee.getCompanyEmail());
     }
 
     private boolean isLateAndEarlyOutTestEmployee(Employee employee) {
-        return employee != null && LATE_EARLY_OUT_TEST_EMAIL.equalsIgnoreCase(employee.getEmail());
+        return employee != null && LATE_EARLY_OUT_TEST_EMAIL.equalsIgnoreCase(employee.getCompanyEmail());
+    }
+
+    private String buildPersonalEmail(String companyEmail) {
+        if (companyEmail == null || companyEmail.isBlank() || !companyEmail.contains("@")) {
+            return companyEmail;
+        }
+
+        int atIndex = companyEmail.indexOf('@');
+        return companyEmail.substring(0, atIndex) + ".personal" + companyEmail.substring(atIndex);
     }
 
     private Instant toInstant(LocalDateTime dateTime) {

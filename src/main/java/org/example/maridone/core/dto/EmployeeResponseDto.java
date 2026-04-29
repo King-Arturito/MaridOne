@@ -17,7 +17,8 @@ public class EmployeeResponseDto {
     private EmploymentStatus employmentStatus;
     private ExemptionStatus exemptionStatus;
     private LocalDate employmentDateStart;
-    private String email;
+    private String companyEmail;
+    private String personalEmail;
     private String phoneNumber;
     private Position position;
     private String department;
@@ -96,12 +97,20 @@ public class EmployeeResponseDto {
         this.employmentDateStart = employmentDateStart;
     }
 
-    public String getEmail() {
-        return email;
+    public String getCompanyEmail() {
+        return companyEmail;
     }
 
-    public void setEmail(String email) {
-        this.email = email;
+    public void setCompanyEmail(String companyEmail) {
+        this.companyEmail = companyEmail;
+    }
+
+    public String getPersonalEmail() {
+        return personalEmail;
+    }
+
+    public void setPersonalEmail(String personalEmail) {
+        this.personalEmail = personalEmail;
     }
 
     public String getPhoneNumber() {

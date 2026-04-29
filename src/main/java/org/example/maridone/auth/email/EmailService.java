@@ -4,25 +4,26 @@ import org.example.maridone.config.DefaultConfig;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.stereotype.Service;
+import org.springframework.web.util.UriComponentsBuilder;
 
 @Service
 //todo: change to prod
 public class EmailService {
 
     private final JavaMailSender mailSender;
-    private final DefaultConfig defaultConfig;
-    private final String frontendUrl;
+    private final String apiUrl;
 
     public EmailService(JavaMailSender mailSender, DefaultConfig defaultConfig) {
         this.mailSender = mailSender;
-        this.defaultConfig = defaultConfig;
-        this.frontendUrl = (defaultConfig.getUrl() == null || defaultConfig.getUrl().isBlank())
-                ? "http://localhost:5173"
-                : defaultConfig.getUrl();
+        this.apiUrl = defaultConfig.getApiUrlOrDefault();
     }
 
     public void sendVerificationEmail(String toEmail, String jwtToken) {
-        String verifyUrl = frontendUrl + "/verify-email?token=" + jwtToken;
+        String verifyUrl = UriComponentsBuilder.fromUriString(apiUrl)
+                .path("/api/auth/verify-email")
+                .queryParam("token", jwtToken)
+                .build()
+                .toUriString();
         sendPlainTextEmail(
                 toEmail,
                 "Verify your MaridOne Email Address",

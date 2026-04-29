@@ -51,7 +51,8 @@ class AuthServiceTest {
         request.setUsername("richard14");
 
         Employee employee = new Employee();
-        employee.setEmail("richard@maridone.test");
+        employee.setCompanyEmail("richard@maridone.test");
+        employee.setPersonalEmail("richard.personal@maridone.test");
         employee.setEmploymentStatus(EmploymentStatus.REGULAR);
 
         UserAccount account = new UserAccount();
@@ -68,6 +69,7 @@ class AuthServiceTest {
         Assertions.assertNotNull(account.getPasswordResetExpiresAt());
         verify(userAccountRepository).save(account);
         verify(emailService).sendPasswordResetCode("richard@maridone.test", "123456");
+        verify(emailService).sendPasswordResetCode("richard.personal@maridone.test", "123456");
     }
 
     @Test
@@ -144,5 +146,36 @@ class AuthServiceTest {
 
         Assertions.assertTrue(error.getMessage().contains("at least 8 characters"));
         verify(userAccountRepository, never()).findByUsername("richard14");
+    }
+
+    @Test
+    void verifyEmail_ShouldMarkEmployeeVerified_WhenTokenIsValid() {
+        Employee employee = new Employee();
+        employee.setIsVerified(false);
+
+        UserAccount account = new UserAccount();
+        account.setUsername("richard14");
+        account.setEmployee(employee);
+
+        when(jwtService.isValidVerificationToken("valid-token")).thenReturn(true);
+        when(jwtService.extractUsername("valid-token")).thenReturn("richard14");
+        when(userAccountRepository.findByUsername("richard14")).thenReturn(Optional.of(account));
+
+        authService.verifyEmail("valid-token");
+
+        Assertions.assertTrue(Boolean.TRUE.equals(employee.getIsVerified()));
+        verify(userAccountRepository).save(account);
+    }
+
+    @Test
+    void verifyEmail_ShouldRejectInvalidToken() {
+        when(jwtService.isValidVerificationToken("expired-token")).thenReturn(false);
+
+        Assertions.assertThrows(
+                UnauthorizedAccessException.class,
+                () -> authService.verifyEmail("expired-token")
+        );
+
+        verify(userAccountRepository, never()).findByUsername(org.mockito.ArgumentMatchers.anyString());
     }
 }

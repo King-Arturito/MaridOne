@@ -10,10 +10,14 @@ import org.example.maridone.exception.notfound.AccountNotFoundException;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
 
 import java.time.Instant;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Set;
 
 @Service
 public class SensitiveAccessService {
@@ -71,12 +75,12 @@ public class SensitiveAccessService {
         ensureTwoFactorEnabled(account);
 
         String tokenToSend = totpService.generateCurrentCode(account.getTwoFactorSecret());
-        String email = account.getEmployee() != null ? account.getEmployee().getEmail() : null;
-        if (email == null || email.isBlank()) {
-            throw new IllegalArgumentException("A verified email is required before sending a sensitive-access code.");
+        List<String> emails = resolveEmployeeEmails(account);
+        if (emails.isEmpty()) {
+            throw new IllegalArgumentException("At least one email address is required before sending a sensitive-access code.");
         }
 
-        emailService.sendVerificationCode(email, tokenToSend);
+        emails.forEach(email -> emailService.sendVerificationCode(email, tokenToSend));
     }
 
     public void assertHrSensitiveAccess(Authentication authentication) {
@@ -165,5 +169,23 @@ public class SensitiveAccessService {
             return normalized;
         }
         return "PASSWORD";
+    }
+
+    private List<String> resolveEmployeeEmails(UserAccount account) {
+        if (account == null || account.getEmployee() == null) {
+            return List.of();
+        }
+
+        Set<String> emails = new LinkedHashSet<>();
+        addEmail(emails, account.getEmployee().getCompanyEmail());
+        addEmail(emails, account.getEmployee().getPersonalEmail());
+        return List.copyOf(emails);
+    }
+
+    private void addEmail(Set<String> emails, String value) {
+        if (!StringUtils.hasText(value)) {
+            return;
+        }
+        emails.add(value.trim());
     }
 }

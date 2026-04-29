@@ -93,6 +93,8 @@ public class EmployeeService {
     @ExecutionTime
     public EmployeeResponseDto createEmployee(EmployeeRequestDto employeeRequestDto) {
         Employee employee = coreMapper.toEmployee(employeeRequestDto);
+        employee.setCompanyEmail(normalizeRequiredEmail(employee.getCompanyEmail(), "Company email is required."));
+        employee.setPersonalEmail(normalizeOptionalEmail(employee.getPersonalEmail()));
         employee.setPhoneNumber(normalizePhoneNumber(employee.getPhoneNumber()));
         employee.setPosition(Optional.ofNullable(employee.getPosition()).orElse(Position.EMPLOYEE));
         employee.setEmploymentStatus(Optional.ofNullable(employee.getEmploymentStatus()).orElse(EmploymentStatus.REGULAR));
@@ -178,9 +180,13 @@ public class EmployeeService {
                 .filter(v -> !v.equals(emp.getEmploymentStatus()))
                 .ifPresent(emp::setEmploymentStatus);
 
-        Optional.ofNullable(updated.getEmail())
-                .filter(v -> !v.equals(emp.getEmail()))
-                .ifPresent(newEmail -> updateEmail(emp, newEmail));
+        Optional.ofNullable(updated.getCompanyEmail())
+                .filter(v -> !v.equals(emp.getCompanyEmail()))
+                .ifPresent(newEmail -> updateCompanyEmail(emp, newEmail));
+
+        Optional.ofNullable(updated.getPersonalEmail())
+                .filter(v -> !Objects.equals(v, emp.getPersonalEmail()))
+                .ifPresent(newEmail -> updatePersonalEmail(emp, newEmail));
 
         Optional.ofNullable(updated.getPhoneNumber())
                 .filter(v -> !v.equals(emp.getPhoneNumber()))
@@ -242,9 +248,9 @@ public class EmployeeService {
         Employee emp = employeeRepository.findById(id).orElseThrow(() -> new EmployeeNotFoundException(id));
         assertSelfEditableFieldsOnly(updated);
 
-        Optional.ofNullable(updated.getEmail())
-                .filter(v -> !v.equals(emp.getEmail()))
-                .ifPresent(newEmail -> updateEmail(emp, newEmail));
+        Optional.ofNullable(updated.getPersonalEmail())
+                .filter(v -> !Objects.equals(v, emp.getPersonalEmail()))
+                .ifPresent(newEmail -> updatePersonalEmail(emp, newEmail));
 
         Optional.ofNullable(updated.getPhoneNumber())
                 .filter(v -> !v.equals(emp.getPhoneNumber()))
@@ -494,8 +500,27 @@ public class EmployeeService {
         return digitsOnly;
     }
 
-    private void updateEmail(Employee employee, String email) {
-        employee.setEmail(email);
+    private String normalizeRequiredEmail(String value, String message) {
+        if (value == null || value.trim().isEmpty()) {
+            throw new IllegalArgumentException(message);
+        }
+        return value.trim();
+    }
+
+    private String normalizeOptionalEmail(String value) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    private void updateCompanyEmail(Employee employee, String email) {
+        employee.setCompanyEmail(normalizeRequiredEmail(email, "Company email is required."));
+    }
+
+    private void updatePersonalEmail(Employee employee, String email) {
+        employee.setPersonalEmail(normalizeRequiredEmail(email, "Personal email is required."));
         employee.setIsVerified(false);
     }
 
@@ -545,6 +570,7 @@ public class EmployeeService {
                         || updated.getExemptionStatus() != null
                         || updated.getEmploymentDateStart() != null
                         || updated.getEmploymentDateEnd() != null
+                        || updated.getCompanyEmail() != null
                         || updated.getPosition() != null
                         || updated.getDepartment() != null
                         || updated.getYearlySalary() != null
