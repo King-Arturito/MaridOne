@@ -1,5 +1,6 @@
 package org.example.maridone.log.timecard;
 
+import org.apache.pdfbox.pdmodel.PDDocument;
 import org.example.maridone.config.DefaultConfig;
 import org.example.maridone.core.employee.Employee;
 import org.example.maridone.core.employee.EmployeeRepository;
@@ -24,6 +25,7 @@ import org.thymeleaf.spring6.SpringTemplateEngine;
 import org.thymeleaf.templateresolver.ClassLoaderTemplateResolver;
 
 import java.math.BigDecimal;
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -118,6 +120,26 @@ class TimecardServiceTest {
         Assertions.assertEquals("Timecard_Robert_Brown_2026-04-11_to_2026-04-25.pdf", pdf.fileName());
         Assertions.assertTrue(pdf.content().length > 0);
         Assertions.assertTrue(new String(pdf.content(), 0, 4, StandardCharsets.US_ASCII).startsWith("%PDF"));
+    }
+
+    @Test
+    void generateTimecardPdf_shouldSpanMultiplePagesWhenDateRangeIsLong() throws IOException {
+        LocalDate from = LocalDate.of(2026, 1, 1);
+        LocalDate to = LocalDate.of(2026, 6, 30);
+        Employee employee = employee(33L, "Maria", "Santiago", Position.EMPLOYEE);
+        employee.setManager(null);
+        employee.setEmpTitle(null);
+
+        stubCommonDependencies(employee, from, to, List.of());
+        when(payrollCalculator.findAttendanceSessionsForDate(anyList(), any(LocalDate.class))).thenReturn(List.of());
+        when(payrollCalculator.calculateHoursFromAttendanceSessions(anyList())).thenReturn(BigDecimal.ZERO);
+        when(payrollCalculator.deductUnpaidLunchHour(any(BigDecimal.class))).thenReturn(BigDecimal.ZERO);
+
+        TimecardService.GeneratedTimecardPdf pdf = timecardService.generateTimecardPdf(employee.getEmployeeId(), from, to);
+
+        try (PDDocument document = PDDocument.load(pdf.content())) {
+            Assertions.assertTrue(document.getNumberOfPages() > 1, "Expected a long timecard to flow to multiple pages.");
+        }
     }
 
     private void stubCommonDependencies(Employee employee, LocalDate from, LocalDate to, List<AttendanceLog> logs) {
