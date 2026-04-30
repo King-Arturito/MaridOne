@@ -7,6 +7,7 @@ import jakarta.validation.constraints.Pattern;
 import org.example.maridone.embeddable.Address;
 import org.example.maridone.enums.EmploymentStatus;
 import org.example.maridone.enums.ExemptionStatus;
+import org.example.maridone.enums.Gender;
 import org.example.maridone.enums.Position;
 import org.example.maridone.enums.SeparationReason;
 import org.example.maridone.marker.OnCreate;
@@ -24,6 +25,7 @@ public class EmployeeRequestDto {
     private String lastName;
     @NotNull(groups = OnCreate.class, message = "Birth date is required.")
     private LocalDate birthDate;
+    private Gender gender;
     @NotNull(groups = HrUpdate.class)
     private EmploymentStatus employmentStatus;
     private ExemptionStatus exemptionStatus;
@@ -86,6 +88,14 @@ public class EmployeeRequestDto {
 
     public void setBirthDate(LocalDate birthDate) {
         this.birthDate = birthDate;
+    }
+
+    public Gender getGender() {
+        return gender;
+    }
+
+    public void setGender(Gender gender) {
+        this.gender = gender;
     }
 
     public EmploymentStatus getEmploymentStatus() {

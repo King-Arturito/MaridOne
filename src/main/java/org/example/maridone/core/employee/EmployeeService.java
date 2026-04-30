@@ -176,6 +176,10 @@ public class EmployeeService {
                 .filter(v -> !v.equals(emp.getBirthDate()))
                 .ifPresent(emp::setBirthDate);
 
+        Optional.ofNullable(updated.getGender())
+                .filter(v -> !v.equals(emp.getGender()))
+                .ifPresent(emp::setGender);
+
         Optional.ofNullable(updated.getEmploymentStatus())
                 .filter(v -> !v.equals(emp.getEmploymentStatus()))
                 .ifPresent(emp::setEmploymentStatus);
@@ -566,6 +570,7 @@ public class EmployeeService {
                         || updated.getMiddleName() != null
                         || updated.getLastName() != null
                         || updated.getBirthDate() != null
+                        || updated.getGender() != null
                         || updated.getEmploymentStatus() != null
                         || updated.getExemptionStatus() != null
                         || updated.getEmploymentDateStart() != null

@@ -6,6 +6,7 @@ import java.time.LocalDate;
 import org.example.maridone.embeddable.Address;
 import org.example.maridone.enums.EmploymentStatus;
 import org.example.maridone.enums.ExemptionStatus;
+import org.example.maridone.enums.Gender;
 import org.example.maridone.enums.Position;
 import org.example.maridone.enums.SeparationReason;
 
@@ -16,6 +17,7 @@ public class EmployeeDetailsDto {
     private String middleName;
     private String lastName;
     private LocalDate birthDate;
+    private Gender gender;
     private EmploymentStatus employmentStatus;
     private ExemptionStatus exemptionStatus;
     private LocalDate employmentDateStart;
@@ -93,6 +95,14 @@ public class EmployeeDetailsDto {
 
     public void setBirthDate(LocalDate birthDate) {
         this.birthDate = birthDate;
+    }
+
+    public Gender getGender() {
+        return gender;
+    }
+
+    public void setGender(Gender gender) {
+        this.gender = gender;
     }
 
     public EmploymentStatus getEmploymentStatus() {

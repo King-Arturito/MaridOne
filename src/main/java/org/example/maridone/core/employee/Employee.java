@@ -6,6 +6,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Past;
 import jakarta.validation.constraints.Size;
 import org.example.maridone.enums.ExemptionStatus;
+import org.example.maridone.enums.Gender;
 import org.example.maridone.core.user.UserAccount;
 import org.example.maridone.enums.EmploymentStatus;
 import org.example.maridone.enums.ManagerTitle;
@@ -42,6 +43,10 @@ public class Employee {
     @Past
     @Column(name ="birth_date", nullable = false)
     private LocalDate birthDate;
+
+    @Column(name = "gender")
+    @Enumerated(EnumType.STRING)
+    private Gender gender;
 
     @Column(name = "employment_status", nullable = false)
     @Enumerated(EnumType.STRING)
@@ -182,6 +187,14 @@ public class Employee {
 
     public void setBirthDate(LocalDate birthDate) {
         this.birthDate = birthDate;
+    }
+
+    public Gender getGender() {
+        return gender;
+    }
+
+    public void setGender(Gender gender) {
+        this.gender = gender;
     }
 
     public EmploymentStatus getEmploymentStatus() {

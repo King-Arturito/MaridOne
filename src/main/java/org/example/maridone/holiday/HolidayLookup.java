@@ -7,11 +7,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 
-public record HolidayLookup(
-        Set<LocalDate> holidayDates,
-        Set<LocalDate> regularHolidayDates,
-        Map<LocalDate, String> holidayNamesByDate
-) {
+public record HolidayLookup(Set<LocalDate> holidayDates, Set<LocalDate> regularHolidayDates, Map<LocalDate, String> holidayNames) {
 
     public HolidayLookup {
         holidayDates = holidayDates == null
@@ -20,17 +16,13 @@ public record HolidayLookup(
         regularHolidayDates = regularHolidayDates == null
                 ? Set.of()
                 : Collections.unmodifiableSet(new HashSet<>(regularHolidayDates));
-        holidayNamesByDate = holidayNamesByDate == null
+        holidayNames = holidayNames == null
                 ? Map.of()
-                : Collections.unmodifiableMap(new HashMap<>(holidayNamesByDate));
+                : Collections.unmodifiableMap(new HashMap<>(holidayNames));
     }
 
     public HolidayLookup(Set<LocalDate> holidayDates, Set<LocalDate> regularHolidayDates) {
         this(holidayDates, regularHolidayDates, Map.of());
-    }
-
-    public String holidayName(LocalDate date) {
-        return date == null ? null : holidayNamesByDate.get(date);
     }
 
     public static HolidayLookup empty() {

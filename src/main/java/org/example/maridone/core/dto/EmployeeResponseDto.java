@@ -4,6 +4,7 @@ import java.util.List;
 
 import org.example.maridone.enums.EmploymentStatus;
 import org.example.maridone.enums.ExemptionStatus;
+import org.example.maridone.enums.Gender;
 import org.example.maridone.enums.Position;
 import org.example.maridone.enums.SeparationReason;
 import org.example.maridone.schedule.dto.ShiftResponseDto;
@@ -14,6 +15,7 @@ public class EmployeeResponseDto {
     private String firstName;
     private String middleName;
     private String lastName;
+    private Gender gender;
     private EmploymentStatus employmentStatus;
     private ExemptionStatus exemptionStatus;
     private LocalDate employmentDateStart;
@@ -71,6 +73,14 @@ public class EmployeeResponseDto {
 
     public void setLastName(String lastName) {
         this.lastName = lastName;
+    }
+
+    public Gender getGender() {
+        return gender;
+    }
+
+    public void setGender(Gender gender) {
+        this.gender = gender;
     }
 
     public EmploymentStatus getEmploymentStatus() {
