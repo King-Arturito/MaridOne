@@ -25,7 +25,7 @@ class CalendarificHolidayServiceTest {
         String overridesJson = """
                 {
                   "overrides": [
-                    { "date": "2026-05-01", "type": "REGULAR", "action": "ADD" },
+                    { "date": "2026-05-01", "type": "REGULAR", "action": "ADD", "name": "Labor Day" },
                     { "date": "2026-05-02", "type": "SPECIAL_NON_WORKING", "action": "ADD" },
                     { "date": "2026-05-03", "action": "REMOVE" }
                   ]
@@ -48,6 +48,7 @@ class CalendarificHolidayServiceTest {
         Assertions.assertFalse(lookup.holidayDates().contains(LocalDate.of(2026, 5, 3)));
         Assertions.assertTrue(lookup.regularHolidayDates().contains(LocalDate.of(2026, 5, 1)));
         Assertions.assertFalse(lookup.regularHolidayDates().contains(LocalDate.of(2026, 5, 2)));
+        Assertions.assertEquals("Labor Day", lookup.holidayName(LocalDate.of(2026, 5, 1)));
     }
 
     @Test
@@ -62,8 +63,8 @@ class CalendarificHolidayServiceTest {
                   "year": 2026,
                   "fetchedAt": "%s",
                   "holidays": [
-                    { "date": "2026-06-12", "type": "REGULAR" },
-                    { "date": "2026-06-13", "type": "SPECIAL_NON_WORKING" }
+                    { "date": "2026-06-12", "type": "REGULAR", "name": "Independence Day" },
+                    { "date": "2026-06-13", "type": "SPECIAL_NON_WORKING", "name": "Founders Day" }
                   ]
                 }
                 """.formatted(Instant.now().toString());
@@ -74,7 +75,7 @@ class CalendarificHolidayServiceTest {
                   "overrides": [
                     { "date": "2026-06-12", "action": "REMOVE" },
                     { "date": "2026-06-13", "type": "REGULAR", "action": "ADD" },
-                    { "date": "2026-06-14", "type": "SPECIAL_NON_WORKING", "action": "ADD" }
+                    { "date": "2026-06-14", "type": "SPECIAL_NON_WORKING", "action": "ADD", "name": "City Charter Day" }
                   ]
                 }
                 """;
@@ -95,6 +96,8 @@ class CalendarificHolidayServiceTest {
         Assertions.assertTrue(lookup.holidayDates().contains(LocalDate.of(2026, 6, 14)));
         Assertions.assertTrue(lookup.regularHolidayDates().contains(LocalDate.of(2026, 6, 13)));
         Assertions.assertFalse(lookup.regularHolidayDates().contains(LocalDate.of(2026, 6, 14)));
+        Assertions.assertEquals("Founders Day", lookup.holidayName(LocalDate.of(2026, 6, 13)));
+        Assertions.assertEquals("City Charter Day", lookup.holidayName(LocalDate.of(2026, 6, 14)));
     }
 
     @Test

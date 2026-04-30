@@ -9,6 +9,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/holidays")
@@ -36,10 +37,23 @@ public class HolidayController {
         HolidayLookup lookup = holidayService.getHolidayLookup(from, to);
         return new HolidayLookupResponse(
                 lookup.holidayDates().stream().sorted().map(LocalDate::toString).toList(),
-                lookup.regularHolidayDates().stream().sorted().map(LocalDate::toString).toList()
+                lookup.regularHolidayDates().stream().sorted().map(LocalDate::toString).toList(),
+                lookup.holidayNamesByDate().entrySet().stream()
+                        .filter(entry -> entry.getKey() != null && entry.getValue() != null && !entry.getValue().isBlank())
+                        .sorted(Map.Entry.comparingByKey())
+                        .collect(java.util.stream.Collectors.toMap(
+                                entry -> entry.getKey().toString(),
+                                Map.Entry::getValue,
+                                (left, right) -> left,
+                                java.util.LinkedHashMap::new
+                        ))
         );
     }
 
-    public record HolidayLookupResponse(List<String> holidayDates, List<String> regularHolidayDates) {
+    public record HolidayLookupResponse(
+            List<String> holidayDates,
+            List<String> regularHolidayDates,
+            Map<String, String> holidayNamesByDate
+    ) {
     }
 }

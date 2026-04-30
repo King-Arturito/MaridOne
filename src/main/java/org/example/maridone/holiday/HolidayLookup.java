@@ -3,9 +3,15 @@ package org.example.maridone.holiday;
 import java.time.LocalDate;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Set;
 
-public record HolidayLookup(Set<LocalDate> holidayDates, Set<LocalDate> regularHolidayDates) {
+public record HolidayLookup(
+        Set<LocalDate> holidayDates,
+        Set<LocalDate> regularHolidayDates,
+        Map<LocalDate, String> holidayNamesByDate
+) {
 
     public HolidayLookup {
         holidayDates = holidayDates == null
@@ -14,9 +20,20 @@ public record HolidayLookup(Set<LocalDate> holidayDates, Set<LocalDate> regularH
         regularHolidayDates = regularHolidayDates == null
                 ? Set.of()
                 : Collections.unmodifiableSet(new HashSet<>(regularHolidayDates));
+        holidayNamesByDate = holidayNamesByDate == null
+                ? Map.of()
+                : Collections.unmodifiableMap(new HashMap<>(holidayNamesByDate));
+    }
+
+    public HolidayLookup(Set<LocalDate> holidayDates, Set<LocalDate> regularHolidayDates) {
+        this(holidayDates, regularHolidayDates, Map.of());
+    }
+
+    public String holidayName(LocalDate date) {
+        return date == null ? null : holidayNamesByDate.get(date);
     }
 
     public static HolidayLookup empty() {
-        return new HolidayLookup(Set.of(), Set.of());
+        return new HolidayLookup(Set.of(), Set.of(), Map.of());
     }
 }

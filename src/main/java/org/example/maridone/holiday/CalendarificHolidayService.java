@@ -89,13 +89,13 @@ public class CalendarificHolidayService implements HolidayService {
         String country = holidayConfig.getCountry() == null
                 ? "PH"
                 : holidayConfig.getCountry().trim().toUpperCase(Locale.ROOT);
-        Map<LocalDate, HolidayType> merged = new HashMap<>();
+        Map<LocalDate, HolidayDefinition> merged = new HashMap<>();
 
         for (int year = startDate.getYear(); year <= endDate.getYear(); year++) {
-            Map<LocalDate, HolidayType> yearHolidays = loadYearHolidays(country, year);
-            yearHolidays.forEach((date, type) -> {
+            Map<LocalDate, HolidayDefinition> yearHolidays = loadYearHolidays(country, year);
+            yearHolidays.forEach((date, holiday) -> {
                 if (!date.isBefore(startDate) && !date.isAfter(endDate)) {
-                    merged.merge(date, type, CalendarificHolidayService::preferRegularHoliday);
+                    merged.merge(date, holiday, CalendarificHolidayService::preferHolidayDefinition);
                 }
             });
         }
@@ -104,16 +104,20 @@ public class CalendarificHolidayService implements HolidayService {
 
         Set<LocalDate> holidayDates = new HashSet<>(merged.keySet());
         Set<LocalDate> regularHolidayDates = new HashSet<>();
-        merged.forEach((date, type) -> {
-            if (type == HolidayType.REGULAR) {
+        Map<LocalDate, String> holidayNamesByDate = new HashMap<>();
+        merged.forEach((date, holiday) -> {
+            if (holiday.type() == HolidayType.REGULAR) {
                 regularHolidayDates.add(date);
+            }
+            if (holiday.name() != null && !holiday.name().isBlank()) {
+                holidayNamesByDate.put(date, holiday.name());
             }
         });
 
-        return new HolidayLookup(holidayDates, regularHolidayDates);
+        return new HolidayLookup(holidayDates, regularHolidayDates, holidayNamesByDate);
     }
 
-    private Map<LocalDate, HolidayType> loadYearHolidays(String country, int year) {
+    private Map<LocalDate, HolidayDefinition> loadYearHolidays(String country, int year) {
         YearCacheKey key = new YearCacheKey(country, year);
         Instant now = Instant.now();
         YearCacheEntry existing = memoryCache.get(key);
@@ -141,7 +145,7 @@ public class CalendarificHolidayService implements HolidayService {
             }
 
             try {
-                Map<LocalDate, HolidayType> apiHolidays = fetchFromCalendarific(country, year);
+                Map<LocalDate, HolidayDefinition> apiHolidays = fetchFromCalendarific(country, year);
                 YearCacheEntry updated = new YearCacheEntry(apiHolidays, now);
                 memoryCache.put(key, updated);
                 writeCacheFile(cacheFile, key, updated);
@@ -157,7 +161,7 @@ public class CalendarificHolidayService implements HolidayService {
         }
     }
 
-    private Map<LocalDate, HolidayType> fetchFromCalendarific(String country, int year) throws IOException, InterruptedException {
+    private Map<LocalDate, HolidayDefinition> fetchFromCalendarific(String country, int year) throws IOException, InterruptedException {
         String url = buildUrl(country, year);
         HttpRequest request = HttpRequest.newBuilder(URI.create(url))
                 .timeout(holidayConfig.getRequestTimeout())
@@ -175,7 +179,7 @@ public class CalendarificHolidayService implements HolidayService {
             return Map.of();
         }
 
-        Map<LocalDate, HolidayType> result = new HashMap<>();
+        Map<LocalDate, HolidayDefinition> result = new HashMap<>();
         for (JsonNode holidayNode : holidays) {
             LocalDate date = extractHolidayDate(holidayNode);
             if (date == null) {
@@ -186,7 +190,8 @@ public class CalendarificHolidayService implements HolidayService {
             if (holidayType == null) {
                 continue;
             }
-            result.merge(date, holidayType, CalendarificHolidayService::preferRegularHoliday);
+            String holidayName = normalizeHolidayName(holidayNode.path("name").asText(""));
+            result.merge(date, new HolidayDefinition(holidayType, holidayName), CalendarificHolidayService::preferHolidayDefinition);
         }
         return result;
     }
@@ -238,7 +243,7 @@ public class CalendarificHolidayService implements HolidayService {
         return null;
     }
 
-    private void applyOverrides(Map<LocalDate, HolidayType> merged, LocalDate startDate, LocalDate endDate) {
+    private void applyOverrides(Map<LocalDate, HolidayDefinition> merged, LocalDate startDate, LocalDate endDate) {
         String overrideFilePath = holidayConfig.getOverrideFile();
         if (overrideFilePath == null || overrideFilePath.isBlank()) {
             return;
@@ -270,7 +275,14 @@ public class CalendarificHolidayService implements HolidayService {
 
                 HolidayType holidayType = parseHolidayType(override.path("type").asText(""));
                 if (holidayType != null) {
-                    merged.put(date, holidayType);
+                    String overrideName = normalizeHolidayName(override.path("name").asText(""));
+                    HolidayDefinition existing = merged.get(date);
+                    String resolvedName = overrideName != null
+                            ? overrideName
+                            : existing != null
+                                ? existing.name()
+                                : null;
+                    merged.put(date, new HolidayDefinition(holidayType, resolvedName));
                 }
             }
         } catch (Exception ex) {
@@ -307,14 +319,19 @@ public class CalendarificHolidayService implements HolidayService {
                 fetchedAt = Instant.now();
             }
 
-            Map<LocalDate, HolidayType> holidays = new HashMap<>();
+            Map<LocalDate, HolidayDefinition> holidays = new HashMap<>();
             JsonNode holidayNodes = root.path("holidays");
             if (holidayNodes.isArray()) {
                 for (JsonNode holidayNode : holidayNodes) {
                     LocalDate date = parseLocalDate(holidayNode.path("date").asText(""));
                     HolidayType holidayType = parseHolidayType(holidayNode.path("type").asText(""));
                     if (date != null && holidayType != null) {
-                        holidays.merge(date, holidayType, CalendarificHolidayService::preferRegularHoliday);
+                        String holidayName = normalizeHolidayName(holidayNode.path("name").asText(""));
+                        holidays.merge(
+                                date,
+                                new HolidayDefinition(holidayType, holidayName),
+                                CalendarificHolidayService::preferHolidayDefinition
+                        );
                     }
                 }
             }
@@ -362,9 +379,15 @@ public class CalendarificHolidayService implements HolidayService {
         JsonNode holidays = ((com.fasterxml.jackson.databind.node.ObjectNode) root).putArray("holidays");
         entry.holidays.entrySet().stream()
                 .sorted(Map.Entry.comparingByKey())
-                .forEach(item -> ((com.fasterxml.jackson.databind.node.ArrayNode) holidays).addObject()
-                        .put("date", item.getKey().toString())
-                        .put("type", item.getValue().name()));
+                .forEach(item -> {
+                    com.fasterxml.jackson.databind.node.ObjectNode holidayNode =
+                            ((com.fasterxml.jackson.databind.node.ArrayNode) holidays).addObject()
+                                    .put("date", item.getKey().toString())
+                                    .put("type", item.getValue().type().name());
+                    if (item.getValue().name() != null && !item.getValue().name().isBlank()) {
+                        holidayNode.put("name", item.getValue().name());
+                    }
+                });
         return root;
     }
 
@@ -402,11 +425,25 @@ public class CalendarificHolidayService implements HolidayService {
         return false;
     }
 
-    private static HolidayType preferRegularHoliday(HolidayType first, HolidayType second) {
-        if (first == HolidayType.REGULAR || second == HolidayType.REGULAR) {
-            return HolidayType.REGULAR;
+    private static String normalizeHolidayName(String value) {
+        if (value == null) {
+            return null;
         }
-        return HolidayType.SPECIAL_NON_WORKING;
+        String normalized = value.trim();
+        return normalized.isEmpty() ? null : normalized;
+    }
+
+    private static HolidayDefinition preferHolidayDefinition(HolidayDefinition first, HolidayDefinition second) {
+        if (first.type() == HolidayType.REGULAR || second.type() == HolidayType.REGULAR) {
+            HolidayDefinition preferred = first.type() == HolidayType.REGULAR ? first : second;
+            HolidayDefinition alternate = preferred == first ? second : first;
+            return new HolidayDefinition(HolidayType.REGULAR, preferredHolidayName(preferred.name(), alternate.name()));
+        }
+        return new HolidayDefinition(HolidayType.SPECIAL_NON_WORKING, preferredHolidayName(first.name(), second.name()));
+    }
+
+    private static String preferredHolidayName(String primary, String fallback) {
+        return primary != null && !primary.isBlank() ? primary : fallback;
     }
 
     private static HolidayType parseHolidayType(String value) {
@@ -445,11 +482,13 @@ public class CalendarificHolidayService implements HolidayService {
 
     private record YearCacheKey(String country, int year) { }
 
+    private record HolidayDefinition(HolidayType type, String name) { }
+
     private static class YearCacheEntry {
-        private final Map<LocalDate, HolidayType> holidays;
+        private final Map<LocalDate, HolidayDefinition> holidays;
         private final Instant fetchedAt;
 
-        private YearCacheEntry(Map<LocalDate, HolidayType> holidays, Instant fetchedAt) {
+        private YearCacheEntry(Map<LocalDate, HolidayDefinition> holidays, Instant fetchedAt) {
             this.holidays = Map.copyOf(holidays);
             this.fetchedAt = fetchedAt;
         }
