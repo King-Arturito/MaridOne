@@ -508,6 +508,43 @@ public class PayrollCalculator {
         return applyLunchDeductionForSchedules(rawHours, schedules);
     }
 
+    public BigDecimal calculatePayableLeaveHoursWithinSchedules(
+            List<DailyShiftSchedule> schedules,
+            LeaveRequest leave
+    ) {
+        if (schedules == null
+                || schedules.isEmpty()
+                || leave == null
+                || leave.getStartDateTime() == null
+                || leave.getEndDateTime() == null
+                || !leave.getEndDateTime().isAfter(leave.getStartDateTime())) {
+            return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+        }
+
+        Instant leaveStart = toInstant(leave.getStartDateTime());
+        Instant leaveEnd = toInstant(leave.getEndDateTime());
+        if (leaveStart == null || leaveEnd == null || !leaveEnd.isAfter(leaveStart)) {
+            return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+        }
+
+        BigDecimal rawHours = BigDecimal.ZERO;
+        for (DailyShiftSchedule schedule : schedules) {
+            Instant scheduleStart = toInstant(schedule.getStartDateTime());
+            Instant scheduleEnd = toInstant(schedule.getEndDateTime());
+            if (scheduleStart == null || scheduleEnd == null || !scheduleEnd.isAfter(scheduleStart)) {
+                continue;
+            }
+
+            Instant overlapStart = maxInstant(scheduleStart, leaveStart);
+            Instant overlapEnd = minInstant(scheduleEnd, leaveEnd);
+            if (overlapEnd.isAfter(overlapStart)) {
+                rawHours = rawHours.add(calculateHours(overlapStart, overlapEnd));
+            }
+        }
+
+        return applyLunchDeductionForSchedules(rawHours, schedules);
+    }
+
     public BigDecimal calculateExpectedShiftHours(List<DailyShiftSchedule> schedules) {
         if (schedules == null || schedules.isEmpty()) {
             return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);

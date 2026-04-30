@@ -274,7 +274,11 @@ public class CalendarificHolidayService implements HolidayService {
                 HolidayType holidayType = parseHolidayType(override.path("type").asText(""));
                 if (holidayType != null) {
                     String holidayName = normalizeHolidayName(override.path("name").asText(""));
-                    merged.put(date, new HolidayData(holidayType, holidayName.isBlank() ? "Holiday" : holidayName));
+                    if (holidayName.isBlank()) {
+                        HolidayData existing = merged.get(date);
+                        holidayName = existing != null && !existing.name().isBlank() ? existing.name() : "Holiday";
+                    }
+                    merged.put(date, new HolidayData(holidayType, holidayName));
                 }
             }
         } catch (Exception ex) {

@@ -25,6 +25,13 @@ public record HolidayLookup(Set<LocalDate> holidayDates, Set<LocalDate> regularH
         this(holidayDates, regularHolidayDates, Map.of());
     }
 
+    public String holidayName(LocalDate date) {
+        if (date == null) {
+            return "";
+        }
+        return holidayNames.getOrDefault(date, "");
+    }
+
     public static HolidayLookup empty() {
         return new HolidayLookup(Set.of(), Set.of(), Map.of());
     }

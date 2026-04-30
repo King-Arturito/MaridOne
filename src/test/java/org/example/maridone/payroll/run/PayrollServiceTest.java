@@ -355,6 +355,78 @@ class PayrollServiceTest {
     }
 
     @Test
+    void processPayrollNonExempt_PartialPaidLeaveWithoutAttendance_ShouldOnlyDeductUncoveredHours() {
+        LocalDate workDate = LocalDate.of(2026, 3, 26);
+        PayrollRun run = buildSingleDayRun(workDate);
+        Employee employee = buildEmployee(31L, ExemptionStatus.NON_EXEMPT, "624000.00");
+        DailyShiftSchedule dailyShift = buildDailyShift(employee, workDate, LocalTime.of(8, 0), LocalTime.of(17, 0));
+        LeaveRequest partialLeave = buildLeave(employee, workDate.atTime(8, 0), workDate.atTime(12, 0));
+
+        when(defaultConfig.getTimeZone()).thenReturn(ZONE);
+        when(attendanceLogRepository.findByEmployeeIdInAndTimestampBetween(anyList(), any(Instant.class), any(Instant.class), any()))
+                .thenReturn(List.of());
+        when(overtimeRequestRepository.findAll(any(Specification.class)))
+                .thenReturn(List.of());
+        when(dailyShiftRepository.findAllByEmployeeIdsAndPeriod(anyList(), any(LocalDateTime.class), any(LocalDateTime.class)))
+                .thenReturn(List.of(dailyShift));
+        when(leaveRequestRepository.findApprovedLeavesForPeriod(anyList(), any(LocalDateTime.class), any(LocalDateTime.class)))
+                .thenReturn(List.of(partialLeave));
+        when(holidayService.getHolidayLookup(any(LocalDate.class), any(LocalDate.class)))
+                .thenReturn(HolidayLookup.empty());
+
+        List<PayrollItem> items = new ArrayList<>();
+        payrollService.processPayrollNonExempt(run, items, List.of(employee), Map.of());
+
+        Assertions.assertEquals(1, items.size());
+        BigDecimal latePenaltyAmount = items.get(0).getDeductions().stream()
+                .filter(line -> line.getDeductionType() == DeductionType.LATE_PENALTY)
+                .map(DeductionsLine::getAmount)
+                .findFirst()
+                .orElse(BigDecimal.ZERO);
+
+        BigDecimal expectedFourHourDeduction = payrollCalculator.computeHourlyRate(employee.getYearlySalary())
+                .multiply(new BigDecimal("4.00"))
+                .setScale(2, java.math.RoundingMode.HALF_UP);
+        assertBigDecimalEquals(expectedFourHourDeduction.toPlainString(), latePenaltyAmount);
+        Assertions.assertTrue(items.get(0).getDeductions().stream()
+                .noneMatch(line -> line.getDeductionType() == DeductionType.ABSENT_DEDUCTION));
+    }
+
+    @Test
+    void processPayrollNonExempt_PartialPaidLeavePlusAttendance_ShouldNotCreateAttendanceDeductions() {
+        LocalDate workDate = LocalDate.of(2026, 3, 27);
+        PayrollRun run = buildSingleDayRun(workDate);
+        Employee employee = buildEmployee(32L, ExemptionStatus.NON_EXEMPT, "624000.00");
+        DailyShiftSchedule dailyShift = buildDailyShift(employee, workDate, LocalTime.of(8, 0), LocalTime.of(17, 0));
+        LeaveRequest morningLeave = buildLeave(employee, workDate.atTime(8, 0), workDate.atTime(12, 0));
+        List<AttendanceLog> attendanceLogs = List.of(
+                buildAttendanceLog(employee, workDate, LocalTime.of(13, 0), "IN"),
+                buildAttendanceLog(employee, workDate, LocalTime.of(17, 0), "OUT")
+        );
+
+        when(defaultConfig.getTimeZone()).thenReturn(ZONE);
+        when(attendanceLogRepository.findByEmployeeIdInAndTimestampBetween(anyList(), any(Instant.class), any(Instant.class), any()))
+                .thenReturn(attendanceLogs);
+        when(overtimeRequestRepository.findAll(any(Specification.class)))
+                .thenReturn(List.of());
+        when(dailyShiftRepository.findAllByEmployeeIdsAndPeriod(anyList(), any(LocalDateTime.class), any(LocalDateTime.class)))
+                .thenReturn(List.of(dailyShift));
+        when(leaveRequestRepository.findApprovedLeavesForPeriod(anyList(), any(LocalDateTime.class), any(LocalDateTime.class)))
+                .thenReturn(List.of(morningLeave));
+        when(holidayService.getHolidayLookup(any(LocalDate.class), any(LocalDate.class)))
+                .thenReturn(HolidayLookup.empty());
+
+        List<PayrollItem> items = new ArrayList<>();
+        payrollService.processPayrollNonExempt(run, items, List.of(employee), Map.of());
+
+        Assertions.assertEquals(1, items.size());
+        Assertions.assertTrue(items.get(0).getDeductions().stream()
+                .noneMatch(line -> line.getDeductionType() == DeductionType.ABSENT_DEDUCTION));
+        Assertions.assertTrue(items.get(0).getDeductions().stream()
+                .noneMatch(line -> line.getDeductionType() == DeductionType.LATE_PENALTY));
+    }
+
+    @Test
     void processPayrollNonExempt_ApprovedOvertimeWithoutAttendanceOverlap_ShouldNotCreateOvertimeEarnings() {
         LocalDate workDate = LocalDate.of(2026, 3, 22);
         PayrollRun run = buildSingleDayRun(workDate);
@@ -390,6 +462,45 @@ class PayrollServiceTest {
         PayrollItem item = items.get(0);
         Assertions.assertTrue(item.getEarnings().stream().noneMatch(line -> Boolean.TRUE.equals(line.getOvertime())));
         assertBigDecimalEquals("26000.00", item.getGrossPay());
+    }
+
+    @Test
+    void processPayrollNonExempt_UnpaidApprovedOvertimeShouldNotCreateOvertimeEarnings() {
+        LocalDate workDate = LocalDate.of(2026, 3, 29);
+        PayrollRun run = buildSingleDayRun(workDate);
+        Employee employee = buildEmployee(33L, ExemptionStatus.NON_EXEMPT, "624000.00");
+        DailyShiftSchedule dailyShift = buildDailyShift(employee, workDate, LocalTime.of(8, 0), LocalTime.of(17, 0));
+        OvertimeRequest overtimeRequest = buildOvertimeRequest(
+                employee,
+                workDate,
+                workDate.atTime(17, 0),
+                workDate.atTime(19, 0),
+                EarningsType.OVERTIME,
+                false
+        );
+        List<AttendanceLog> attendanceLogs = List.of(
+                buildAttendanceLog(employee, workDate, LocalTime.of(8, 0), "IN"),
+                buildAttendanceLog(employee, workDate, LocalTime.of(19, 0), "OUT")
+        );
+
+        when(defaultConfig.getTimeZone()).thenReturn(ZONE);
+        when(attendanceLogRepository.findByEmployeeIdInAndTimestampBetween(anyList(), any(Instant.class), any(Instant.class), any()))
+                .thenReturn(attendanceLogs);
+        when(overtimeRequestRepository.findAll(any(Specification.class)))
+                .thenReturn(List.of(overtimeRequest));
+        when(dailyShiftRepository.findAllByEmployeeIdsAndPeriod(anyList(), any(LocalDateTime.class), any(LocalDateTime.class)))
+                .thenReturn(List.of(dailyShift));
+        when(leaveRequestRepository.findApprovedLeavesForPeriod(anyList(), any(LocalDateTime.class), any(LocalDateTime.class)))
+                .thenReturn(List.of());
+        when(holidayService.getHolidayLookup(any(LocalDate.class), any(LocalDate.class)))
+                .thenReturn(HolidayLookup.empty());
+
+        List<PayrollItem> items = new ArrayList<>();
+        payrollService.processPayrollNonExempt(run, items, List.of(employee), Map.of());
+
+        Assertions.assertEquals(1, items.size());
+        Assertions.assertTrue(items.get(0).getEarnings().stream()
+                .noneMatch(line -> Boolean.TRUE.equals(line.getOvertime())));
     }
 
     @Test
@@ -1115,6 +1226,17 @@ class PayrollServiceTest {
             LocalDateTime endDateTime,
             EarningsType overtimeType
     ) {
+        return buildOvertimeRequest(employee, workDate, startDateTime, endDateTime, overtimeType, true);
+    }
+
+    private OvertimeRequest buildOvertimeRequest(
+            Employee employee,
+            LocalDate workDate,
+            LocalDateTime startDateTime,
+            LocalDateTime endDateTime,
+            EarningsType overtimeType,
+            boolean paid
+    ) {
         OvertimeRequest overtimeRequest = new OvertimeRequest();
         overtimeRequest.setEmployee(employee);
         overtimeRequest.setWorkDate(workDate);
@@ -1123,6 +1245,7 @@ class PayrollServiceTest {
         overtimeRequest.setOvertimeType(overtimeType);
         overtimeRequest.setRequestStatus(Status.APPROVED);
         overtimeRequest.setReason("Test overtime");
+        overtimeRequest.setPaid(paid);
         ReflectionTestUtils.setField(overtimeRequest, "employeeId", employee.getEmployeeId());
         return overtimeRequest;
     }

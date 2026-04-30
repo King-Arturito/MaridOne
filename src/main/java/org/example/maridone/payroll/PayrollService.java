@@ -436,6 +436,7 @@ public class PayrollService {
 
                 List<OvertimeRequest> todaysOT = requests.stream()
                         .filter(ot -> ot.getWorkDate().equals(loopDate))
+                        .filter(ot -> Boolean.TRUE.equals(ot.getPaid()))
                         .toList();
                 List<PayableOvertimeBreakdown> payableTodaysOT = hasCompleteAttendancePair
                         ? todaysOT.stream()
@@ -507,19 +508,24 @@ public class PayrollService {
                     BigDecimal expectedHours = payrollCalculator.calculatePayableScheduledHours(todaysSchedules);
                     if (expectedHours.compareTo(BigDecimal.ZERO) <= 0) {
                         // leave this day alone if the generated schedules carry no payable hours.
-                    } else if (!hasCompleteAttendancePair) {
-                        // missing the whole scheduled day counts as ordinary absence.
-                        if (todaysLeave == null) {
-                            absentDeductAmount = absentDeductAmount.add(expectedHours.multiply(hourlyRate));
-                        }
                     } else {
-                        // only count overlap inside the scheduled segments so split-leave days stay accurate.
-                        BigDecimal actualHours = payrollCalculator.calculatePayableWorkedHoursWithinSchedules(
+                        // scheduled coverage comes from actual worked hours plus any paid leave overlap on the same segments.
+                        BigDecimal actualHours = hasCompleteAttendancePair
+                                ? payrollCalculator.calculatePayableWorkedHoursWithinSchedules(
+                                        todaysSchedules,
+                                        attendanceSessions
+                                )
+                                : BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+                        BigDecimal leaveHours = payrollCalculator.calculatePayableLeaveHoursWithinSchedules(
                                 todaysSchedules,
-                                attendanceSessions
+                                todaysLeave
                         );
-                        if (actualHours.compareTo(expectedHours) < 0) {
-                            BigDecimal missingHours = expectedHours.subtract(actualHours);
+                        BigDecimal coveredHours = actualHours.add(leaveHours).min(expectedHours);
+
+                        if (coveredHours.compareTo(BigDecimal.ZERO) <= 0) {
+                            absentDeductAmount = absentDeductAmount.add(expectedHours.multiply(hourlyRate));
+                        } else if (coveredHours.compareTo(expectedHours) < 0) {
+                            BigDecimal missingHours = expectedHours.subtract(coveredHours);
                             lateDeductAmount = lateDeductAmount.add(missingHours.multiply(hourlyRate));
                         }
                     }
