@@ -22,6 +22,7 @@ import org.example.maridone.enums.Position;
 import org.example.maridone.enums.SeparationReason;
 import org.example.maridone.leave.balance.LeaveBalance;
 import org.example.maridone.leave.balance.LeaveBalanceRepository;
+import org.example.maridone.leave.LeaveBalancePolicy;
 import org.example.maridone.leave.request.LeaveRequest;
 import org.example.maridone.leave.request.LeaveRequestRepository;
 import org.example.maridone.enums.Status;
@@ -725,12 +726,20 @@ public class EmployeeService {
         LeaveBalance sickLeave = new LeaveBalance();
         sickLeave.setEmployee(employee);
         sickLeave.setLeaveType(LeaveType.SICK_LEAVE);
-        sickLeave.setBalanceHours(payrollConfig.getSickLeaveHours());
+        sickLeave.setBalanceHours(
+                LeaveBalancePolicy.isEligibleForDefaultCredits(employee, LocalDate.now())
+                        ? payrollConfig.getSickLeaveHours()
+                        : BigDecimal.ZERO
+        );
 
         LeaveBalance vacationLeave = new LeaveBalance();
         vacationLeave.setEmployee(employee);
         vacationLeave.setLeaveType(LeaveType.VACATION_LEAVE);
-        vacationLeave.setBalanceHours(payrollConfig.getVacationLeaveHours());
+        vacationLeave.setBalanceHours(
+                LeaveBalancePolicy.isEligibleForDefaultCredits(employee, LocalDate.now())
+                        ? payrollConfig.getVacationLeaveHours()
+                        : BigDecimal.ZERO
+        );
 
         leaveBalanceRepository.saveAll(List.of(sickLeave, vacationLeave));
     }

@@ -129,7 +129,46 @@ class EmployeeServiceTest {
                             collected.stream().map(LeaveBalance::getLeaveType).toList().containsAll(List.of(
                                 LeaveType.SICK_LEAVE,
                                 LeaveType.VACATION_LEAVE
-                        ));
+                        )) &&
+                            collected.stream().allMatch(balance -> balance.getBalanceHours().compareTo(java.math.BigDecimal.valueOf(40)) == 0);
+                }
+        ));
+    }
+
+    @Test
+    void createEmployee_ShouldSeedZeroDefaultLeaveBalances_ForNewHire() {
+        stubScheduleDependencies();
+        EmployeeRequestDto requestDto = new EmployeeRequestDto();
+        requestDto.setFirstName("Fern");
+        requestDto.setEmploymentStatus(EmploymentStatus.NEW_HIRE);
+
+        Employee employee = new Employee();
+        ReflectionTestUtils.setField(employee, "employeeId", 2L);
+        employee.setFirstName("Fern");
+        employee.setLastName("Test");
+        employee.setCompanyEmail("fern@example.com");
+        employee.setPhoneNumber("09171234568");
+        employee.setBirthDate(java.time.LocalDate.of(2001, 1, 1));
+        employee.setPosition(Position.EMPLOYEE);
+        employee.setEmploymentStatus(EmploymentStatus.NEW_HIRE);
+        employee.setEmploymentDateStart(java.time.LocalDate.now());
+
+        EmployeeResponseDto responseDto = new EmployeeResponseDto();
+        responseDto.setId(2L);
+        responseDto.setFirstName("Fern");
+
+        when(coreMapper.toEmployee(any(EmployeeRequestDto.class))).thenReturn(employee);
+        when(employeeRepository.save(any(Employee.class))).thenReturn(employee);
+        when(coreMapper.toEmployeeResponse(any(Employee.class))).thenReturn(responseDto);
+        when(userAccountRepository.findUsernameByEmployeeEmployeeId(anyLong())).thenReturn(Optional.empty());
+
+        employeeService.createEmployee(requestDto);
+
+        verify(leaveBalanceRepository).saveAll(argThat(balances -> {
+                    List<LeaveBalance> collected = new ArrayList<>();
+                    balances.forEach(collected::add);
+                    return collected.size() == 2 &&
+                            collected.stream().allMatch(balance -> balance.getBalanceHours().compareTo(java.math.BigDecimal.ZERO) == 0);
                 }
         ));
     }

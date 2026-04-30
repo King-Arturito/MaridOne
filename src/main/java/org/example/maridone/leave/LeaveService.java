@@ -135,6 +135,8 @@ public class LeaveService {
 
     @ExecutionTime
     public List<BalanceResponseDto> getBalance(Long empId) {
+        Employee employee = employeeRepository.findById(empId).orElseThrow(() -> new EmployeeNotFoundException(empId));
+        synchronizeDefaultLeaveBalances(employee, LocalDate.now(defaultConfig.getTimeZone()));
         return leaveMapper.toBalanceResponsesDto(leaveBalanceRepository.findByEmployee_EmployeeId(empId));
     }
 
@@ -241,31 +243,15 @@ public class LeaveService {
     @Transactional
     @AutoScheduled
     public void updateYearlyBalance() {
-        List<EmploymentStatus> blacklistedStatuses = List.of(
-                EmploymentStatus.TERMINATED,
-                EmploymentStatus.SUSPENDED
-        );
-
-        int updateSickLeaves = leaveBalanceRepository.updateActiveEmployeeLeaveBalances(
-                payrollConfig.getSickLeaveHours(),
-                List.of(LeaveType.SICK_LEAVE),
-                blacklistedStatuses
-        );
-
-        int updateVacationLeaves = leaveBalanceRepository.updateActiveEmployeeLeaveBalances(
-                payrollConfig.getVacationLeaveHours(),
-                List.of(LeaveType.VACATION_LEAVE),
-                blacklistedStatuses
-        );
-
-        System.out.println("Updated Sick Leaves = " + updateSickLeaves);
-        System.out.println("Updated Vacation Leaves = " + updateVacationLeaves);
+        LocalDate today = LocalDate.now(defaultConfig.getTimeZone());
+        employeeRepository.findAll().forEach(employee -> synchronizeDefaultLeaveBalances(employee, today));
     }
 
     @Transactional
     @ExecutionTime
     public List<LeaveRequest> createLeaveRequest(LeaveRequestDto payload, Long empId, MultipartFile file) {
         Employee emp =  employeeRepository.findById(empId).orElseThrow(() -> new EmployeeNotFoundException(empId));
+        synchronizeDefaultLeaveBalances(emp, LocalDate.now(defaultConfig.getTimeZone()));
         validateRequestWindow(payload);
         validateAdvanceNotice(payload);
         validateNoOvertimeConflict(empId, payload.getStartDateTime(), payload.getEndDateTime());
@@ -684,6 +670,58 @@ public class LeaveService {
         }
 
         return fallbackEnd;
+    }
+
+    private void synchronizeDefaultLeaveBalances(Employee employee, LocalDate asOfDate) {
+        if (employee == null
+                || employee.getEmployeeId() == null
+                || employee.getEmploymentStatus() == EmploymentStatus.TERMINATED
+                || employee.getEmploymentStatus() == EmploymentStatus.SUSPENDED) {
+            return;
+        }
+
+        boolean eligible = LeaveBalancePolicy.isEligibleForDefaultCredits(employee, asOfDate);
+        BigDecimal targetSickHours = eligible ? payrollConfig.getSickLeaveHours() : BigDecimal.ZERO;
+        BigDecimal targetVacationHours = eligible ? payrollConfig.getVacationLeaveHours() : BigDecimal.ZERO;
+
+        List<LeaveBalance> balances = new ArrayList<>(leaveBalanceRepository.findByEmployee_EmployeeId(employee.getEmployeeId()));
+        LeaveBalance sickLeave = balances.stream()
+                .filter(balance -> balance.getLeaveType() == LeaveType.SICK_LEAVE)
+                .findFirst()
+                .orElseGet(() -> {
+                    LeaveBalance created = new LeaveBalance();
+                    created.setEmployee(employee);
+                    created.setLeaveType(LeaveType.SICK_LEAVE);
+                    balances.add(created);
+                    return created;
+                });
+        LeaveBalance vacationLeave = balances.stream()
+                .filter(balance -> balance.getLeaveType() == LeaveType.VACATION_LEAVE)
+                .findFirst()
+                .orElseGet(() -> {
+                    LeaveBalance created = new LeaveBalance();
+                    created.setEmployee(employee);
+                    created.setLeaveType(LeaveType.VACATION_LEAVE);
+                    balances.add(created);
+                    return created;
+                });
+
+        boolean changed = syncBalanceHours(sickLeave, targetSickHours);
+        changed = syncBalanceHours(vacationLeave, targetVacationHours) || changed;
+
+        if (changed) {
+            leaveBalanceRepository.saveAll(List.of(sickLeave, vacationLeave));
+        }
+    }
+
+    private boolean syncBalanceHours(LeaveBalance balance, BigDecimal targetHours) {
+        BigDecimal current = Optional.ofNullable(balance.getBalanceHours()).orElse(BigDecimal.ZERO);
+        BigDecimal target = Optional.ofNullable(targetHours).orElse(BigDecimal.ZERO);
+        if (current.compareTo(target) == 0) {
+            return false;
+        }
+        balance.setBalanceHours(target);
+        return true;
     }
 
     private List<Long> resolveHandledEmployeeIds(String username) {

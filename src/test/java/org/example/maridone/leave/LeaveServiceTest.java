@@ -143,6 +143,72 @@ class LeaveServiceTest {
     }
 
     @Test
+    void getBalance_ShouldKeepNewHireCreditsAtZeroBeforeSixMonths() {
+        Long empId = 44L;
+        Employee emp = new Employee();
+        ReflectionTestUtils.setField(emp, "employeeId", empId);
+        emp.setEmploymentStatus(EmploymentStatus.NEW_HIRE);
+        emp.setEmploymentDateStart(LocalDate.of(2026, 2, 1));
+
+        LeaveBalance sickLeave = new LeaveBalance();
+        sickLeave.setEmployee(emp);
+        sickLeave.setLeaveType(LeaveType.SICK_LEAVE);
+        sickLeave.setBalanceHours(BigDecimal.valueOf(40));
+
+        LeaveBalance vacationLeave = new LeaveBalance();
+        vacationLeave.setEmployee(emp);
+        vacationLeave.setLeaveType(LeaveType.VACATION_LEAVE);
+        vacationLeave.setBalanceHours(BigDecimal.valueOf(40));
+
+        when(employeeRepository.findById(empId)).thenReturn(Optional.of(emp));
+        when(leaveBalanceRepository.findByEmployee_EmployeeId(empId)).thenReturn(List.of(sickLeave, vacationLeave));
+        when(leaveMapper.toBalanceResponsesDto(anyList())).thenReturn(List.of());
+
+        leaveService.getBalance(empId);
+
+        verify(leaveBalanceRepository).saveAll(argThat(balances -> {
+            List<LeaveBalance> collected = new ArrayList<>();
+            balances.forEach(collected::add);
+            return collected.size() == 2 &&
+                    collected.stream().allMatch(balance -> balance.getBalanceHours().compareTo(BigDecimal.ZERO) == 0);
+        }));
+    }
+
+    @Test
+    void getBalance_ShouldAutoGrantCreditsAfterSixMonthsForNewHire() {
+        Long empId = 45L;
+        Employee emp = new Employee();
+        ReflectionTestUtils.setField(emp, "employeeId", empId);
+        emp.setEmploymentStatus(EmploymentStatus.NEW_HIRE);
+        emp.setEmploymentDateStart(LocalDate.of(2025, 10, 1));
+
+        LeaveBalance sickLeave = new LeaveBalance();
+        sickLeave.setEmployee(emp);
+        sickLeave.setLeaveType(LeaveType.SICK_LEAVE);
+        sickLeave.setBalanceHours(BigDecimal.ZERO);
+
+        LeaveBalance vacationLeave = new LeaveBalance();
+        vacationLeave.setEmployee(emp);
+        vacationLeave.setLeaveType(LeaveType.VACATION_LEAVE);
+        vacationLeave.setBalanceHours(BigDecimal.ZERO);
+
+        when(employeeRepository.findById(empId)).thenReturn(Optional.of(emp));
+        when(leaveBalanceRepository.findByEmployee_EmployeeId(empId)).thenReturn(List.of(sickLeave, vacationLeave));
+        when(leaveMapper.toBalanceResponsesDto(anyList())).thenReturn(List.of());
+        when(payrollConfig.getSickLeaveHours()).thenReturn(BigDecimal.valueOf(40));
+        when(payrollConfig.getVacationLeaveHours()).thenReturn(BigDecimal.valueOf(40));
+
+        leaveService.getBalance(empId);
+
+        verify(leaveBalanceRepository).saveAll(argThat(balances -> {
+            List<LeaveBalance> collected = new ArrayList<>();
+            balances.forEach(collected::add);
+            return collected.size() == 2 &&
+                    collected.stream().allMatch(balance -> balance.getBalanceHours().compareTo(BigDecimal.valueOf(40)) == 0);
+        }));
+    }
+
+    @Test
     void createLeaveRequest_ShouldSetStatusPendingManager() {
         Long empId = 1L;
         LeaveRequestDto dto = new LeaveRequestDto();
