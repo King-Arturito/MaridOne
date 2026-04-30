@@ -10,6 +10,7 @@ public class ItemViewDto {
     private Long itemId;
     private BigDecimal grossPay;
     private BigDecimal netPay;
+    private BigDecimal employerContributionTotal;
 
     public ItemViewDto(Long empId, String firstName, String lastName, Long itemId, BigDecimal grossPay, BigDecimal netPay) {
         this.empId = empId;
@@ -66,5 +67,13 @@ public class ItemViewDto {
 
     public void setNetPay(BigDecimal netPay) {
         this.netPay = netPay;
+    }
+
+    public BigDecimal getEmployerContributionTotal() {
+        return employerContributionTotal;
+    }
+
+    public void setEmployerContributionTotal(BigDecimal employerContributionTotal) {
+        this.employerContributionTotal = employerContributionTotal;
     }
 }

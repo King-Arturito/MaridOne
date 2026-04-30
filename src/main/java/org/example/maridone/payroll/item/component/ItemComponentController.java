@@ -7,6 +7,7 @@ import org.example.maridone.auth.sensitive.SensitiveAccessService;
 import org.example.maridone.payroll.payslip.PayslipService;
 import org.example.maridone.payroll.dto.DeductionsDto;
 import org.example.maridone.payroll.dto.EarningsDto;
+import org.example.maridone.payroll.dto.EmployerContributionDto;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -25,17 +26,20 @@ import org.springframework.web.bind.annotation.RestController;
 public class ItemComponentController {
     private final EarningsService earningsService;
     private final DeductionsService deductionsService;
+    private final EmployerContributionService employerContributionService;
     private final PayslipService payslipService;
     private final SensitiveAccessService sensitiveAccessService;
 
     public ItemComponentController(
             EarningsService earningsService,
             DeductionsService deductionsService,
+            EmployerContributionService employerContributionService,
             PayslipService payslipService,
             SensitiveAccessService sensitiveAccessService
     ) {
         this.earningsService = earningsService;
         this.deductionsService = deductionsService;
+        this.employerContributionService = employerContributionService;
         this.payslipService = payslipService;
         this.sensitiveAccessService = sensitiveAccessService;
     }
@@ -52,6 +56,13 @@ public class ItemComponentController {
     public List<DeductionsDto> getDeductions(@PathVariable Long itemId, Authentication authentication) {
         sensitiveAccessService.assertPayrollReportSensitiveAccess(authentication);
         return deductionsService.getDeductions(itemId);
+    }
+
+    @GetMapping("/employer-contributions/{itemId}")
+    @PreAuthorize("hasAnyRole('HR', 'ACCOUNTING', 'MANAGEMENT')")
+    public List<EmployerContributionDto> getEmployerContributions(@PathVariable Long itemId, Authentication authentication) {
+        sensitiveAccessService.assertPayrollReportSensitiveAccess(authentication);
+        return employerContributionService.getEmployerContributions(itemId);
     }
 
     @GetMapping("/{itemId}/payslip/pdf")

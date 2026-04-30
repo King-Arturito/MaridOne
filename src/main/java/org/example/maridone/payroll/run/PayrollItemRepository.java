@@ -32,6 +32,11 @@ public interface PayrollItemRepository extends JpaRepository<PayrollItem, Long>,
             RunType runType
     );
 
+    List<PayrollItem> findByEmployee_EmployeeIdAndPayrollRun_RunTypeOrderByPayrollRun_PaymentDateDescPayrollRun_PeriodEndDescItemIdDesc(
+            Long empId,
+            RunType runType
+    );
+
     Optional<PayrollItem> findByPayrollRun_PayIdAndEmployee_EmployeeId(Long payId, Long empId);
 
     Optional<PayrollItem> findByItemIdAndPayrollRun_PayrollStatus(Long itemId, PayrollStatus payrollStatus);

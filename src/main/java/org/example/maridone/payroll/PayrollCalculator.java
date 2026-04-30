@@ -31,17 +31,27 @@ public class PayrollCalculator {
 
     public record AttendanceSession(AttendanceLog inLog, AttendanceLog outLog) {}
     public record RegularTaxContext(
+            BigDecimal monthlyBasicPay,
+            BigDecimal monthlyGrossPay,
             BigDecimal priorMonthPayAfterAttendance,
             BigDecimal priorMonthWithholding,
             boolean hasPriorRegularCutoff
     ) {
         public RegularTaxContext {
+            monthlyBasicPay = CommonCalculator.normalize(monthlyBasicPay);
+            monthlyGrossPay = CommonCalculator.normalize(monthlyGrossPay);
             priorMonthPayAfterAttendance = CommonCalculator.normalize(priorMonthPayAfterAttendance);
             priorMonthWithholding = CommonCalculator.normalize(priorMonthWithholding);
         }
 
         public static RegularTaxContext empty() {
-            return new RegularTaxContext(BigDecimal.ZERO, BigDecimal.ZERO, false);
+            return new RegularTaxContext(
+                    BigDecimal.ZERO,
+                    BigDecimal.ZERO,
+                    BigDecimal.ZERO,
+                    BigDecimal.ZERO,
+                    false
+            );
         }
     }
 
@@ -252,16 +262,31 @@ public class PayrollCalculator {
         }
 
         if (schedule == RegularTaxSchedule.SECOND_HALF) {
-            BigDecimal monthlySssDue = computeSssEmployeeShareMonthly(monthlyBasicPay);
-            BigDecimal monthlyPhilHealthDue = computePhilHealthEmployeeShareMonthly(monthlyBasicPay);
-            BigDecimal monthlyPagibigDue = computePagibigEmployeeShareMonthly(monthlyBasicPay);
+            BigDecimal monthlyBasicBase = taxContext.monthlyBasicPay().compareTo(BigDecimal.ZERO) > 0
+                    ? taxContext.monthlyBasicPay()
+                    : monthlyBasicPay;
+            BigDecimal monthlyGrossBase = taxContext.monthlyGrossPay().compareTo(BigDecimal.ZERO) > 0
+                    ? taxContext.monthlyGrossPay()
+                    : grossPay;
+
+            BigDecimal monthlySssDue = computeSssEmployeeShareMonthly(monthlyGrossBase);
+            BigDecimal monthlyPhilHealthDue = computePhilHealthEmployeeShareMonthly(monthlyBasicBase);
+            BigDecimal monthlyPagibigDue = computePagibigEmployeeShareMonthly(monthlyBasicBase);
             BigDecimal monthlyStatutoryTotal = CommonCalculator.normalize(
                     monthlySssDue.add(monthlyPhilHealthDue).add(monthlyPagibigDue)
             );
 
-            BigDecimal nti = CommonCalculator.normalizeNonNegative(payAfterAttendance.subtract(monthlyStatutoryTotal));
-            BigDecimal withholdingDue = bracketService.computeWithholdingTaxPerCutoff(nti);
-            DeductionType withholdingType = bracketService.resolveWithholdingDeductionType(nti);
+            BigDecimal monthlyPayAfterAttendance = CommonCalculator.normalize(
+                    taxContext.priorMonthPayAfterAttendance().add(payAfterAttendance)
+            );
+            BigDecimal monthlyNti = CommonCalculator.normalizeNonNegative(
+                    monthlyPayAfterAttendance.subtract(monthlyStatutoryTotal)
+            );
+            BigDecimal monthlyWithholdingDue = computeWithholdingTaxPerMonth(monthlyNti);
+            BigDecimal withholdingDue = CommonCalculator.normalizeNonNegative(
+                    monthlyWithholdingDue.subtract(taxContext.priorMonthWithholding())
+            );
+            DeductionType withholdingType = resolveWithholdingDeductionTypePerMonth(monthlyNti);
 
             addDeductionLine(deductions, item, DeductionType.SSS, monthlySssDue);
             addDeductionLine(deductions, item, DeductionType.PHILHEALTH, monthlyPhilHealthDue);
@@ -744,6 +769,45 @@ public class PayrollCalculator {
 
     public BigDecimal computeExemptDailyAbsenceRate(BigDecimal yearlyCompensation) {
         return computeDailyRate(yearlyCompensation);
+    }
+
+    public BigDecimal computeSssEmployerShareMonthly(BigDecimal monthlyGrossCompensation) {
+        BigDecimal msc = resolveSssMsc(monthlyGrossCompensation);
+        if (msc.compareTo(BigDecimal.ZERO) <= 0) {
+            return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+        }
+
+        BigDecimal regularBase = msc.min(payrollConfig.getSssWispThreshold());
+        BigDecimal wispBase = msc.subtract(payrollConfig.getSssWispThreshold()).max(BigDecimal.ZERO.setScale(2));
+        BigDecimal ecAmount = msc.compareTo(payrollConfig.getSssEcThreshold()) < 0
+                ? payrollConfig.getSssEcLowerAmount()
+                : payrollConfig.getSssEcUpperAmount();
+
+        return CommonCalculator.normalize(
+                regularBase.multiply(payrollConfig.getSssEmployerRegularRate())
+                        .add(wispBase.multiply(payrollConfig.getSssEmployerWispRate()))
+                        .add(ecAmount)
+        );
+    }
+
+    public BigDecimal computePhilHealthEmployerShareMonthly(BigDecimal monthlyBasicCompensation) {
+        BigDecimal monthly = CommonCalculator.normalize(monthlyBasicCompensation);
+        if (monthly.compareTo(BigDecimal.ZERO) <= 0) {
+            return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+        }
+
+        BigDecimal adjustedMonthly = monthly.max(payrollConfig.getPhilHealthFloor()).min(payrollConfig.getPhilHealthCeiling());
+        return CommonCalculator.normalize(adjustedMonthly.multiply(payrollConfig.getPhilHealthEmployerRate()));
+    }
+
+    public BigDecimal computePagibigEmployerShareMonthly(BigDecimal monthlyBasicCompensation) {
+        BigDecimal monthly = CommonCalculator.normalize(monthlyBasicCompensation);
+        if (monthly.compareTo(BigDecimal.ZERO) <= 0) {
+            return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+        }
+
+        BigDecimal mfs = monthly.min(payrollConfig.getPagibigMfsCap());
+        return CommonCalculator.normalize(mfs.multiply(payrollConfig.getPagibigEmployerRate()));
     }
 
     public BigDecimal resolveHolidayOrRestDayPremiumRate(boolean isRestDay, boolean isHoliday, boolean isRegularHoliday) {

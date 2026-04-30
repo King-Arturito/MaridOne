@@ -8,6 +8,7 @@ import org.example.maridone.core.employee.Employee;
 import org.example.maridone.payroll.dispute.DisputeRequest;
 import org.example.maridone.payroll.item.component.DeductionsLine;
 import org.example.maridone.payroll.item.component.EarningsLine;
+import org.example.maridone.payroll.item.component.EmployerContributionLine;
 import org.example.maridone.payroll.run.PayrollRun;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
@@ -55,6 +56,9 @@ public class PayrollItem {
 
     @OneToMany(mappedBy = "payrollItem", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     private List<EarningsLine> earnings;
+
+    @OneToMany(mappedBy = "payrollItem", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    private List<EmployerContributionLine> employerContributions;
 
     @OneToMany(mappedBy = "payrollItem", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     private List<DisputeRequest> disputes;
@@ -109,6 +113,14 @@ public class PayrollItem {
 
     public void setEarnings(List<EarningsLine> earnings) {
         this.earnings = earnings;
+    }
+
+    public List<EmployerContributionLine> getEmployerContributions() {
+        return employerContributions;
+    }
+
+    public void setEmployerContributions(List<EmployerContributionLine> employerContributions) {
+        this.employerContributions = employerContributions;
     }
 
     public List<DisputeRequest> getDisputes() {

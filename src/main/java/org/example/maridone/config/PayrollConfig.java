@@ -24,15 +24,23 @@ public class PayrollConfig {
     private BigDecimal sickLeaveHours =  BigDecimal.valueOf(40);
     private BigDecimal taxFreeBonusAnnualCap = BigDecimal.valueOf(90_000);
     private BigDecimal sssEmployeeRate = BigDecimal.valueOf(0.05);
+    private BigDecimal sssEmployerRegularRate = BigDecimal.valueOf(0.10);
+    private BigDecimal sssEmployerWispRate = BigDecimal.valueOf(0.10);
+    private BigDecimal sssWispThreshold = BigDecimal.valueOf(20_000);
+    private BigDecimal sssEcThreshold = BigDecimal.valueOf(15_000);
+    private BigDecimal sssEcLowerAmount = BigDecimal.valueOf(10);
+    private BigDecimal sssEcUpperAmount = BigDecimal.valueOf(30);
     private BigDecimal sssMinimumMsc = BigDecimal.valueOf(5_000);
     private BigDecimal sssMaximumMsc = BigDecimal.valueOf(35_000);
     private BigDecimal sssMscStep = BigDecimal.valueOf(500);
     private BigDecimal philHealthEmployeeRate = BigDecimal.valueOf(0.025);
+    private BigDecimal philHealthEmployerRate = BigDecimal.valueOf(0.025);
     private BigDecimal philHealthFloor = BigDecimal.valueOf(10_000);
     private BigDecimal philHealthCeiling = BigDecimal.valueOf(100_000);
     private BigDecimal pagibigLowerSalaryThreshold = BigDecimal.valueOf(1_500);
     private BigDecimal pagibigLowerRate = BigDecimal.valueOf(0.01);
     private BigDecimal pagibigHigherRate = BigDecimal.valueOf(0.02);
+    private BigDecimal pagibigEmployerRate = BigDecimal.valueOf(0.02);
     private BigDecimal pagibigMfsCap = BigDecimal.valueOf(10_000);
 
     /*
@@ -139,6 +147,54 @@ public class PayrollConfig {
         this.sssEmployeeRate = sssEmployeeRate;
     }
 
+    public BigDecimal getSssEmployerRegularRate() {
+        return sssEmployerRegularRate;
+    }
+
+    public void setSssEmployerRegularRate(BigDecimal sssEmployerRegularRate) {
+        this.sssEmployerRegularRate = sssEmployerRegularRate;
+    }
+
+    public BigDecimal getSssEmployerWispRate() {
+        return sssEmployerWispRate;
+    }
+
+    public void setSssEmployerWispRate(BigDecimal sssEmployerWispRate) {
+        this.sssEmployerWispRate = sssEmployerWispRate;
+    }
+
+    public BigDecimal getSssWispThreshold() {
+        return sssWispThreshold;
+    }
+
+    public void setSssWispThreshold(BigDecimal sssWispThreshold) {
+        this.sssWispThreshold = sssWispThreshold;
+    }
+
+    public BigDecimal getSssEcThreshold() {
+        return sssEcThreshold;
+    }
+
+    public void setSssEcThreshold(BigDecimal sssEcThreshold) {
+        this.sssEcThreshold = sssEcThreshold;
+    }
+
+    public BigDecimal getSssEcLowerAmount() {
+        return sssEcLowerAmount;
+    }
+
+    public void setSssEcLowerAmount(BigDecimal sssEcLowerAmount) {
+        this.sssEcLowerAmount = sssEcLowerAmount;
+    }
+
+    public BigDecimal getSssEcUpperAmount() {
+        return sssEcUpperAmount;
+    }
+
+    public void setSssEcUpperAmount(BigDecimal sssEcUpperAmount) {
+        this.sssEcUpperAmount = sssEcUpperAmount;
+    }
+
     public BigDecimal getSssMinimumMsc() {
         return sssMinimumMsc;
     }
@@ -169,6 +225,14 @@ public class PayrollConfig {
 
     public void setPhilHealthEmployeeRate(BigDecimal philHealthEmployeeRate) {
         this.philHealthEmployeeRate = philHealthEmployeeRate;
+    }
+
+    public BigDecimal getPhilHealthEmployerRate() {
+        return philHealthEmployerRate;
+    }
+
+    public void setPhilHealthEmployerRate(BigDecimal philHealthEmployerRate) {
+        this.philHealthEmployerRate = philHealthEmployerRate;
     }
 
     public BigDecimal getPhilHealthFloor() {
@@ -209,6 +273,14 @@ public class PayrollConfig {
 
     public void setPagibigHigherRate(BigDecimal pagibigHigherRate) {
         this.pagibigHigherRate = pagibigHigherRate;
+    }
+
+    public BigDecimal getPagibigEmployerRate() {
+        return pagibigEmployerRate;
+    }
+
+    public void setPagibigEmployerRate(BigDecimal pagibigEmployerRate) {
+        this.pagibigEmployerRate = pagibigEmployerRate;
     }
 
     public BigDecimal getPagibigMfsCap() {

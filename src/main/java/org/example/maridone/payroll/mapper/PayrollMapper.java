@@ -5,6 +5,7 @@ import org.example.maridone.payroll.dispute.DisputeRequest;
 import org.example.maridone.payroll.dto.*;
 import org.example.maridone.payroll.item.component.DeductionsLine;
 import org.example.maridone.payroll.item.component.EarningsLine;
+import org.example.maridone.payroll.item.component.EmployerContributionLine;
 import org.example.maridone.payroll.item.PayrollItem;
 import org.example.maridone.payroll.dto.RunResponseDto;
 import org.example.maridone.payroll.run.PayrollRun;
@@ -35,6 +36,9 @@ public interface PayrollMapper {
     DeductionsDto toDeductionsDto(DeductionsLine deductionsLine);
 
     List<DeductionsDto> toDeductionsDtos(List<DeductionsLine> deductionsLines);
+
+    @Mapping(source = "employerContributionId", target = "employerContributionId")
+    EmployerContributionDto toEmployerContributionDto(EmployerContributionLine employerContributionLine);
 
     @Mapping(source = "disputeId", target = "id")
     @Mapping(source = "payrollItem.itemId", target = "itemId")

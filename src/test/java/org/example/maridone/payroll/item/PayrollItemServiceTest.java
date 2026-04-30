@@ -6,6 +6,7 @@ import org.example.maridone.enums.Activity;
 import org.example.maridone.enums.AdjustmentKind;
 import org.example.maridone.enums.DeductionType;
 import org.example.maridone.enums.EarningsType;
+import org.example.maridone.enums.PaySummaryKind;
 import org.example.maridone.enums.PayrollStatus;
 import org.example.maridone.enums.RunType;
 import org.example.maridone.exception.unauthorized.InvalidActionException;
@@ -22,6 +23,8 @@ import org.example.maridone.payroll.item.component.DeductionsService;
 import org.example.maridone.payroll.item.component.EarningsLine;
 import org.example.maridone.payroll.item.component.EarningsRepository;
 import org.example.maridone.payroll.item.component.EarningsService;
+import org.example.maridone.payroll.item.component.EmployerContributionRepository;
+import org.example.maridone.payroll.item.component.EmployerContributionService;
 import org.example.maridone.payroll.item.component.PayrollItemTotalsService;
 import org.example.maridone.payroll.mapper.PayrollMapper;
 import org.example.maridone.payroll.projection.PayTypeSummaryProjection;
@@ -67,6 +70,10 @@ public class PayrollItemServiceTest {
     private EarningsService earningsService;
     @Mock
     private DeductionsService deductionsService;
+    @Mock
+    private EmployerContributionRepository employerContributionRepository;
+    @Mock
+    private EmployerContributionService employerContributionService;
     @Mock
     private ActivityLogRepository activityLogRepository;
     @Mock
@@ -117,23 +124,32 @@ public class PayrollItemServiceTest {
     }
 
     @Test
-    void getSummarizedRunItems_ShouldSeparateEarningsAndDeductionsByAdjustmentKind() {
+    void getSummarizedRunItems_ShouldIncludeEmployerContributionsAsSeparateSummaryKind() {
         when(deductionsRepository.getSummarizedDeductions(12L)).thenReturn(List.of(
                 summaryProjection("SSS", new BigDecimal("20000.00"))
         ));
         when(earningsRepository.getSummarizedEarnings(12L)).thenReturn(List.of(
                 summaryProjection("BASIC", new BigDecimal("50000.00"))
         ));
+        when(employerContributionRepository.getSummarizedEmployerContributions(12L)).thenReturn(List.of(
+                summaryProjection("PHILHEALTH", new BigDecimal("1300.00"))
+        ));
 
         List<PayTypeSummaryDto> result = payrollItemService.getSummarizedRunItems(12L);
 
-        Assertions.assertEquals(2, result.size());
+        Assertions.assertEquals(3, result.size());
         Assertions.assertEquals("SSS", result.get(0).getPayType());
         Assertions.assertEquals(AdjustmentKind.DEDUCTION, result.get(0).getAdjustment());
+        Assertions.assertEquals(PaySummaryKind.DEDUCTION, result.get(0).getSummaryKind());
         Assertions.assertEquals(new BigDecimal("20000.00"), result.get(0).getTotal());
         Assertions.assertEquals("BASIC", result.get(1).getPayType());
         Assertions.assertEquals(AdjustmentKind.EARNING, result.get(1).getAdjustment());
+        Assertions.assertEquals(PaySummaryKind.EARNING, result.get(1).getSummaryKind());
         Assertions.assertEquals(new BigDecimal("50000.00"), result.get(1).getTotal());
+        Assertions.assertEquals("PHILHEALTH", result.get(2).getPayType());
+        Assertions.assertNull(result.get(2).getAdjustment());
+        Assertions.assertEquals(PaySummaryKind.EMPLOYER_CONTRIBUTION, result.get(2).getSummaryKind());
+        Assertions.assertEquals(new BigDecimal("1300.00"), result.get(2).getTotal());
     }
 
     @Test

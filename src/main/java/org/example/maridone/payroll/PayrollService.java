@@ -52,6 +52,7 @@ import org.example.maridone.payroll.item.PayrollItem;
 import org.example.maridone.payroll.item.PayrollItemService;
 import org.example.maridone.payroll.item.component.DeductionsLine;
 import org.example.maridone.payroll.item.component.EarningsLine;
+import org.example.maridone.payroll.item.component.EmployerContributionLine;
 import org.example.maridone.payroll.run.PayrollItemRepository;
 import org.example.maridone.payroll.run.PayrollRun;
 import org.example.maridone.payroll.run.PayrollRunRepository;
@@ -309,7 +310,9 @@ public class PayrollService {
                     item.setGrossPay(semiMonthlySalary);
                     item.setDisputes(new ArrayList<>());
                     item.setEarnings(payrollCalculator.setEarnings(emp, item));
-                    PayrollCalculator.RegularTaxContext taxContext = resolveRegularTaxContext(emp, run);
+                    item.getEarnings().forEach(line -> line.setPayrollItem(item));
+                    PayrollCalculator.RegularTaxContext taxContext = resolveRegularTaxContext(emp, run, item);
+                    item.setEmployerContributions(buildEmployerContributionLines(item, taxContext));
                     List<DeductionsLine> deductions = payrollCalculator.setDeductions(
                             emp,
                             item,
@@ -613,7 +616,8 @@ public class PayrollService {
             BigDecimal grossPay = earningsTotal.setScale(2, RoundingMode.HALF_UP);
             item.setGrossPay(grossPay);
 
-            PayrollCalculator.RegularTaxContext taxContext = resolveRegularTaxContext(emp, run);
+            PayrollCalculator.RegularTaxContext taxContext = resolveRegularTaxContext(emp, run, item);
+            item.setEmployerContributions(buildEmployerContributionLines(item, taxContext));
             List<DeductionsLine> calculatedDeductions = payrollCalculator.setDeductions(
                     emp,
                     item,
@@ -1047,11 +1051,16 @@ public class PayrollService {
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
-    private PayrollCalculator.RegularTaxContext resolveRegularTaxContext(Employee employee, PayrollRun run) {
+    private PayrollCalculator.RegularTaxContext resolveRegularTaxContext(
+            Employee employee,
+            PayrollRun run,
+            PayrollItem currentItem
+    ) {
         if (employee == null
                 || employee.getEmployeeId() == null
                 || run == null
-                || run.getRunType() == RunType.ADJUSTMENT) {
+                || run.getRunType() == RunType.ADJUSTMENT
+                || currentItem == null) {
             return PayrollCalculator.RegularTaxContext.empty();
         }
 
@@ -1060,41 +1069,136 @@ public class PayrollService {
             return PayrollCalculator.RegularTaxContext.empty();
         }
 
-        List<PayrollItem> priorItems =
-                safeList(payrollItemRepository.findByEmployee_EmployeeIdAndPayrollRun_PayrollStatusAndPayrollRun_RunTypeNotOrderByPayrollRun_PeriodEndDescItemIdDesc(
-                        employee.getEmployeeId(),
-                        PayrollStatus.POSTED,
-                        RunType.ADJUSTMENT
-                ));
+        Optional<PayrollItem> priorItem = resolvePriorRegularCutoffItem(employee.getEmployeeId(), paymentDate);
+        BigDecimal currentBasicPay = resolveItemBasicPay(currentItem);
+        BigDecimal currentGrossPay = resolveItemGrossPay(currentItem);
 
+        BigDecimal priorBasicPay = BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+        BigDecimal priorGrossPay = BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
         BigDecimal priorMonthPayAfterAttendance = BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
         BigDecimal priorMonthWithholding = BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
-        boolean hasPriorRegularCutoff = false;
+        boolean hasPriorRegularCutoff = priorItem.isPresent();
 
-        for (PayrollItem priorItem : priorItems) {
-            if (!isPriorRegularCutoffInSameMonth(priorItem, paymentDate)) {
-                continue;
-            }
-
-            hasPriorRegularCutoff = true;
-            BigDecimal priorGrossPay = CommonCalculator.normalize(priorItem.getGrossPay());
+        if (priorItem.isPresent()) {
+            PayrollItem resolvedPriorItem = priorItem.get();
+            priorBasicPay = resolveItemBasicPay(resolvedPriorItem);
+            priorGrossPay = resolveItemGrossPay(resolvedPriorItem);
             BigDecimal priorAttendanceDeductions = sumMatchingDeductionAmounts(
-                    priorItem.getDeductions(),
+                    resolvedPriorItem.getDeductions(),
                     ATTENDANCE_DEDUCTION_TYPES
             );
             priorMonthPayAfterAttendance = priorMonthPayAfterAttendance.add(
                     CommonCalculator.normalizeNonNegative(priorGrossPay.subtract(priorAttendanceDeductions))
             );
             priorMonthWithholding = priorMonthWithholding.add(
-                    sumMatchingDeductionAmounts(priorItem.getDeductions(), WITHHOLDING_TYPES)
+                    sumMatchingDeductionAmounts(resolvedPriorItem.getDeductions(), WITHHOLDING_TYPES)
             );
         }
 
         return new PayrollCalculator.RegularTaxContext(
+                CommonCalculator.normalize(priorBasicPay.add(currentBasicPay)),
+                CommonCalculator.normalize(priorGrossPay.add(currentGrossPay)),
                 priorMonthPayAfterAttendance,
                 priorMonthWithholding,
                 hasPriorRegularCutoff
         );
+    }
+
+    private Optional<PayrollItem> resolvePriorRegularCutoffItem(Long employeeId, LocalDate currentPaymentDate) {
+        if (employeeId == null || currentPaymentDate == null) {
+            return Optional.empty();
+        }
+
+        List<PayrollItem> priorItems = safeList(
+                payrollItemRepository.findByEmployee_EmployeeIdAndPayrollRun_RunTypeOrderByPayrollRun_PaymentDateDescPayrollRun_PeriodEndDescItemIdDesc(
+                        employeeId,
+                        RunType.REGULAR
+                )
+        ).stream()
+                .filter(item -> isPriorRegularCutoffInSameMonth(item, currentPaymentDate))
+                .toList();
+
+        return priorItems.stream()
+                .filter(item -> item.getPayrollRun() != null && item.getPayrollRun().getPayrollStatus() == PayrollStatus.POSTED)
+                .findFirst()
+                .or(() -> priorItems.stream().findFirst());
+    }
+
+    private List<EmployerContributionLine> buildEmployerContributionLines(
+            PayrollItem item,
+            PayrollCalculator.RegularTaxContext taxContext
+    ) {
+        if (item == null || item.getPayrollRun() == null || taxContext == null || !isMonthEndRegularRun(item.getPayrollRun())) {
+            return new ArrayList<>();
+        }
+
+        List<EmployerContributionLine> lines = new ArrayList<>();
+        lines.add(createEmployerContributionLine(
+                item,
+                org.example.maridone.enums.EmployerContributionType.SSS,
+                payrollCalculator.computeSssEmployerShareMonthly(taxContext.monthlyGrossPay())
+        ));
+        lines.add(createEmployerContributionLine(
+                item,
+                org.example.maridone.enums.EmployerContributionType.PHILHEALTH,
+                payrollCalculator.computePhilHealthEmployerShareMonthly(taxContext.monthlyBasicPay())
+        ));
+        lines.add(createEmployerContributionLine(
+                item,
+                org.example.maridone.enums.EmployerContributionType.PAGIBIG,
+                payrollCalculator.computePagibigEmployerShareMonthly(taxContext.monthlyBasicPay())
+        ));
+        return lines;
+    }
+
+    private EmployerContributionLine createEmployerContributionLine(
+            PayrollItem item,
+            org.example.maridone.enums.EmployerContributionType type,
+            BigDecimal amount
+    ) {
+        EmployerContributionLine line = new EmployerContributionLine();
+        line.setPayrollItem(item);
+        line.setContributionType(type);
+        line.setAmount(CommonCalculator.normalize(amount));
+        return line;
+    }
+
+    private boolean isMonthEndRegularRun(PayrollRun run) {
+        if (run == null || run.getRunType() != RunType.REGULAR) {
+            return false;
+        }
+
+        LocalDate paymentDate = run.getPaymentDate() != null ? run.getPaymentDate() : run.getPeriodEnd();
+        return paymentDate != null && paymentDate.getDayOfMonth() == 30;
+    }
+
+    private BigDecimal resolveItemGrossPay(PayrollItem item) {
+        if (item == null) {
+            return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+        }
+
+        BigDecimal earningsTotal = sumEarningAmounts(item.getEarnings());
+        if (earningsTotal.compareTo(BigDecimal.ZERO) > 0) {
+            return CommonCalculator.normalize(earningsTotal);
+        }
+        return CommonCalculator.normalize(item.getGrossPay());
+    }
+
+    private BigDecimal resolveItemBasicPay(PayrollItem item) {
+        if (item == null) {
+            return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+        }
+
+        BigDecimal basicTotal = safeList(item.getEarnings()).stream()
+                .filter(line -> line != null && line.getEarningsType() == EarningsType.BASIC)
+                .map(EarningsLine::getAmount)
+                .filter(amount -> amount != null)
+                .reduce(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP), BigDecimal::add);
+
+        if (basicTotal.compareTo(BigDecimal.ZERO) > 0) {
+            return CommonCalculator.normalize(basicTotal);
+        }
+        return CommonCalculator.normalize(item.getGrossPay());
     }
 
     private boolean isPriorRegularCutoffInSameMonth(PayrollItem priorItem, LocalDate currentPaymentDate) {

@@ -9,6 +9,7 @@ import org.example.maridone.enums.Activity;
 import org.example.maridone.enums.AdjustmentKind;
 import org.example.maridone.enums.DeductionType;
 import org.example.maridone.enums.EarningsType;
+import org.example.maridone.enums.PaySummaryKind;
 import org.example.maridone.enums.PayrollStatus;
 import org.example.maridone.enums.RunType;
 import org.example.maridone.exception.notfound.EmployeeNotFoundException;
@@ -20,6 +21,7 @@ import org.example.maridone.log.activity.ActivityLog;
 import org.example.maridone.payroll.dto.CorrectionSourceItemDto;
 import org.example.maridone.payroll.dto.DeductionsDto;
 import org.example.maridone.payroll.dto.EarningsDto;
+import org.example.maridone.payroll.dto.EmployerContributionDto;
 import org.example.maridone.payroll.dto.ItemDetailsDto;
 import org.example.maridone.payroll.dto.ItemViewDto;
 import org.example.maridone.payroll.dto.PayTypeSummaryDto;
@@ -31,6 +33,8 @@ import org.example.maridone.payroll.item.component.DeductionsService;
 import org.example.maridone.payroll.item.component.EarningsLine;
 import org.example.maridone.payroll.item.component.EarningsRepository;
 import org.example.maridone.payroll.item.component.EarningsService;
+import org.example.maridone.payroll.item.component.EmployerContributionRepository;
+import org.example.maridone.payroll.item.component.EmployerContributionService;
 import org.example.maridone.payroll.item.component.PayrollItemTotalsService;
 import org.example.maridone.payroll.mapper.PayrollMapper;
 import org.example.maridone.payroll.run.PayrollItemRepository;
@@ -58,6 +62,8 @@ public class PayrollItemService {
     private final EarningsRepository earningsRepository;
     private final EarningsService earningsService;
     private final DeductionsService deductionsService;
+    private final EmployerContributionRepository employerContributionRepository;
+    private final EmployerContributionService employerContributionService;
     private final ActivityLogRepository activityLogRepository;
     private final PayrollItemTotalsService payrollItemTotalsService;
 
@@ -70,6 +76,8 @@ public class PayrollItemService {
             EarningsRepository earningsRepository,
             EarningsService earningsService,
             DeductionsService deductionsService,
+            EmployerContributionRepository employerContributionRepository,
+            EmployerContributionService employerContributionService,
             ActivityLogRepository activityLogRepository,
             PayrollItemTotalsService payrollItemTotalsService
     ) {
@@ -81,6 +89,8 @@ public class PayrollItemService {
         this.earningsRepository = earningsRepository;
         this.earningsService = earningsService;
         this.deductionsService = deductionsService;
+        this.employerContributionRepository = employerContributionRepository;
+        this.employerContributionService = employerContributionService;
         this.activityLogRepository = activityLogRepository;
         this.payrollItemTotalsService = payrollItemTotalsService;
     }
@@ -130,7 +140,10 @@ public class PayrollItemService {
         );
         Page<ItemViewDto> items = payrollItemRepository.findSpecificDetails(payId, filter, pageable);
         if (run.getPayrollStatus() != PayrollStatus.POSTED || run.getRunType() == RunType.ADJUSTMENT) {
-            return items;
+            List<ItemViewDto> itemViews = items.getContent().stream()
+                    .map(this::withEmployerContributionTotal)
+                    .toList();
+            return new PageImpl<>(itemViews, pageable, items.getTotalElements());
         }
 
         List<ItemViewDto> displayedItems = items.getContent().stream()
@@ -180,11 +193,15 @@ public class PayrollItemService {
         List<PayTypeSummaryDto> summaryDtos = new ArrayList<>();
 
         deductionsRepository.getSummarizedDeductions(payId).forEach(p ->
-                summaryDtos.add(new PayTypeSummaryDto(AdjustmentKind.DEDUCTION, p.getType(), p.getTotalAmount()))
+                summaryDtos.add(new PayTypeSummaryDto(PaySummaryKind.DEDUCTION, p.getType(), p.getTotalAmount()))
         );
 
         earningsRepository.getSummarizedEarnings(payId).forEach(p ->
-                summaryDtos.add(new PayTypeSummaryDto(AdjustmentKind.EARNING, p.getType(), p.getTotalAmount()))
+                summaryDtos.add(new PayTypeSummaryDto(PaySummaryKind.EARNING, p.getType(), p.getTotalAmount()))
+        );
+
+        employerContributionRepository.getSummarizedEmployerContributions(payId).forEach(p ->
+                summaryDtos.add(new PayTypeSummaryDto(PaySummaryKind.EMPLOYER_CONTRIBUTION, p.getType(), p.getTotalAmount()))
         );
 
         return summaryDtos;
@@ -214,11 +231,15 @@ public class PayrollItemService {
         List<PayTypeSummaryDto> summaryDtos = new ArrayList<>();
 
         deductionsRepository.getSummarizedDeductionsByDateRange(startDate, endDate).forEach(p ->
-                summaryDtos.add(new PayTypeSummaryDto(AdjustmentKind.DEDUCTION, p.getType(), p.getTotalAmount()))
+                summaryDtos.add(new PayTypeSummaryDto(PaySummaryKind.DEDUCTION, p.getType(), p.getTotalAmount()))
         );
 
         earningsRepository.getSummarizedEarningsByDateRange(startDate, endDate).forEach(p ->
-                summaryDtos.add(new PayTypeSummaryDto(AdjustmentKind.EARNING, p.getType(), p.getTotalAmount()))
+                summaryDtos.add(new PayTypeSummaryDto(PaySummaryKind.EARNING, p.getType(), p.getTotalAmount()))
+        );
+
+        employerContributionRepository.getSummarizedEmployerContributionsByDateRange(startDate, endDate).forEach(p ->
+                summaryDtos.add(new PayTypeSummaryDto(PaySummaryKind.EMPLOYER_CONTRIBUTION, p.getType(), p.getTotalAmount()))
         );
 
         return summaryDtos;
@@ -475,7 +496,7 @@ public class PayrollItemService {
         BigDecimal totalDeductions = sumDeductions(itemView.getItemId());
         itemView.setGrossPay(CommonCalculator.normalize(grossPay));
         itemView.setNetPay(CommonCalculator.normalizeNonNegative(grossPay.subtract(totalDeductions)));
-        return itemView;
+        return withEmployerContributionTotal(itemView);
     }
 
     private ItemDetailsDto toDisplayedItemDetails(PayrollItem item) {
@@ -499,6 +520,22 @@ public class PayrollItemService {
                 .map(DeductionsDto::getAmount)
                 .filter(amount -> amount != null)
                 .reduce(BigDecimal.ZERO.setScale(2), BigDecimal::add);
+    }
+
+    private BigDecimal sumEmployerContributions(Long itemId) {
+        return employerContributionService.getEmployerContributions(itemId).stream()
+                .map(EmployerContributionDto::getAmount)
+                .filter(amount -> amount != null)
+                .reduce(BigDecimal.ZERO.setScale(2), BigDecimal::add);
+    }
+
+    private ItemViewDto withEmployerContributionTotal(ItemViewDto itemView) {
+        if (itemView == null || itemView.getItemId() == null) {
+            return itemView;
+        }
+
+        itemView.setEmployerContributionTotal(CommonCalculator.normalize(sumEmployerContributions(itemView.getItemId())));
+        return itemView;
     }
 
     private void assertRunIsEditable(PayrollRun run) {

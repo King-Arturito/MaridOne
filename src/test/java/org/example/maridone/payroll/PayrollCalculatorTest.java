@@ -166,6 +166,8 @@ class PayrollCalculatorTest {
                 BigDecimal.ZERO,
                 BigDecimal.ZERO,
                 new PayrollCalculator.RegularTaxContext(
+                        new BigDecimal("52000.00"),
+                        new BigDecimal("52000.00"),
                         new BigDecimal("26000.00"),
                         new BigDecimal("2479.10"),
                         true
@@ -176,8 +178,41 @@ class PayrollCalculatorTest {
         assertDeduction(deductions, DeductionType.SSS, "1750.00");
         assertDeduction(deductions, DeductionType.PHILHEALTH, "1300.00");
         assertDeduction(deductions, DeductionType.PAGIBIG, "200.00");
-        assertDeduction(deductions, DeductionType.BRACKET_LEVEL_THREE, "2154.10");
+        assertDeduction(deductions, DeductionType.BRACKET_LEVEL_THREE, "2479.10");
         deductions.forEach(line -> Assertions.assertSame(item, line.getPayrollItem()));
+    }
+
+    @Test
+    void computeSssEmployerShareMonthly_ShouldApplyRegularWispAndEcComponents() {
+        BigDecimal result = payrollCalculator.computeSssEmployerShareMonthly(new BigDecimal("25000.00"));
+
+        assertBigDecimalEquals("2530.00", result);
+    }
+
+    @Test
+    void computeSssEmployerShareMonthly_ShouldUseLowerEcBelowThreshold() {
+        BigDecimal result = payrollCalculator.computeSssEmployerShareMonthly(new BigDecimal("14500.00"));
+
+        assertBigDecimalEquals("1460.00", result);
+    }
+
+    @Test
+    void computePhilHealthEmployerShareMonthly_ShouldRespectFloorAndCeiling() {
+        assertBigDecimalEquals(
+                "250.00",
+                payrollCalculator.computePhilHealthEmployerShareMonthly(new BigDecimal("5000.00"))
+        );
+        assertBigDecimalEquals(
+                "2500.00",
+                payrollCalculator.computePhilHealthEmployerShareMonthly(new BigDecimal("150000.00"))
+        );
+    }
+
+    @Test
+    void computePagibigEmployerShareMonthly_ShouldCapAtTenThousandMfs() {
+        BigDecimal result = payrollCalculator.computePagibigEmployerShareMonthly(new BigDecimal("15000.00"));
+
+        assertBigDecimalEquals("200.00", result);
     }
 
     @Test
