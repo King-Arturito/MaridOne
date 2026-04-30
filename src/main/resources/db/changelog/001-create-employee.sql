@@ -4,6 +4,7 @@ CREATE TABLE employee (
     middle_name           VARCHAR(30),
     last_name             VARCHAR(30)     NOT NULL,
     birth_date            DATE            NOT NULL,
+    gender                VARCHAR(30),
     employment_date_start DATE            NOT NULL,
     employment_date_end   DATE,
     yearly_salary         NUMERIC(38, 2)  NOT NULL,
@@ -30,6 +31,7 @@ CREATE TABLE employee (
     emergency_contact_number      VARCHAR(255),
     manager_id                    BIGINT,
 
+    CONSTRAINT employee_gender_check            CHECK (gender IN ('MALE', 'FEMALE', 'NON_BINARY', 'PREFER_NOT_TO_SAY')),
     CONSTRAINT employee_employment_status_check CHECK (employment_status IN ('REGULAR', 'NEW_HIRE', 'PART_TIME', 'TERMINATED', 'SUSPENDED')),
     CONSTRAINT employee_exemption_status_check  CHECK (exemption_status  IN ('EXEMPT', 'NON_EXEMPT')),
     CONSTRAINT employee_position_check          CHECK (position          IN ('MANAGEMENT', 'HR', 'ACCOUNTING', 'EMPLOYEE', 'MANAGER', 'UNKNOWN')),
