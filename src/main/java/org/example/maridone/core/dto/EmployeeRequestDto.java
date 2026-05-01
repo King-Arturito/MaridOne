@@ -54,6 +54,8 @@ public class EmployeeRequestDto {
     private String emergencyContactName;
     private String emergencyContactRelationship;
     private String emergencyContactNumber;
+    private String bankName;
+    private String bankAccountNumber;
     private SeparationReason separationReason;
     private Boolean eligibleForRehire;
     private String separationNotes;
@@ -248,6 +250,22 @@ public class EmployeeRequestDto {
 
     public void setEmergencyContactNumber(String emergencyContactNumber) {
         this.emergencyContactNumber = emergencyContactNumber;
+    }
+
+    public String getBankName() {
+        return bankName;
+    }
+
+    public void setBankName(String bankName) {
+        this.bankName = bankName;
+    }
+
+    public String getBankAccountNumber() {
+        return bankAccountNumber;
+    }
+
+    public void setBankAccountNumber(String bankAccountNumber) {
+        this.bankAccountNumber = bankAccountNumber;
     }
 
     public SeparationReason getSeparationReason() {

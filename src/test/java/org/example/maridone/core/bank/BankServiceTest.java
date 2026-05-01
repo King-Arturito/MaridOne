@@ -1,6 +1,7 @@
 package org.example.maridone.core.bank;
 
 import java.util.Optional;
+import java.util.List;
 
 import org.example.maridone.core.dto.BankAccountDto;
 import org.example.maridone.core.employee.Employee;
@@ -51,21 +52,27 @@ class BankServiceTest {
 
     @Test
     void updateBankAccount_ShouldUpdateDetails_WhenExists() {
+        Long empId = 1L;
         Long bankId = 100L;
         BankAccountDto payload = new BankAccountDto();
         payload.setBankId(bankId);
         payload.setBankName("BDO");
         payload.setAccountNumber("0987654321");
 
+        Employee employee = new Employee();
+        ReflectionTestUtils.setField(employee, "employeeId", empId);
+
         BankAccount existing = new BankAccount();
         ReflectionTestUtils.setField(existing, "bankId", bankId);
+        ReflectionTestUtils.setField(existing, "employeeId", empId);
         existing.setActive(true);
         existing.setBankName("OldBank");
 
+        when(employeeRepository.findById(empId)).thenReturn(Optional.of(employee));
         when(bankAccountRepository.findById(bankId)).thenReturn(Optional.of(existing));
         when(bankAccountRepository.save(any(BankAccount.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        BankAccount result = bankService.updateBankAccount(payload);
+        BankAccount result = bankService.updateBankAccount(empId, payload);
 
         Assertions.assertEquals("BDO", result.getBankName());
         Assertions.assertEquals("0987654321", result.getAccountNumber());
@@ -73,13 +80,36 @@ class BankServiceTest {
 
     @Test
     void updateBankAccount_ShouldThrowException_WhenNotFound() {
+        Long empId = 1L;
         BankAccountDto payload = new BankAccountDto();
         payload.setBankId(999L);
         
+        when(employeeRepository.findById(empId)).thenReturn(Optional.of(new Employee()));
         when(bankAccountRepository.findById(999L)).thenReturn(Optional.empty());
 
         Assertions.assertThrows(BankNotFoundException.class, () -> {
-            bankService.updateBankAccount(payload);
+            bankService.updateBankAccount(empId, payload);
         });
+    }
+
+    @Test
+    void getPrimaryBankAccount_ShouldReturnLatestActiveAccount() {
+        Long empId = 7L;
+        Employee employee = new Employee();
+        ReflectionTestUtils.setField(employee, "employeeId", empId);
+
+        BankAccount latest = new BankAccount();
+        latest.setEmployee(employee);
+        latest.setBankName("UnionBank");
+        latest.setAccountNumber("1111222233334444");
+
+        when(employeeRepository.findById(empId)).thenReturn(Optional.of(employee));
+        when(bankAccountRepository.findAllByEmployeeIdAndIsActiveTrueOrderByBankIdDesc(empId))
+                .thenReturn(List.of(latest));
+
+        Optional<BankAccount> result = bankService.getPrimaryBankAccount(empId);
+
+        Assertions.assertTrue(result.isPresent());
+        Assertions.assertEquals("UnionBank", result.get().getBankName());
     }
 }
