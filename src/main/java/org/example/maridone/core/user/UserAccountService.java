@@ -13,6 +13,7 @@ import org.example.maridone.document.DocumentPathRepository;
 import org.example.maridone.document.dto.DocumentResponseDto;
 import org.example.maridone.document.mapper.DocumentMapper;
 import org.example.maridone.document.spec.DocumentSpecs;
+import org.example.maridone.enums.AccountStatus;
 import org.example.maridone.exception.badrequest.UnauthorizedAccessException;
 import org.example.maridone.exception.notfound.AccountNotFoundException;
 import org.example.maridone.exception.notfound.EmployeeNotFoundException;
@@ -124,6 +125,9 @@ public class UserAccountService {
         }
 
         existing.setAccountStatus(payload.getAccountStatus());
+        if (payload.getAccountStatus() == AccountStatus.INACTIVE) {
+            refreshTokenRepository.deleteAllByUserAccount(existingId);
+        }
 
         return userAccountRepository.save(existing);
     }

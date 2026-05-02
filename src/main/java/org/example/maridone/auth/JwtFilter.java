@@ -7,6 +7,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import org.example.maridone.core.user.UserAccount;
 import org.example.maridone.core.user.UserAccountRepository;
 import org.example.maridone.core.user.UserLoginService;
+import org.example.maridone.enums.AccountStatus;
 import org.springframework.lang.NonNull;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -19,6 +20,8 @@ import java.io.IOException;
 
 @Component
 public class JwtFilter extends OncePerRequestFilter {
+    private static final String FORCED_LOGOUT_HEADER = "X-Session-Ended-Reason";
+    private static final String PORTAL_ACCESS_REMOVED_REASON = "portal-access-removed";
 
     private final JwtService jwtService;
     private final UserLoginService userLoginService;
@@ -58,6 +61,18 @@ public class JwtFilter extends OncePerRequestFilter {
             if (jwtService.isTokenValid(jwt, userDetails) && jwtService.isAccessToken(jwt)) {
                 UserAccount userAccount = userAccountRepository.findByUsername(username).orElse(null);
                 if (userAccount != null
+                        && userAccount.getAccountStatus() == AccountStatus.INACTIVE
+                        && !isLogoutAllowedPath(request)) {
+                    SecurityContextHolder.clearContext();
+                    response.setHeader(FORCED_LOGOUT_HEADER, PORTAL_ACCESS_REMOVED_REASON);
+                    response.sendError(
+                            HttpServletResponse.SC_UNAUTHORIZED,
+                            "Your portal access has been removed. Logging out now."
+                    );
+                    return;
+                }
+
+                if (userAccount != null
                         && Boolean.TRUE.equals(userAccount.getPasswordChangeRequired())
                         && !isPasswordChangeAllowedPath(request)) {
                     response.sendError(
@@ -85,5 +100,9 @@ public class JwtFilter extends OncePerRequestFilter {
         return "/api/user/password/change".equals(path)
                 || "/api/auth/logout".equals(path)
                 || "/api/auth/refresh".equals(path);
+    }
+
+    private boolean isLogoutAllowedPath(HttpServletRequest request) {
+        return "/api/auth/logout".equals(request.getRequestURI());
     }
 }

@@ -22,6 +22,7 @@ import org.example.maridone.enums.LeaveType;
 import org.example.maridone.enums.ManagerTitle;
 import org.example.maridone.enums.Position;
 import org.example.maridone.enums.SeparationReason;
+import org.example.maridone.enums.AccountStatus;
 import org.example.maridone.leave.balance.LeaveBalance;
 import org.example.maridone.leave.balance.LeaveBalanceRepository;
 import org.example.maridone.leave.LeaveBalancePolicy;
@@ -324,6 +325,7 @@ public class EmployeeService {
         response.setManagerName(resolveManagerName(employee));
         response.setManagerHeadLabel(resolveManagerHeadLabel(employee));
         response.setUserAccountName(findUsername(employee.getEmployeeId()));
+        response.setAccountStatus(findAccountStatus(employee.getEmployeeId()));
         response.setShiftSchedules(resolveShiftSchedules(employee.getEmployeeId(), schedulesByEmployeeId));
         applyLatestSeparation(response, employee);
         return response;
@@ -371,6 +373,7 @@ public class EmployeeService {
         response.setManagerName(resolveManagerName(employee));
         response.setManagerHeadLabel(resolveManagerHeadLabel(employee));
         response.setUserAccountName(findUsername(employee.getEmployeeId()));
+        response.setAccountStatus(findAccountStatus(employee.getEmployeeId()));
         applyBankAccounts(response, employee);
         applyLatestSeparation(response, employee);
         return response;
@@ -416,6 +419,12 @@ public class EmployeeService {
         return updated != null
                 && (updated.getBankName() != null
                 || updated.getBankAccountNumber() != null);
+    }
+
+    private AccountStatus findAccountStatus(Long employeeId) {
+        return userAccountRepository.findByEmployee_EmployeeId(employeeId)
+                .map(userAccount -> userAccount.getAccountStatus())
+                .orElse(null);
     }
 
     private void recordSeparation(Employee employee, EmployeeRequestDto request, String actorUsername) {

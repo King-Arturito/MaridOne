@@ -2,6 +2,7 @@ package org.example.maridone.core.dto;
 import java.time.LocalDate;
 import java.util.List;
 
+import org.example.maridone.enums.AccountStatus;
 import org.example.maridone.enums.EmploymentStatus;
 import org.example.maridone.enums.ExemptionStatus;
 import org.example.maridone.enums.Gender;
@@ -27,6 +28,7 @@ public class EmployeeResponseDto {
     private String managerName;
     private String managerHeadLabel;
     private String userAccountName;
+    private AccountStatus accountStatus;
     private List<ShiftResponseDto> shiftSchedules = List.of();
     private SeparationReason separationReason;
     private Boolean eligibleForRehire;
@@ -169,6 +171,14 @@ public class EmployeeResponseDto {
 
     public void setUserAccountName(String userAccountName) {
         this.userAccountName = userAccountName;
+    }
+
+    public AccountStatus getAccountStatus() {
+        return accountStatus;
+    }
+
+    public void setAccountStatus(AccountStatus accountStatus) {
+        this.accountStatus = accountStatus;
     }
 
     public List<ShiftResponseDto> getShiftSchedules() {

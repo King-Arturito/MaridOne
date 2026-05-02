@@ -5,6 +5,7 @@ import java.time.LocalDate;
 import java.util.List;
 
 import org.example.maridone.embeddable.Address;
+import org.example.maridone.enums.AccountStatus;
 import org.example.maridone.enums.EmploymentStatus;
 import org.example.maridone.enums.ExemptionStatus;
 import org.example.maridone.enums.Gender;
@@ -31,6 +32,7 @@ public class EmployeeDetailsDto {
     private Position position;
     private String department;
     private String userAccountName;
+    private AccountStatus accountStatus;
     private Long managerId;
     private String managerName;
     private String managerHeadLabel;
@@ -268,6 +270,14 @@ public class EmployeeDetailsDto {
 
     public void setUserAccountName(String userAccountName) {
         this.userAccountName = userAccountName;
+    }
+
+    public AccountStatus getAccountStatus() {
+        return accountStatus;
+    }
+
+    public void setAccountStatus(AccountStatus accountStatus) {
+        this.accountStatus = accountStatus;
     }
 
     public String getSssNumber() {
