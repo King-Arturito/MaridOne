@@ -107,7 +107,7 @@ public class PayrollController {
     @GetMapping("/item/manage/{itemId}")
     @PreAuthorize("hasRole('HR')")
     public CorrectionSourceItemDto getItemForCorrection(@PathVariable Long itemId, Authentication authentication) {
-        sensitiveAccessService.assertHrSensitiveAccess(authentication);
+        sensitiveAccessService.assertSensitiveAccess(authentication);
         return payrollItemService.getItemForCorrection(itemId);
     }
 

@@ -58,7 +58,7 @@ public class CalendarService {
         validateEventDateRange(calendar);
 
         UserAccount userAccount = userAccountRepository.findByUsername(username).orElseThrow(
-                () -> new AccountNotFoundException("username of: " + username)
+                () -> new AccountNotFoundException("UserAccount with: " + username + " not found.")
         );
 
         CompanyCalendar companyCalendar = calendarMapper.toCompanyCalendar(calendar);

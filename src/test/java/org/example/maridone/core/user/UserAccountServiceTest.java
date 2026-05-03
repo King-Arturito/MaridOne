@@ -2,7 +2,6 @@ package org.example.maridone.core.user;
 
 import java.time.Instant;
 import java.time.ZoneId;
-import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 import java.util.Optional;
 
@@ -13,8 +12,7 @@ import org.example.maridone.core.dto.CreateUserAccountDto;
 import org.example.maridone.core.dto.UpdateUserAccountDto;
 import org.example.maridone.core.employee.Employee;
 import org.example.maridone.core.employee.EmployeeRepository;
-import org.example.maridone.document.DocumentPathRepository;
-import org.example.maridone.document.dto.DocumentResponseDto;
+import org.example.maridone.document.path.DocumentPathRepository;
 import org.example.maridone.document.mapper.DocumentMapper;
 import org.example.maridone.document.path.DocumentPath;
 import org.example.maridone.enums.AccountStatus;
@@ -27,7 +25,6 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
-import org.junit.platform.commons.util.ReflectionUtils;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.ArgumentCaptor;
@@ -111,31 +108,6 @@ class UserAccountServiceTest {
         Assertions.assertThrows(AccountNotFoundException.class, () -> {
             userAccountService.getUserAccount(username);
         });
-    }
-
-    @Test
-    void getDocuments_ShouldReturnFilteredDocumentDtos() {
-        String username = "niko123";
-        UserAccount account = new UserAccount();
-        account.setUsername(username);
-
-        DocumentPath payslip = new DocumentPath();
-        payslip.setFilePath("C:/tmp/local-documents/niko123/payslip/sample.pdf");
-        DocumentPath dispute = new DocumentPath();
-        dispute.setFilePath("C:/tmp/local-documents/niko123/dispute-request/sample.pdf");
-
-        DocumentResponseDto payslipDto = new DocumentResponseDto();
-        payslipDto.setFilePath(payslip.getFilePath());
-
-        when(userAccountRepository.findByUsername(username)).thenReturn(Optional.of(account));
-        when(documentPathRepository.findAll(org.mockito.ArgumentMatchers.<Specification<DocumentPath>>any(), any(Sort.class)))
-                .thenReturn(java.util.List.of(payslip, dispute));
-        when(documentMapper.toDocumentResponseDto(payslip)).thenReturn(payslipDto);
-
-        java.util.List<DocumentResponseDto> result = userAccountService.getDocuments(username, "payslip");
-
-        Assertions.assertEquals(1, result.size());
-        Assertions.assertEquals(payslip.getFilePath(), result.get(0).getFilePath());
     }
 
     @Test

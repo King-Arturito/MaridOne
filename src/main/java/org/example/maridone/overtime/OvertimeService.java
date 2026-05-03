@@ -80,7 +80,8 @@ public class OvertimeService {
         Specification<Employee> spec = Specification.allOf(
                 EmployeeSpecs.hasUserAccount(username)
         );
-        Employee emp = employeeRepository.findOne(spec).orElseThrow(() -> new AccountNotFoundException(username));
+        Employee emp = employeeRepository.findOne(spec).orElseThrow(
+                () -> new AccountNotFoundException("UserAccount with: " + username + " not found."));
         validateRequestWindow(requestDto);
         validateNoLeaveConflict(emp, requestDto);
         validateOutsideShiftSchedule(emp, requestDto.getStartTime(), requestDto.getEndTime());
@@ -123,7 +124,7 @@ public class OvertimeService {
                 .orElseThrow(() -> new OvertimeException("Overtime Not Found"));
         Employee emp = userAccountRepository.findByUsername(approverUsername)
                 .map(UserAccount::getEmployee)
-                .orElseThrow(() -> new AccountNotFoundException(approverUsername));
+                .orElseThrow(() -> new AccountNotFoundException("Approver's UserAccount with: " + approverUsername + " not found."));
 
         Long requestEmployeeId = req.getEmployeeId() != null
                 ? req.getEmployeeId()
@@ -213,7 +214,7 @@ public class OvertimeService {
     private List<Long> resolveHandledEmployeeIds(String username) {
         Long employeeId = userAccountRepository.findEmployeeIdByUsername(username);
         if (employeeId == null) {
-            throw new AccountNotFoundException(username);
+            throw new AccountNotFoundException("UserAccount with: " + username + " not found.");
         }
         return employeeRepository.findHandledEmployeeIds(employeeId);
     }

@@ -68,7 +68,7 @@ public class ItemComponentController {
     @GetMapping("/{itemId}/payslip/pdf")
     @PreAuthorize("hasAnyRole('HR', 'ACCOUNTING') or @itemOwnerCheck.isSelf(#itemId, authentication.getName())")
     public ResponseEntity<byte[]> getPayslipPdf(@PathVariable Long itemId, Authentication authentication) {
-        sensitiveAccessService.assertHrSensitiveAccess(authentication);
+        sensitiveAccessService.assertSensitiveAccess(authentication);
         PayslipService.GeneratedPayslipPdf pdf = payslipService.generatePayslipPdf(itemId);
         return ResponseEntity.ok()
                 .contentType(MediaType.APPLICATION_PDF)
@@ -80,7 +80,7 @@ public class ItemComponentController {
     @PreAuthorize("hasRole('HR')")
     @AuditLog
     public EarningsDto createEarning(@RequestBody EarningsDto payload, @PathVariable Long itemId, Authentication authentication) {
-        sensitiveAccessService.assertHrSensitiveAccess(authentication);
+        sensitiveAccessService.assertSensitiveAccess(authentication);
         return earningsService.createEarning(payload, itemId);
     }
 
@@ -88,7 +88,7 @@ public class ItemComponentController {
     @PreAuthorize("hasRole('HR')")
     @AuditLog
     public DeductionsDto createDeduction(@RequestBody DeductionsDto payload, @PathVariable Long itemId, Authentication authentication) {
-        sensitiveAccessService.assertHrSensitiveAccess(authentication);
+        sensitiveAccessService.assertSensitiveAccess(authentication);
         return deductionsService.createDeduction(payload, itemId);
     }
 
@@ -96,7 +96,7 @@ public class ItemComponentController {
     @PreAuthorize("hasRole('HR')")
     @AuditLog
     public EarningsDto updateEarning(@RequestBody EarningsDto payload, @PathVariable Long earningsId, Authentication authentication) {
-        sensitiveAccessService.assertHrSensitiveAccess(authentication);
+        sensitiveAccessService.assertSensitiveAccess(authentication);
         return earningsService.updateEarning(payload, earningsId);
     }
 
@@ -104,7 +104,7 @@ public class ItemComponentController {
     @PreAuthorize("hasRole('HR')")
     @AuditLog
     public DeductionsDto updateDeduction(@RequestBody DeductionsDto payload, @PathVariable Long deductionsId, Authentication authentication) {
-        sensitiveAccessService.assertHrSensitiveAccess(authentication);
+        sensitiveAccessService.assertSensitiveAccess(authentication);
         return deductionsService.updateDeduction(payload, deductionsId);
     }
 }

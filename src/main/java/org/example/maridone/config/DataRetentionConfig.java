@@ -1,6 +1,7 @@
 package org.example.maridone.config;
 
 
+import jakarta.annotation.PostConstruct;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.context.annotation.Configuration;
 

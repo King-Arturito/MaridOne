@@ -19,6 +19,8 @@ import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.util.List;
+
 @RestController
 @RequestMapping("/api/payroll/item/dispute")
 public class DisputeController {
@@ -58,9 +60,9 @@ public class DisputeController {
     public DisputeRequest createDisputeRequest
             (@PathVariable Long itemId,
              @RequestBody @Valid DisputeRequestDto payload,
-            @RequestParam(required = false) MultipartFile file)
+            @RequestParam(required = false) List<MultipartFile> files)
     {
-        return disputeService.createDisputeRequest(itemId, payload,file);
+        return disputeService.createDisputeRequest(itemId, payload, files);
     }
 
     @PatchMapping("/update/{disputeId}")

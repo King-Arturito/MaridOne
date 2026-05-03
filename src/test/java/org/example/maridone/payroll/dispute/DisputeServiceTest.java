@@ -5,7 +5,7 @@ import java.util.Optional;
 import org.example.maridone.core.employee.Employee;
 import org.example.maridone.core.employee.EmployeeRepository;
 import org.example.maridone.core.user.UserAccountRepository;
-import org.example.maridone.document.DocumentPathRepository;
+import org.example.maridone.document.path.DocumentPathRepository;
 import org.example.maridone.document.DocumentService;
 import org.example.maridone.enums.EmploymentStatus;
 import org.example.maridone.enums.Position;

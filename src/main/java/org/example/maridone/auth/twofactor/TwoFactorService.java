@@ -21,7 +21,7 @@ public class TwoFactorService {
     @Transactional
     public TwoFactorSetupResponse generateSetupDetails(String username) {
         UserAccount userAccount = userAccountRepository.findByUsername(username)
-                .orElseThrow(() -> new AccountNotFoundException("Account not found"));
+                .orElseThrow(() -> new AccountNotFoundException("UserAccount with: " + username + " not found."));
 
         //generate a cryptographic secret
         String secret = totpService.generateSecret();
@@ -41,7 +41,7 @@ public class TwoFactorService {
     @Transactional
     public void confirmAndEnable2fa(String username, String code) {
         UserAccount userAccount = userAccountRepository.findByUsername(username)
-                .orElseThrow(() -> new AccountNotFoundException("Account not found"));
+                .orElseThrow(() -> new AccountNotFoundException("UserAccount with: " + username + " not found."));
 
         String savedSecret = userAccount.getTwoFactorSecret();
         if (savedSecret == null) {
@@ -65,7 +65,7 @@ public class TwoFactorService {
     @Transactional
     public Void disable2fa(String username) {
         UserAccount userAccount = userAccountRepository.findByUsername(username)
-                .orElseThrow(() -> new AccountNotFoundException("Account not found"));
+                .orElseThrow(() -> new AccountNotFoundException("UserAccount with: " + username + " not found."));
 
         userAccount.setTwoFactorEnabled(false);
         userAccount.setTwoFactorSecret(null);

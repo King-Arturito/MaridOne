@@ -90,7 +90,7 @@ public class AttendanceReportService {
         validateDateRange(from, to);
         Long managerId = userAccountRepository.findEmployeeIdByUsername(username);
         if (managerId == null) {
-            throw new AccountNotFoundException(username);
+            throw new AccountNotFoundException("UserAccount with: " + username + " not found.");
         }
 
         List<Employee> employees;

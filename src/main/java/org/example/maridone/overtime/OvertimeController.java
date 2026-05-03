@@ -79,7 +79,7 @@ public class OvertimeController {
     }
     //get all pending overtimes for Employee
     @GetMapping("/all/{empId}")
-    @PreAuthorize("@userCheck.isSelf(#empId, Authentication.getName())")
+    @PreAuthorize("@userCheck.isSelf(#empId, authentication.getName())")
     public Page<OvertimeResponseDto> getMyOvertimeRequests(
             @PathVariable Long empId,
             @PageableDefault(sort = "requestAt", direction = Sort.Direction.ASC) Pageable pageable) {

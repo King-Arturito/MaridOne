@@ -70,6 +70,6 @@ public class UserAccountController {
     @PreAuthorize("#username == authentication.getName()")
     public List<DocumentResponseDto> getDocuments(@PathVariable String username,
                                                   @org.springframework.web.bind.annotation.RequestParam(required = false) String subDir) {
-        return userAccountService.getDocuments(username, subDir);
+        return userAccountService.getDocuments(username);
     }
 }

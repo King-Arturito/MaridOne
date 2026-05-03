@@ -86,7 +86,7 @@ public class PayslipService {
                     "application/pdf",
                     pdfBytes
             );
-            batchRequests.add(new FileUploadBatchRequest(multipartFile, block.userAccountName(), Directories.PAYSLIP.getDisplayName()));
+            batchRequests.add(new FileUploadBatchRequest(multipartFile, block.userAccountName(), Directories.PAYSLIP));
         }
         documentService.batchUpload(batchRequests);
     }

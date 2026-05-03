@@ -8,7 +8,6 @@ import org.springframework.stereotype.Component;
 import org.springframework.validation.annotation.Validated;
 
 @ConfigurationProperties("jwt")
-@Component
 @Validated
 public class JwtConfig {
     @NotEmpty(message = "No provided JWT Secret Key.")

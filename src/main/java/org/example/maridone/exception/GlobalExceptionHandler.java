@@ -31,7 +31,8 @@ public class GlobalExceptionHandler {
             ShiftsNotFoundException.class,
             BankNotFoundException.class,
             CalendarEventNotFound.class,
-            BalanceNotFoundException.class
+            BalanceNotFoundException.class,
+            PathNotFoundException.class,
     })
     public ResponseEntity<Map<String, String>> handleNotFoundExceptions(RuntimeException ex) {
         return ResponseEntity.status(HttpStatus.NOT_FOUND)
@@ -62,7 +63,8 @@ public class GlobalExceptionHandler {
             DuplicateAccountException.class,
             CloudReadException.class,
             CloudWriteException.class,
-            IllegalArgumentException.class
+            IllegalArgumentException.class,
+            MaxUploadSizeExceededException.class
     })
     public ResponseEntity<Map<String, String>> handleBadRequestExceptions(RuntimeException ex) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
@@ -80,20 +82,13 @@ public class GlobalExceptionHandler {
 
     //413 Payload too large
     @ExceptionHandler({
-            FileTooLargeException.class
+            FileTooLargeException.class,
+            MaxUploadSizeExceededException.class,
+            MultipartException.class
     })
     public ResponseEntity<Map<String, String>> handleLargePayloadExceptions(RuntimeException ex) {
         return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE)
                 .body(Map.of("error", ex.getMessage()));
-    }
-
-    @ExceptionHandler({
-            MaxUploadSizeExceededException.class,
-            MultipartException.class
-    })
-    public ResponseEntity<Map<String, String>> handleMultipartExceptions(Exception ex) {
-        return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE)
-                .body(Map.of("error", "File size exceeded 10MB."));
     }
 
     @ExceptionHandler(SensitiveAccessRequiredException.class)

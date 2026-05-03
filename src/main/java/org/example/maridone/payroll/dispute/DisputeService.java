@@ -4,10 +4,12 @@ import org.example.maridone.annotation.NotifyRole;
 import org.example.maridone.annotation.ExecutionTime;
 import org.example.maridone.annotation.Notify;
 import org.example.maridone.common.CommonSpecs;
+import org.example.maridone.common.FileValidation;
+import org.example.maridone.config.DocumentConfig;
 import org.example.maridone.core.employee.EmployeeRepository;
 import org.example.maridone.core.user.UserAccount;
 import org.example.maridone.core.user.UserAccountRepository;
-import org.example.maridone.document.DocumentPathRepository;
+import org.example.maridone.document.path.DocumentPathRepository;
 import org.example.maridone.document.DocumentService;
 import org.example.maridone.document.path.DocumentPath;
 import org.example.maridone.document.spec.DocumentSpecs;
@@ -16,6 +18,7 @@ import org.example.maridone.enums.EmploymentStatus;
 import org.example.maridone.enums.PayrollStatus;
 import org.example.maridone.enums.Position;
 import org.example.maridone.enums.Status;
+import org.example.maridone.exception.badrequest.MaxFileUploadExceededException;
 import org.example.maridone.exception.notfound.AccountNotFoundException;
 import org.example.maridone.exception.toolarge.FileTooLargeException;
 import org.example.maridone.exception.unauthorized.DuplicateDisputeException;
@@ -43,6 +46,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.time.Instant;
+import java.util.List;
 
 @Service
 public class DisputeService {
@@ -56,6 +60,7 @@ public class DisputeService {
     private final PayrollMapper payrollMapper;
     private final NotificationService notificationService;
     private final WorkflowEmailService workflowEmailService;
+    private final DocumentConfig documentConfig;
     public DisputeService
             (DisputeRequestRepository disputeRepository,
              PayrollItemRepository payrollItemRepository,
@@ -65,7 +70,8 @@ public class DisputeService {
              DocumentService documentService,
              PayrollMapper payrollMapper,
              NotificationService notificationService,
-             WorkflowEmailService workflowEmailService) {
+             WorkflowEmailService workflowEmailService,
+             DocumentConfig documentConfig) {
         this.disputeRepository = disputeRepository;
         this.payrollItemRepository = payrollItemRepository;
         this.employeeRepository = employeeRepository;
@@ -75,6 +81,7 @@ public class DisputeService {
         this.payrollMapper = payrollMapper;
         this.notificationService = notificationService;
         this.workflowEmailService = workflowEmailService;
+        this.documentConfig = documentConfig;
     }
 
 
@@ -85,7 +92,13 @@ public class DisputeService {
                     + "#{#result.payrollItem.employee.lastName}: #{#result.subject}",
             targetRole = Position.HR,
             importance = "HIGH")
-    public DisputeRequest createDisputeRequest(Long itemId, DisputeRequestDto payload, MultipartFile file) {
+    public DisputeRequest createDisputeRequest(Long itemId, DisputeRequestDto payload, List<MultipartFile> files) {
+        if (FileValidation.exceedsFileSizeLimit(files, documentConfig.getMaxFileSize().toBytes())) {
+            throw new FileTooLargeException("One or more files exceeds file size limit: " + documentConfig.getMaxFileSize().toMegabytes() + "MB");
+        }
+        if (FileValidation.exceedsFileUploadLimit(files.size(), documentConfig.getMaxFileUpload())) {
+            throw new MaxFileUploadExceededException("files to upload exceeded. Limit: " + documentConfig.getMaxFileUpload() + " files");
+        }
         PayrollItem item = payrollItemRepository
                 .findByItemIdAndPayrollRun_PayrollStatus(itemId, PayrollStatus.POSTED)
                 .orElse(null);
@@ -105,11 +118,9 @@ public class DisputeService {
         disputeRequest.setSubject(payload.getSubject());
         disputeRequest.setReason(payload.getReason());
         disputeRequest.setStatus(Status.PENDING);
-        if (file != null) {
-            if (file.getSize() > (10*1024*1024)) {
-                throw new FileTooLargeException("File exceeds 10MB");
-            }
-            documentService.upload(file, item.getEmployee().getUserAccount().getUsername(), Directories.DISPUTE.getDisplayName());
+
+        if (files != null) {
+            documentService.batchUploadPrivateDocuments(files, item.getEmployee().getUserAccount().getUsername(), Directories.DISPUTE, List.of(itemId));
         }
         DisputeRequest savedRequest = disputeRepository.save(disputeRequest);
         workflowEmailService.sendDisputeSubmittedToHr(savedRequest);
@@ -131,7 +142,7 @@ public class DisputeService {
             throw new InvalidActionException("Dispute ID: " + disputeId + " has been processed already.");
         }
         UserAccount approver = userAccountRepository.findByUsername(approverUsername)
-                .orElseThrow(() -> new AccountNotFoundException(approverUsername));
+                .orElseThrow(() -> new AccountNotFoundException("Approver's UserAccount with: " + approverUsername + " not found."));
 
         Long empId = disputeRepository.findEmployeeIdByDisputeRequestId(disputeId);
         if ( empId !=  null && empId.equals(approver.getEmployeeId())) {

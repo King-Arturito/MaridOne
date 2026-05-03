@@ -2,14 +2,15 @@ package org.example.maridone.document;
 
 import org.example.maridone.auth.sensitive.SensitiveAccessService;
 import org.example.maridone.document.dto.DocumentResponseDto;
-import org.springframework.core.io.Resource;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.MediaType;
+import org.example.maridone.enums.Directories;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/document")
@@ -24,49 +25,77 @@ public class DocumentController {
         this.sensitiveAccessService = sensitiveAccessService;
     }
 
-    @GetMapping("/{pathId}/view")
-    @PreAuthorize("hasRole('HR') or @documentOwnerCheck.isSelf(#pathId, authentication.name)")
-    public ResponseEntity<Resource> view(@PathVariable Long pathId, Authentication authentication) {
-        sensitiveAccessService.assertHrSensitiveAccess(authentication);
-        DocumentViewResult result = documentService.view(pathId);
-        return ResponseEntity.ok()
-                .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + result.fileName() + "\"")
-                .contentType(MediaType.parseMediaType(result.fileType()))
-                .body(result.file());
+    @PostMapping("/public/upload")
+    @PreAuthorize("hasRole('MANAGEMENT')")
+    public ResponseEntity<Void> uploadPublicDocument(MultipartFile file, Authentication authentication) {
+        String uploadedBy = authentication.getName();
+        documentService.uploadPublicDocument(file, uploadedBy);
+        return ResponseEntity.status(HttpStatus.CREATED).build();
     }
 
-    @GetMapping("/library/{subDir}/{fileName:.+}")
+    //returns download link
+    @GetMapping("/public/view/{pathId}")
     @PreAuthorize("isAuthenticated()")
-    public ResponseEntity<Resource> viewLibraryDocument(@PathVariable String subDir,
-                                                        @PathVariable String fileName) {
-        DocumentViewResult result = documentService.viewLibraryDocument(subDir, fileName);
-        return ResponseEntity.ok()
-                .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + result.fileName() + "\"")
-                .contentType(MediaType.parseMediaType(result.fileType()))
-                .body(result.file());
+    public String getPublicDocument(@PathVariable Long pathId) {
+        return documentService.getPublicDocument(pathId);
     }
 
-    @PostMapping("/upload")
+    @GetMapping("/public/view/list")
+    @PreAuthorize("isAuthenticated()")
+    public List<DocumentResponseDto> getPublicDocuments() {
+        return documentService.getPublicDocuments();
+    }
+
+    @DeleteMapping("/public/delete/{pathId}")
+    @PreAuthorize("hasRole('MANAGEMENT')")
+    public ResponseEntity<String> deletePublicDocument(@PathVariable("pathId") Long pathId) {
+        documentService.deletePublicDocument(pathId);
+        return ResponseEntity.ok("Document deleted successfully.");
+    }
+
+    //returns a list of an employee's list of documents
+    //hr can see an employee's list of documents by providing their username
+    @GetMapping("/private/view/list")
+    @PreAuthorize("isAuthenticated()")
+    public List<DocumentResponseDto> getPrivateDocuments(
+            @RequestParam(required = false) String username,
+            Authentication authentication) {
+        return documentService.getPrivateDocuments(username, authentication);
+    }
+
+    //returns a presigned url of that specific file obtained from getPrivateDocuments()
+    @GetMapping("/private/view/{pathId}")
+    @PreAuthorize("hasRole('HR') or @documentOwnerCheck.isSelf(#pathId, authentication.name)")
+    public String view(@PathVariable Long pathId, Authentication authentication) {
+        sensitiveAccessService.assertSensitiveAccess(authentication);
+        return documentService.getPrivateDocument(pathId);
+    }
+
+    @PostMapping("/private/upload")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<DocumentResponseDto> upload(@RequestParam("file") MultipartFile file,
-                                                      @RequestParam("subDir") String subDir,
+                                                      @RequestParam("subDir") Directories subDir,
+                                                      @RequestParam("id") Long connectedId,
                                                       Authentication authentication) {
-        return ResponseEntity.ok(documentService.upload(file, authentication.getName(), subDir));
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(documentService.uploadPrivateDocument(file, authentication.getName(), subDir, connectedId));
     }
 
-    @PutMapping("/{id}/replace")
-    @PreAuthorize("@documentOwnerCheck.isSelf(#pathId, authentication.name)")
-    public ResponseEntity<DocumentResponseDto> replace(@PathVariable("id") Long pathId,
-                                                @RequestParam("subDir") String subDir,
-                                                @RequestParam("file") MultipartFile file,
-                                                Authentication authentication) {
-        return ResponseEntity.ok(documentService.replace(pathId, file, authentication.getName(), subDir));
+    @PostMapping("/private/upload/batch")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<Void> batchUpload(
+            @RequestParam("files") List<MultipartFile> files,
+            @RequestParam("subDir") Directories subDir,
+            @RequestParam(value = "connectedId", required = false) Long connectedId,
+            Authentication authentication) {
+        documentService.batchUploadPrivateDocuments(files, authentication.getName(), subDir, List.of(connectedId));
+        return ResponseEntity.status(HttpStatus.CREATED).build();
     }
 
-    @DeleteMapping("/{id}/delete")
+    @DeleteMapping("/private/delete/{id}")
     @PreAuthorize("@documentOwnerCheck.isSelf(#pathId, authentication.name)")
     public ResponseEntity<String> delete(@PathVariable("id") Long pathId) {
-        documentService.delete(pathId);
+        documentService.deletePrivateDocument(pathId);
         return ResponseEntity.ok("Document deleted successfully");
     }
 }

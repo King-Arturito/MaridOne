@@ -2,9 +2,10 @@ package org.example.maridone.document.path;
 
 import jakarta.persistence.*;
 import org.example.maridone.core.user.UserAccount;
+import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.Instant;
-import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "document_path",
@@ -17,10 +18,6 @@ public class DocumentPath {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "path_id", nullable = false)
     private Long pathId;
-
-    //keep for now but most likely going to be replaced by s3_key;
-    @Column(name = "file_path", nullable = false)
-    private String filePath;
 
     @Column(name = "s3_key", nullable = false, unique = true)
     private String s3Key;
@@ -35,18 +32,23 @@ public class DocumentPath {
     private Long fileSizeBytes;
 
     //no direct connection
-    @Column(name = "connected_entity", nullable = false)
+    @Column(name = "connected_entity", nullable = true)
     private String connectedEntity;
 
     //no direct connection
-    //usage = connectedEntity -> connected Entity's primary key
-    @Column(name = "connected_id", nullable = false)
-    private Long connectedId;
+    //usage = connectedEntity -> Entity's primary key/s
+    @Column(name = "connected_ids", nullable = true)
+    private String connectedIds;
 
+    @Column(name = "is_public")
+    private Boolean isPublic = false;
+
+    @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
-    @Column(name = "updated_at", nullable = false)
+    @UpdateTimestamp
+    @Column(name = "updated_at", nullable = true)
     private Instant updatedAt;
 
     @ManyToOne(fetch = FetchType.LAZY)
@@ -55,14 +57,6 @@ public class DocumentPath {
 
     public Long getPathId() {
         return pathId;
-    }
-
-    public String getFilePath() {
-        return filePath;
-    }
-
-    public void setFilePath(String filePath) {
-        this.filePath = filePath;
     }
 
     public String getFileName() {
@@ -97,6 +91,14 @@ public class DocumentPath {
         this.s3Key = s3Key;
     }
 
+    public Boolean getIsPublic() {
+        return isPublic;
+    }
+
+    public void setIsPublic(Boolean isPublic) {
+        this.isPublic = isPublic;
+    }
+
     public Long getFileSizeBytes() {
         return fileSizeBytes;
     }
@@ -129,11 +131,11 @@ public class DocumentPath {
         this.connectedEntity = connectedEntity;
     }
 
-    public Long getConnectedId() {
-        return connectedId;
+    public String getConnectedIds() {
+        return connectedIds;
     }
 
-    public void setConnectedId(Long connectedId) {
-        this.connectedId = connectedId;
+    public void setConnectedIds(String connectedId) {
+        this.connectedIds = connectedIds;
     }
 }

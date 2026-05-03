@@ -7,12 +7,13 @@ import org.example.maridone.compliance.dto.ComplianceLeaveRecordDto;
 import org.example.maridone.compliance.dto.CompliancePerformanceSummaryDto;
 import org.example.maridone.compliance.dto.ComplianceRecordDto;
 import org.example.maridone.compliance.dto.ComplianceTimelineEntryDto;
+import org.example.maridone.config.DefaultConfig;
 import org.example.maridone.core.employee.Employee;
 import org.example.maridone.core.employee.EmployeeRepository;
 import org.example.maridone.core.employee.EmployeeSeparation;
 import org.example.maridone.core.employee.EmployeeSeparationRepository;
 import org.example.maridone.core.user.UserAccountRepository;
-import org.example.maridone.document.DocumentPathRepository;
+import org.example.maridone.document.path.DocumentPathRepository;
 import org.example.maridone.document.path.DocumentPath;
 import org.example.maridone.document.spec.DocumentSpecs;
 import org.example.maridone.enums.Activity;
@@ -33,11 +34,9 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Comparator;
 import java.util.Deque;
 import java.util.LinkedHashMap;
@@ -45,7 +44,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -53,7 +51,6 @@ import java.util.stream.Stream;
 public class ComplianceOrchestrator {
     private static final int MAX_HISTORY_ROWS = 200;
     private static final int PERFORMANCE_WINDOW_DAYS = 30;
-    private static final ZoneId APP_ZONE = ZoneId.of("Asia/Manila");
     private static final DateTimeFormatter TIMELINE_DATE_FORMAT =
             DateTimeFormatter.ofPattern("MMMM d, uuuu", Locale.ENGLISH);
 
@@ -65,6 +62,7 @@ public class ComplianceOrchestrator {
     private final EmployeeSeparationRepository employeeSeparationRepository;
     private final ActivityLogRepository activityLogRepository;
     private final AttendanceLogRepository attendanceLogRepository;
+    private final DefaultConfig defaultConfig;
 
     public ComplianceOrchestrator(EmployeeRepository employeeRepository,
                                   UserAccountRepository userAccountRepository,
@@ -73,7 +71,8 @@ public class ComplianceOrchestrator {
                                   DocumentPathRepository documentPathRepository,
                                   EmployeeSeparationRepository employeeSeparationRepository,
                                   ActivityLogRepository activityLogRepository,
-                                  AttendanceLogRepository attendanceLogRepository) {
+                                  AttendanceLogRepository attendanceLogRepository,
+                                  DefaultConfig defaultConfig){
         this.employeeRepository = employeeRepository;
         this.userAccountRepository = userAccountRepository;
         this.leaveRequestRepository = leaveRequestRepository;
@@ -82,6 +81,7 @@ public class ComplianceOrchestrator {
         this.employeeSeparationRepository = employeeSeparationRepository;
         this.activityLogRepository = activityLogRepository;
         this.attendanceLogRepository = attendanceLogRepository;
+        this.defaultConfig = defaultConfig;
     }
 
     public ComplianceRecordDto getEmployeeComplianceRecord(Long employeeId) {
@@ -133,15 +133,14 @@ public class ComplianceOrchestrator {
 
     private List<ComplianceDocumentDto> mapDocuments(List<DocumentPath> documents) {
         return documents.stream()
-                .map(document -> {
-                    ComplianceDocumentDto dto = new ComplianceDocumentDto();
-                    dto.setPathId(document.getPathId());
-                    dto.setFileName(document.getFileName());
-                    dto.setFileType(document.getFileType());
-                    dto.setFilePath(document.getFilePath());
-                    dto.setCategory(classifyDocumentCategory(document.getFilePath()));
-                    return dto;
-                })
+                .map(document -> new ComplianceDocumentDto(
+                        document.getPathId(),
+                        document.getFileName(),
+                        document.getFileType(),
+                        document.getFileSizeBytes(),
+                        document.getConnectedEntity(),
+                        document.getConnectedIds() == null ? null : document.getConnectedIds()
+                ))
                 .toList();
     }
 
@@ -222,7 +221,7 @@ public class ComplianceOrchestrator {
         );
 
         Map<LocalDate, List<AttendanceLog>> logsByDate = logs.stream()
-                .collect(Collectors.groupingBy(log -> LocalDateTime.ofInstant(log.getTimestamp(), APP_ZONE).toLocalDate(),
+                .collect(Collectors.groupingBy(log -> LocalDateTime.ofInstant(log.getTimestamp(), defaultConfig.getTimeZone()).toLocalDate(),
                         LinkedHashMap::new,
                         Collectors.toList()));
 
@@ -284,15 +283,15 @@ public class ComplianceOrchestrator {
                     "Employment",
                     "Employment Started",
                     "Employee joined on " + TIMELINE_DATE_FORMAT.format(employee.getEmploymentDateStart()) + ".",
-                    employee.getEmploymentDateStart().atStartOfDay(APP_ZONE).toInstant()
+                    employee.getEmploymentDateStart().atStartOfDay(defaultConfig.getTimeZone()).toInstant()
             ));
         }
 
         for (EmployeeSeparation separation : separations) {
             Instant timestamp = separation.getProcessedAt() != null
-                    ? separation.getProcessedAt().atZone(APP_ZONE).toInstant()
+                    ? separation.getProcessedAt().atZone(defaultConfig.getTimeZone()).toInstant()
                     : separation.getEffectiveDate() != null
-                        ? separation.getEffectiveDate().atStartOfDay(APP_ZONE).toInstant()
+                        ? separation.getEffectiveDate().atStartOfDay(defaultConfig.getTimeZone()).toInstant()
                         : Instant.EPOCH;
             entries.add(buildTimelineEntry(
                     "Separation",
@@ -304,7 +303,7 @@ public class ComplianceOrchestrator {
 
         for (LeaveRequest leaveRequest : leaveRequests) {
             Instant timestamp = leaveRequest.getStartDateTime() != null
-                    ? leaveRequest.getStartDateTime().atZone(APP_ZONE).toInstant()
+                    ? leaveRequest.getStartDateTime().atZone(defaultConfig.getTimeZone()).toInstant()
                     : leaveRequest.getApprovedAt();
             entries.add(buildTimelineEntry(
                     "Leave",

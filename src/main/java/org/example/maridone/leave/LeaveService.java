@@ -3,9 +3,11 @@ package org.example.maridone.leave;
 import org.example.maridone.annotation.*;
 import org.example.maridone.common.CommonCalculator;
 import org.example.maridone.common.CommonSpecs;
+import org.example.maridone.common.FileValidation;
 import org.example.maridone.config.DefaultConfig;
+import org.example.maridone.config.DocumentConfig;
 import org.example.maridone.config.PayrollConfig;
-import org.example.maridone.document.DocumentPathRepository;
+import org.example.maridone.document.path.DocumentPathRepository;
 import org.example.maridone.document.DocumentService;
 import org.example.maridone.document.path.DocumentPath;
 import org.example.maridone.document.spec.DocumentSpecs;
@@ -14,6 +16,7 @@ import org.example.maridone.core.employee.Employee;
 import org.example.maridone.core.employee.EmployeeRepository;
 import org.example.maridone.core.user.UserAccount;
 import org.example.maridone.core.user.UserAccountRepository;
+import org.example.maridone.exception.badrequest.MaxFileUploadExceededException;
 import org.example.maridone.exception.conflict.OverlappingDatesException;
 import org.example.maridone.exception.notfound.*;
 import org.example.maridone.exception.toolarge.FileTooLargeException;
@@ -48,7 +51,6 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.time.Clock;
 import java.time.DayOfWeek;
 import java.time.Duration;
 import java.time.Instant;
@@ -78,6 +80,7 @@ public class LeaveService {
     private final DocumentService documentService;
     private final PayrollConfig payrollConfig;
     private final DefaultConfig defaultConfig;
+    private final DocumentConfig documentConfig;
     private final NotificationService notificationService;
     private final OvertimeRequestRepository overtimeRequestRepository;
     private final WorkflowEmailService workflowEmailService;
@@ -95,6 +98,7 @@ public class LeaveService {
             DocumentService documentService,
             PayrollConfig payrollConfig,
             DefaultConfig defaultConfig,
+            DocumentConfig documentConfig,
             NotificationService notificationService,
             OvertimeRequestRepository overtimeRequestRepository,
             WorkflowEmailService workflowEmailService,
@@ -110,6 +114,7 @@ public class LeaveService {
         this.documentService = documentService;
         this.payrollConfig = payrollConfig;
         this.defaultConfig = defaultConfig;
+        this.documentConfig = documentConfig;
         this.notificationService = notificationService;
         this.overtimeRequestRepository = overtimeRequestRepository;
         this.workflowEmailService = workflowEmailService;
@@ -249,7 +254,14 @@ public class LeaveService {
 
     @Transactional
     @ExecutionTime
-    public List<LeaveRequest> createLeaveRequest(LeaveRequestDto payload, Long empId, MultipartFile file) {
+    public List<LeaveRequest> createLeaveRequest(LeaveRequestDto payload, Long empId, List<MultipartFile> files) {
+        if (FileValidation.exceedsFileSizeLimit(files, documentConfig.getMaxFileSize().toBytes()))  {
+            throw new FileTooLargeException("1 or more file exceeded Max file size: " + documentConfig.getMaxFileSize().toMegabytes() +  "MB");
+
+        }
+        if (FileValidation.exceedsFileUploadLimit(files.size(), documentConfig.getMaxFileUpload())) {
+            throw new MaxFileUploadExceededException("files to upload exceeded. Limit: " + documentConfig.getMaxFileUpload() + " files");
+        }
         Employee emp =  employeeRepository.findById(empId).orElseThrow(() -> new EmployeeNotFoundException(empId));
         synchronizeDefaultLeaveBalances(emp, LocalDate.now(defaultConfig.getTimeZone()));
         validateRequestWindow(payload);
@@ -317,14 +329,10 @@ public class LeaveService {
                 }
             }
         }
-        if (file != null) {
-            //max file size = 10mb
-            if (file.getSize() > (10*1024*1024)) {
-                throw new FileTooLargeException("File size exceeded 10MB.");
-            }
-            documentService.upload(file, emp.getUserAccount().getUsername(), Directories.LEAVE_REQUEST.getDisplayName());
-        }
-        leaveRequestRepository.saveAll(requests);
+        leaveRequestRepository.saveAllAndFlush(requests);
+        List<Long> requestIds = requests.stream().map(LeaveRequest::getRequestId).toList();
+        documentService.batchUploadPrivateDocuments(files, emp.getUserAccount().getUsername(), Directories.LEAVE_REQUEST, requestIds);
+
 
         if (emp.getManager() != null) {
             notifyManager(
@@ -362,7 +370,7 @@ public class LeaveService {
     public LeaveRequest updateLeaveRequest(LeaveRequestDto payload, Long requestId) {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         UserAccount user = userAccountRepository.findByUsername(authentication.getName()).orElseThrow(
-                () -> new AccountNotFoundException(authentication.getName()));
+                () -> new AccountNotFoundException("UserAccount with: " + authentication.getName() + " not found."));
 
         LeaveRequest request = leaveRequestRepository.findByIdForUpdate(requestId).orElseThrow(
                 () -> new LeaveNotFoundException("Leave Request of Id: " + requestId + " is not found."));
@@ -389,7 +397,7 @@ public class LeaveService {
 
     private Long verifyOwnEmployeeId(String name) {
         UserAccount userAccount = userAccountRepository.findByUsername(name).orElseThrow((
-                () -> new AccountNotFoundException(name)
+                () -> new AccountNotFoundException("UserAccount with: " + name + " not found.")
                 ));
         return userAccount.getEmployeeId();
     }
@@ -727,7 +735,7 @@ public class LeaveService {
     private List<Long> resolveHandledEmployeeIds(String username) {
         Long employeeId = userAccountRepository.findEmployeeIdByUsername(username);
         if (employeeId == null) {
-            throw new AccountNotFoundException(username);
+            throw new AccountNotFoundException("UserAccount with: " + username + " not found.");
         }
         return employeeRepository.findHandledEmployeeIds(employeeId);
     }
@@ -949,7 +957,7 @@ public class LeaveService {
 
     private String formatApproverName(UserAccount user) {
         Employee employee = Optional.ofNullable(user.getEmployee())
-                .orElseThrow(() -> new AccountNotFoundException(user.getUsername()));
+                .orElseThrow(() -> new AccountNotFoundException("UserAccount with: " + user.getUsername() + " not found."));
         return employee.getLastName() + ", " + employee.getFirstName();
     }
 

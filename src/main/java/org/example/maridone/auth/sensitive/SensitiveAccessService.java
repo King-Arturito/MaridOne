@@ -83,7 +83,8 @@ public class SensitiveAccessService {
         emails.forEach(email -> emailService.sendVerificationCode(email, tokenToSend));
     }
 
-    public void assertHrSensitiveAccess(Authentication authentication) {
+    public void assertSensitiveAccess(Authentication authentication) {
+        //remove this if statement if ever we want to assert sensitive access for all users
         if (!hasAuthority(authentication, "ROLE_HR")) {
             return;
         }
@@ -146,7 +147,7 @@ public class SensitiveAccessService {
 
     private UserAccount findAccount(String username) {
         return userAccountRepository.findByUsername(username)
-                .orElseThrow(() -> new AccountNotFoundException("username of: " + username));
+                .orElseThrow(() -> new AccountNotFoundException(username));
     }
 
     private boolean hasAuthority(Authentication authentication, String authority) {
