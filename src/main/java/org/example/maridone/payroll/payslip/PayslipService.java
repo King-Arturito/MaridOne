@@ -86,7 +86,7 @@ public class PayslipService {
                     "application/pdf",
                     pdfBytes
             );
-            batchRequests.add(new FileUploadBatchRequest(multipartFile, block.userAccountName(), Directories.PAYSLIP));
+            batchRequests.add(new FileUploadBatchRequest(multipartFile, block.userAccountName(), block.employeeId(), Directories.PAYSLIP));
         }
         documentService.batchUpload(batchRequests);
     }
@@ -171,6 +171,7 @@ public class PayslipService {
     }
 
     public record DetailBlocks(
+            Long employeeId,
             String name,
             String taxNumber,
             String department,
@@ -285,6 +286,7 @@ public class PayslipService {
         String payPeriod = periodStart + " to " + periodEnd;
 
         return new DetailBlocks(
+                employee.getEmployeeId(),
                 employee.getFirstName() + " " + employee.getLastName(),
                 employee.getTinNumber() != null && !employee.getTinNumber().isBlank() ? employee.getTinNumber() : "-",
                 department,

@@ -6,5 +6,6 @@ import org.springframework.web.multipart.MultipartFile;
 public record FileUploadBatchRequest(
         MultipartFile file,
         String username,
+        Long employeeId,
         Directories subDir
 ) {}

@@ -1,7 +1,9 @@
 package org.example.maridone.document.storage;
 
+import com.fasterxml.uuid.Generators;
 import org.example.maridone.annotation.AuditLog;
 import org.example.maridone.annotation.ExecutionTime;
+import org.example.maridone.common.Sanitizer;
 import org.example.maridone.config.CloudConfig;
 import org.example.maridone.exception.unauthorized.CloudWriteException;
 import org.example.maridone.exception.unauthorized.InvalidActionException;
@@ -40,23 +42,23 @@ public class CloudStorageService implements StorageService {
     @ExecutionTime
     @AuditLog
     public String store(MultipartFile file, String employeeId, String targetDir) {
-        String originalFilename = StringUtils.cleanPath(Objects.requireNonNull(file.getOriginalFilename()));
-        if (!employeeId.matches("\\d+")) {
+        String sanitizedFilename = Sanitizer.sanitizeFilename(file.getOriginalFilename());
+        if (!employeeId.matches("\\d+") && !employeeId.equals("MaridOne")) {
             throw new InvalidActionException("employeeId is not a valid value. employeeId = " + employeeId);
         }
          /*
-            sample:
-                /cloudConfig.getCompanyDirectory()/username/UUID-filename
+            sample for public
+                /cloudConfig.getCompanyDirectory()/MaridOne/UUID-filename
                 /public-documents/MaridOne/UUID-filename
 
-                for payslips:
-                /payslip/username/UUID-filename
+            sample for private(payslips):
+                /payslip/employeeId/UUID-filename
          */
         String s3Key = String.format("%s/%s/%s-%s",
                 targetDir,
                 employeeId,
-                UUID.randomUUID(),
-                originalFilename
+                Generators.timeBasedGenerator().generate().toString(),
+                sanitizedFilename
         );
 
         PutObjectRequest putObjectRequest = PutObjectRequest.builder()

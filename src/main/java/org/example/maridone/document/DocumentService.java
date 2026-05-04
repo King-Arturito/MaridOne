@@ -87,7 +87,7 @@ public class DocumentService {
 
             if (user == null) throw new AccountNotFoundException("UserAccount with: " + username + " not found.");
 
-            String s3Key = cloudStorageService.store(request.file(), username, request.subDir().getDisplayName());
+            String s3Key = cloudStorageService.store(request.file(), request.employeeId().toString(), request.subDir().getDisplayName());
             uploadedS3Keys.add(s3Key);
 
             DocumentPath dp = buildDocumentPath(request.file(), user, s3Key, true);
@@ -112,16 +112,15 @@ public class DocumentService {
            throw new FileTooLargeException("One or more files exceeds file size limit of: " + documentConfig.getMaxFileSize() + " bytes");
         }
 
-        Long userId = userAccountRepository.findIdByUsername(username)
+        UserAccount userAccount = userAccountRepository.findByUsername(username)
                 .orElseThrow(() -> new AccountNotFoundException("UserAccount with: " + username + " not found."));
-        UserAccount proxy = userAccountRepository.getReferenceById(userId);
 
         List<DocumentPath> documentPaths = new ArrayList<>();
         List<String> uploadedS3Keys = new ArrayList<>();
         for (MultipartFile file : files) {
-            String s3Key = cloudStorageService.store(file, username, subDir.getDisplayName());
+            String s3Key = cloudStorageService.store(file, userAccount.getEmployeeId().toString(), subDir.getDisplayName());
             uploadedS3Keys.add(s3Key);
-            DocumentPath dp = buildDocumentPath(file, proxy, s3Key, false);
+            DocumentPath dp = buildDocumentPath(file, userAccount, s3Key, false);
             dp.setConnectedEntity(subDir.getDisplayName());
             if (connectedIds != null) {
                 dp.setConnectedIds(connectedIds.stream()
@@ -153,13 +152,12 @@ public class DocumentService {
     @ExecutionTime
     @Transactional
     public DocumentResponseDto uploadPrivateDocument(MultipartFile file, String name, Directories subDir, Long connectedId) {
-        Long userId = userAccountRepository.findIdByUsername(name)
+        UserAccount userAccount = userAccountRepository.findByUsername(name)
                 .orElseThrow(() -> new AccountNotFoundException("UserAccount with: " + name + " not found."));
-        UserAccount proxy = userAccountRepository.getReferenceById(userId);
 
-        String s3Key = cloudStorageService.store(file, name, subDir.getDisplayName());
+        String s3Key = cloudStorageService.store(file, userAccount.getEmployeeId().toString(), subDir.getDisplayName());
 
-        DocumentPath dp = buildDocumentPath(file, proxy, s3Key, false);
+        DocumentPath dp = buildDocumentPath(file, userAccount, s3Key, false);
         dp.setConnectedEntity(subDir.getDisplayName());
         dp.setConnectedIds(connectedId.toString());
         applicationEventPublisher.publishEvent(new S3RollbackEvent(List.of(s3Key)));
