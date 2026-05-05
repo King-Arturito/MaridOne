@@ -1,7 +1,12 @@
 package org.example.maridone.exception.notfound;
 
-public class RunNotFoundException extends RuntimeException {
+import org.example.maridone.enums.ErrorCode;
+import org.example.maridone.exception.BaseException;
+
+public class RunNotFoundException extends BaseException {
     public RunNotFoundException(String message) {
-        super(message);
+        super(
+                ErrorCode.RUN_NOT_FOUND,
+                message);
     }
 }

@@ -1,7 +1,12 @@
 package org.example.maridone.exception.unauthorized;
 
-public class InsufficientBalanceException extends RuntimeException {
+import org.example.maridone.enums.ErrorCode;
+import org.example.maridone.exception.BaseException;
+
+public class InsufficientBalanceException extends BaseException {
     public InsufficientBalanceException(String message) {
-        super(message);
+        super(
+                ErrorCode.INSUFFICIENT_BALANCE,
+                message);
     }
 }

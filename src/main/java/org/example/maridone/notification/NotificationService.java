@@ -6,7 +6,7 @@ import org.example.maridone.common.CommonSpecs;
 import org.example.maridone.core.employee.Employee;
 import org.example.maridone.enums.EmploymentStatus;
 import org.example.maridone.exception.notfound.RequestNotFoundException;
-import org.example.maridone.exception.unauthorized.InvalidActionException;
+import org.example.maridone.exception.badrequest.InvalidActionException;
 import org.example.maridone.notification.spec.NotificationSpecs;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;

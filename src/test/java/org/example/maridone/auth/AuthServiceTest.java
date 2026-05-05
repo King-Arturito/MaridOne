@@ -11,7 +11,7 @@ import org.example.maridone.core.user.UserAccount;
 import org.example.maridone.core.user.UserAccountRepository;
 import org.example.maridone.core.user.UserLoginService;
 import org.example.maridone.enums.EmploymentStatus;
-import org.example.maridone.exception.badrequest.UnauthorizedAccessException;
+import org.example.maridone.exception.unauthorized.UnauthorizedAccessException;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;

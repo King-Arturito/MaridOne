@@ -3,7 +3,7 @@ package org.example.maridone.auth.twofactor;
 import org.example.maridone.core.user.UserAccount;
 import org.example.maridone.core.user.UserAccountRepository;
 import org.example.maridone.exception.notfound.AccountNotFoundException;
-import org.example.maridone.exception.badrequest.UnauthorizedAccessException;
+import org.example.maridone.exception.unauthorized.UnauthorizedAccessException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 

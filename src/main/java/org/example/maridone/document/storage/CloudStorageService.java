@@ -5,12 +5,11 @@ import org.example.maridone.annotation.AuditLog;
 import org.example.maridone.annotation.ExecutionTime;
 import org.example.maridone.common.Sanitizer;
 import org.example.maridone.config.CloudConfig;
-import org.example.maridone.exception.unauthorized.CloudWriteException;
-import org.example.maridone.exception.unauthorized.InvalidActionException;
+import org.example.maridone.exception.servererror.CloudWriteException;
+import org.example.maridone.exception.badrequest.InvalidActionException;
 import org.springframework.core.io.InputStreamResource;
 import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Service;
-import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
 import software.amazon.awssdk.core.ResponseInputStream;
 import software.amazon.awssdk.core.sync.RequestBody;
@@ -22,8 +21,6 @@ import software.amazon.awssdk.services.s3.presigner.model.PresignedGetObjectRequ
 
 import java.io.IOException;
 import java.time.Duration;
-import java.util.Objects;
-import java.util.UUID;
 
 @Service
 public class CloudStorageService implements StorageService {

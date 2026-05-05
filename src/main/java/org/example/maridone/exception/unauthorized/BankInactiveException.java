@@ -1,7 +1,13 @@
 package org.example.maridone.exception.unauthorized;
 
-public class BankInactiveException extends RuntimeException {
+import org.example.maridone.enums.ErrorCode;
+import org.example.maridone.exception.BaseException;
+
+public class BankInactiveException extends BaseException {
     public BankInactiveException(String message) {
-        super(message);
+        super(
+                ErrorCode.BANK_INACTIVE,
+                message
+        );
     }
 }

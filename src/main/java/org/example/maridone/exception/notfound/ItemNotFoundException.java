@@ -1,7 +1,12 @@
 package org.example.maridone.exception.notfound;
 
-public class ItemNotFoundException extends RuntimeException {
+import org.example.maridone.enums.ErrorCode;
+import org.example.maridone.exception.BaseException;
+
+public class ItemNotFoundException extends BaseException {
     public ItemNotFoundException(Long id) {
-        super("Item with ID " + id + " not found");
+        super(
+                ErrorCode.ITEM_NOT_FOUND,
+                "Item with ID " + id + " not found");
     }
 }

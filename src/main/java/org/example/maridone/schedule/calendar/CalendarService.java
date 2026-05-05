@@ -8,7 +8,7 @@ import org.example.maridone.core.user.UserAccount;
 import org.example.maridone.core.user.UserAccountRepository;
 import org.example.maridone.enums.EmploymentStatus;
 import org.example.maridone.enums.Position;
-import org.example.maridone.exception.unauthorized.InvalidRangeException;
+import org.example.maridone.exception.badrequest.InvalidRangeException;
 import org.example.maridone.exception.notfound.AccountNotFoundException;
 import org.example.maridone.exception.notfound.CalendarEventNotFound;
 import org.example.maridone.notification.NotificationMessageFormatter;

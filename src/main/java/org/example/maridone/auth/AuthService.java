@@ -13,7 +13,7 @@ import org.example.maridone.core.user.UserLoginService;
 import org.example.maridone.enums.EmploymentStatus;
 import org.example.maridone.exception.notfound.AccountNotFoundException;
 import org.example.maridone.exception.badrequest.InvalidRefreshTokenException;
-import org.example.maridone.exception.badrequest.UnauthorizedAccessException;
+import org.example.maridone.exception.unauthorized.UnauthorizedAccessException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;

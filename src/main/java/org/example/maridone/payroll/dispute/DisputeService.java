@@ -21,8 +21,8 @@ import org.example.maridone.enums.Status;
 import org.example.maridone.exception.badrequest.MaxFileUploadExceededException;
 import org.example.maridone.exception.notfound.AccountNotFoundException;
 import org.example.maridone.exception.toolarge.FileTooLargeException;
-import org.example.maridone.exception.unauthorized.DuplicateDisputeException;
-import org.example.maridone.exception.unauthorized.InvalidActionException;
+import org.example.maridone.exception.conflict.DuplicateDisputeException;
+import org.example.maridone.exception.badrequest.InvalidActionException;
 import org.example.maridone.exception.notfound.ItemNotFoundException;
 import org.example.maridone.exception.notfound.RequestNotFoundException;
 import org.example.maridone.payroll.dto.DisputeDetails;
@@ -108,7 +108,7 @@ public class DisputeService {
 
         DisputeRequest checkRecent = disputeRepository.findTopByPayrollItem_ItemIdOrderByDisputeIdDesc(itemId);
         if (checkRecent != null && checkRecent.getStatus().equals(Status.PENDING)) {
-            throw new DuplicateDisputeException(itemId, "Your dispute is still pending. Please ask for an update from the HR.");
+            throw new DuplicateDisputeException(itemId);
         }
 
         DisputeRequest disputeRequest = new DisputeRequest();

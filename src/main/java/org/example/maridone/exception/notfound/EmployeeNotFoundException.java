@@ -1,7 +1,13 @@
 package org.example.maridone.exception.notfound;
 
-public class EmployeeNotFoundException extends RuntimeException {
+import org.example.maridone.enums.ErrorCode;
+import org.example.maridone.exception.BaseException;
+
+public class EmployeeNotFoundException extends BaseException {
     public EmployeeNotFoundException(Long id) {
-        super("Employee with ID " + id + " not found");
+
+        super(
+                ErrorCode.EMPLOYEE_NOT_FOUND,
+                "Employee with ID " + id + " not found");
     }
 }

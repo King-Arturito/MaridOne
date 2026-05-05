@@ -13,7 +13,7 @@ import org.example.maridone.config.DefaultConfig;
 import org.example.maridone.core.employee.Employee;
 import org.example.maridone.core.employee.EmployeeRepository;
 import org.example.maridone.enums.EmploymentStatus;
-import org.example.maridone.exception.unauthorized.InvalidActionException;
+import org.example.maridone.exception.badrequest.InvalidActionException;
 import org.example.maridone.leave.request.LeaveRequestRepository;
 import org.example.maridone.notification.NotificationService;
 import org.example.maridone.schedule.dto.DailyShiftOverrideRequestDto;

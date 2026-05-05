@@ -15,7 +15,7 @@ import org.example.maridone.enums.RunType;
 import org.example.maridone.exception.notfound.EmployeeNotFoundException;
 import org.example.maridone.exception.notfound.ItemNotFoundException;
 import org.example.maridone.exception.notfound.RunNotFoundException;
-import org.example.maridone.exception.unauthorized.InvalidActionException;
+import org.example.maridone.exception.badrequest.InvalidActionException;
 import org.example.maridone.log.ActivityLogRepository;
 import org.example.maridone.log.activity.ActivityLog;
 import org.example.maridone.payroll.dto.CorrectionSourceItemDto;

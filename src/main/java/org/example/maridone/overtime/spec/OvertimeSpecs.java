@@ -4,7 +4,7 @@ import jakarta.persistence.criteria.JoinType;
 import jakarta.persistence.criteria.Predicate;
 import org.example.maridone.enums.ExemptionStatus;
 import org.example.maridone.enums.Status;
-import org.example.maridone.exception.unauthorized.InvalidRangeException;
+import org.example.maridone.exception.badrequest.InvalidRangeException;
 import org.example.maridone.overtime.OvertimeFilter;
 import org.example.maridone.overtime.OvertimeRequest;
 import org.springframework.data.jpa.domain.Specification;

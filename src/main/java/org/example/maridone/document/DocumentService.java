@@ -20,7 +20,7 @@ import org.example.maridone.exception.badrequest.MaxFileUploadExceededException;
 import org.example.maridone.exception.notfound.AccountNotFoundException;
 import org.example.maridone.exception.notfound.PathNotFoundException;
 import org.example.maridone.exception.toolarge.FileTooLargeException;
-import org.example.maridone.exception.unauthorized.InvalidActionException;
+import org.example.maridone.exception.badrequest.InvalidActionException;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.core.Authentication;
