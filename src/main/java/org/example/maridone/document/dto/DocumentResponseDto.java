@@ -8,5 +8,6 @@ public record DocumentResponseDto(
         String fileType,
         Long fileSizeBytes,
         Instant createdAt,
-        Instant updatedAt
+        Instant updatedAt,
+        Boolean isPublic
 ) {}

@@ -105,6 +105,23 @@ public class CloudStorageService implements StorageService {
         return presignedRequest.url().toString();
     }
 
+    //for downloading documents
+    @ExecutionTime
+    public String downloadPresignedUrl(String s3Key, String downloadFilename) {
+        GetObjectRequest getObjectRequest = GetObjectRequest.builder()
+                .bucket(cloudConfig.getPrivateBucketName())
+                .key(s3Key)
+                .responseContentDisposition("attachment; filename=\"" + downloadFilename + "\"")
+                .build();
+
+        GetObjectPresignRequest getObjectPresignRequest = GetObjectPresignRequest.builder()
+                .signatureDuration(Duration.ofMinutes(15))
+                .getObjectRequest(getObjectRequest)
+                .build();
+
+        return s3Presigner.presignGetObject(getObjectPresignRequest).url().toString();
+    }
+
     @Override
     public void delete(String s3Key) {
         DeleteObjectRequest deleteObjectRequest = DeleteObjectRequest.builder()

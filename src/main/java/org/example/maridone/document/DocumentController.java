@@ -40,6 +40,12 @@ public class DocumentController {
         return documentService.getPublicDocument(pathId);
     }
 
+    @GetMapping("/public/download/{pathId}")
+    @PreAuthorize("isAuthenticated()")
+    public String downloadPublicDocument(@PathVariable Long pathId) {
+        return documentService.downloadPublicDocument(pathId);
+    }
+
     @GetMapping("/public/view/list")
     @PreAuthorize("isAuthenticated()")
     public List<DocumentResponseDto> getPublicDocuments() {
@@ -71,6 +77,14 @@ public class DocumentController {
         return documentService.getPrivateDocument(pathId);
     }
 
+    @GetMapping("/private/download/{pathId}")
+    @PreAuthorize("hasRole('HR') or @documentOwnerCheck.isSelf(#pathId, authentication.name)")
+    public String downloadPrivateDocument(@PathVariable Long pathId, Authentication authentication) {
+        sensitiveAccessService.assertSensitiveAccess(authentication);
+        return documentService.downloadPrivateDocument(pathId);
+    }
+
+    //most likely will be phased out
     @PostMapping("/private/upload")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<DocumentResponseDto> upload(@RequestParam("file") MultipartFile file,
@@ -81,6 +95,7 @@ public class DocumentController {
                 .body(documentService.uploadPrivateDocument(file, authentication.getName(), subDir, connectedId));
     }
 
+    //most likely will be used as default
     @PostMapping("/private/upload/batch")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<Void> batchUpload(

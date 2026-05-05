@@ -162,7 +162,7 @@ public class DocumentService {
         dp.setConnectedIds(connectedId.toString());
         applicationEventPublisher.publishEvent(new S3RollbackEvent(List.of(s3Key)));
 
-        return new DocumentResponseDto(dp.getPathId(), dp.getFileName(), dp.getFileType(), dp.getFileSizeBytes(), dp.getCreatedAt(), dp.getUpdatedAt());
+        return new DocumentResponseDto(dp.getPathId(), dp.getFileName(), dp.getFileType(), dp.getFileSizeBytes(), dp.getCreatedAt(), dp.getUpdatedAt(), dp.getIsPublic());
     }
 
     public String getPublicDocument(Long pathId) {
@@ -179,6 +179,11 @@ public class DocumentService {
         return documentMapper.toDocumentResponseDtos(documentPaths);
     }
 
+    public String downloadPublicDocument(Long pathId) {
+        DocumentPath documentPath = documentPathRepository.findById(pathId).orElseThrow(
+                () -> new PathNotFoundException(pathId));
+        return cloudStorageService.downloadPresignedUrl(documentPath.getS3Key(), documentPath.getFileName());
+    }
 
     public String getPrivateDocument(Long pathId) {
         DocumentPath documentPath = documentPathRepository.findById(pathId).orElseThrow(
@@ -200,6 +205,11 @@ public class DocumentService {
         return documentPaths;
     }
 
+    public String downloadPrivateDocument(Long pathId) {
+        DocumentPath documentPath = documentPathRepository.findById(pathId).orElseThrow(
+                () -> new PathNotFoundException(pathId));
+        return cloudStorageService.downloadPresignedUrl(documentPath.getS3Key(), documentPath.getFileName());
+    }
 
     @Transactional
     public void deletePublicDocument(Long pathId) {
@@ -236,4 +246,5 @@ public class DocumentService {
         documentPath.setS3Key(s3Key);
         return documentPath;
     }
+
 }
