@@ -19,7 +19,7 @@ public interface DocumentPathRepository extends JpaRepository<DocumentPath, Long
 
     @Query("select new " +
             "org.example.maridone.document.dto.DocumentResponseDto(" +
-            "dp.pathId, dp.fileName, dp.fileType, dp.fileSizeBytes, dp.createdAt, dp.updatedAt, dp.isPublic" +
+            "dp.pathId, dp.fileName, dp.fileType, dp.fileSizeBytes, dp.connectedEntity, dp.connectedIds, dp.createdAt, dp.updatedAt, dp.isPublic" +
             ") from DocumentPath dp where dp.userAccount.username = :username")
     List<DocumentResponseDto> findAllByUsername(@Param("username") String username);
 }

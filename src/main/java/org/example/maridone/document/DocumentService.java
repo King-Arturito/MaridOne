@@ -162,7 +162,9 @@ public class DocumentService {
         dp.setConnectedIds(connectedId.toString());
         applicationEventPublisher.publishEvent(new S3RollbackEvent(List.of(s3Key)));
 
-        return new DocumentResponseDto(dp.getPathId(), dp.getFileName(), dp.getFileType(), dp.getFileSizeBytes(), dp.getCreatedAt(), dp.getUpdatedAt(), dp.getIsPublic());
+        return new DocumentResponseDto(
+                dp.getPathId(), dp.getFileName(), dp.getFileType(), dp.getFileSizeBytes(),
+                dp.getConnectedEntity(), dp.getConnectedIds(), dp.getCreatedAt(), dp.getUpdatedAt(), dp.getIsPublic());
     }
 
     public String getPublicDocument(Long pathId) {
