@@ -5,6 +5,7 @@ public enum Directories {
     LEAVE_REQUEST("leave-request"),
     MATERIALS("training-materials"),
     DISPUTE("dispute-request"),
+    PAYROLL_ITEM("payroll-item"),
     OVERTIME("overtime-request"),
     PERSONAL("personal-files"),
     PUBLIC("public-documents");
