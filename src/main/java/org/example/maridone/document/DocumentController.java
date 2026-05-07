@@ -81,6 +81,11 @@ public class DocumentController {
         return documentService.getPrivateDocumentByEntity(connectedEntity, connectedId);
     }
 
+    @GetMapping("/exists")
+    public boolean existsByEntity(@RequestParam String connectedEntity, @RequestParam(required = false) Long connectedId) {
+        return documentService.existsByEntity(connectedEntity,  connectedId);
+    }
+
     //returns a presigned url of that specific file obtained from getPrivateDocuments()
     @GetMapping("/private/view/{pathId}")
     @PreAuthorize("hasRole('HR') or @documentOwnerCheck.isSelf(#pathId, authentication.name)")

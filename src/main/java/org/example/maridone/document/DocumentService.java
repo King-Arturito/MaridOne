@@ -259,6 +259,10 @@ public class DocumentService {
         applicationEventPublisher.publishEvent(new S3CleanupEvent(List.of(documentPath.getS3Key())));
     }
 
+    public boolean existsByEntity(String connectedEntity, Long connectedId) {
+        return documentPathRepository.existsByEntity(connectedEntity, connectedId);
+    }
+
     //helper method for uploads
     protected DocumentPath buildDocumentPath(MultipartFile file,
                                              UserAccount userAccount,

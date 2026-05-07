@@ -25,4 +25,9 @@ public interface DocumentPathRepository extends JpaRepository<DocumentPath, Long
 
     @Query("select dp FROM DocumentPath dp JOIN dp.links link WHERE link.connectedEntity = :entityType AND link.connectedId = null")
     List<DocumentPath> findAllByEntity(@Param("entityType") String entityType);
+
+    @Query("select count(l) > 0 from DocumentPath dp join dp.links l " +
+            "where l.connectedEntity = :connectedEntity and l.connectedId = :connectedId")
+    boolean existsByEntity(@Param("connectedEntity") String connectedEntity,
+                               @Param("connectedId") Long connectedId);
 }
