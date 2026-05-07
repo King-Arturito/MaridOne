@@ -6,12 +6,11 @@ import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.Instant;
+import java.util.HashSet;
+import java.util.Set;
 
 @Entity
-@Table(name = "document_path",
-        indexes = {
-                @Index(name = "idx_document_path_connected" ,  columnList = "connected_entity, connected_id", unique = false)
-        })
+@Table(name = "document_path")
 public class DocumentPath {
 
     @Id
@@ -31,14 +30,18 @@ public class DocumentPath {
     @Column(name = "file_size_bytes", nullable = false)
     private Long fileSizeBytes;
 
-    //no direct connection
-    @Column(name = "connected_entity", nullable = true)
-    private String connectedEntity;
 
     //no direct connection
-    //usage = connectedEntity -> Entity's primary key/s
-    @Column(name = "connected_ids", nullable = true)
-    private String connectedIds;
+    //a join table on path_id
+    @ElementCollection(fetch = FetchType.LAZY)
+    @CollectionTable(
+            name = "document_path_links",
+            joinColumns = @JoinColumn(name = "path_id"),
+            indexes = {
+                @Index(name = "idx_link_connected", columnList = "connected_entity, connected_id")
+            }
+    )
+    private Set<DocumentPathLink> links = new HashSet<>();
 
     @Column(name = "is_public")
     private Boolean isPublic = false;
@@ -123,19 +126,11 @@ public class DocumentPath {
         this.updatedAt = updatedAt;
     }
 
-    public String getConnectedEntity() {
-        return connectedEntity;
+    public Set<DocumentPathLink> getLinks() {
+        return links;
     }
 
-    public void setConnectedEntity(String connectedEntity) {
-        this.connectedEntity = connectedEntity;
-    }
-
-    public String getConnectedIds() {
-        return connectedIds;
-    }
-
-    public void setConnectedIds(String connectedId) {
-        this.connectedIds = connectedIds;
+    public void setLinks(Set<DocumentPathLink> links) {
+        this.links = links;
     }
 }

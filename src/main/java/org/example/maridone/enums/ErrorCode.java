@@ -16,6 +16,7 @@ public enum ErrorCode {
     BALANCE_NOT_FOUND(HttpStatus.NOT_FOUND),
     PATH_NOT_FOUND(HttpStatus.NOT_FOUND),
     RUN_NOT_FOUND(HttpStatus.NOT_FOUND),
+    DOCUMENT_NOT_FOUND(HttpStatus.NOT_FOUND),
 
     // 401
     BAD_CREDENTIALS(HttpStatus.UNAUTHORIZED),

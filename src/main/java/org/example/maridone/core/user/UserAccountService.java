@@ -10,6 +10,7 @@ import org.example.maridone.core.dto.UpdateUserAccountDto;
 import org.example.maridone.core.employee.Employee;
 import org.example.maridone.core.employee.EmployeeRepository;
 import org.example.maridone.document.dto.DocumentResponseDto;
+import org.example.maridone.document.path.DocumentPath;
 import org.example.maridone.document.path.DocumentPathRepository;
 import org.example.maridone.document.mapper.DocumentMapper;
 import org.example.maridone.exception.unauthorized.UnauthorizedAccessException;
@@ -165,7 +166,8 @@ public class UserAccountService {
 
     @ExecutionTime
     public List<DocumentResponseDto> getDocuments(String username) {
-        return documentPathRepository.findAllByUsername(username);
+        List<DocumentPath> paths = documentPathRepository.findAllByUsername(username);
+        return documentMapper.toDocumentResponseDtos(paths);
     }
 
     private String requireUsername(String username) {

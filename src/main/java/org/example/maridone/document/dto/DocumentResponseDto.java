@@ -7,8 +7,6 @@ public record DocumentResponseDto(
         String fileName,
         String fileType,
         Long fileSizeBytes,
-        String connectedEntity,
-        String connectedIds,
         Instant createdAt,
         Instant updatedAt,
         Boolean isPublic

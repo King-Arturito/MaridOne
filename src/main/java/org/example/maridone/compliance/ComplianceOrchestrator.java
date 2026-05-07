@@ -13,6 +13,8 @@ import org.example.maridone.core.employee.EmployeeRepository;
 import org.example.maridone.core.employee.EmployeeSeparation;
 import org.example.maridone.core.employee.EmployeeSeparationRepository;
 import org.example.maridone.core.user.UserAccountRepository;
+import org.example.maridone.document.dto.DocumentLinkDto;
+import org.example.maridone.document.path.DocumentPathLink;
 import org.example.maridone.document.path.DocumentPathRepository;
 import org.example.maridone.document.path.DocumentPath;
 import org.example.maridone.document.spec.DocumentSpecs;
@@ -138,8 +140,12 @@ public class ComplianceOrchestrator {
                         document.getFileName(),
                         document.getFileType(),
                         document.getFileSizeBytes(),
-                        document.getConnectedEntity(),
-                        document.getConnectedIds() == null ? null : document.getConnectedIds()
+                        document.getLinks().stream()
+                                .map(link -> new DocumentLinkDto(
+                                        link.getConnectedEntity(),
+                                        link.getConnectedId()
+                                ))
+                                .toList()
                 ))
                 .toList();
     }

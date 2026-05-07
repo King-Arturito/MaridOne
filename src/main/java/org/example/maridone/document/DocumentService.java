@@ -13,14 +13,17 @@ import org.example.maridone.document.event.S3CleanupEvent;
 import org.example.maridone.document.event.S3RollbackEvent;
 import org.example.maridone.document.mapper.DocumentMapper;
 import org.example.maridone.document.path.DocumentPath;
+import org.example.maridone.document.path.DocumentPathLink;
 import org.example.maridone.document.path.DocumentPathRepository;
 import org.example.maridone.document.storage.CloudStorageService;
 import org.example.maridone.enums.Directories;
 import org.example.maridone.exception.badrequest.MaxFileUploadExceededException;
 import org.example.maridone.exception.notfound.AccountNotFoundException;
+import org.example.maridone.exception.notfound.DocumentNotFound;
 import org.example.maridone.exception.notfound.PathNotFoundException;
 import org.example.maridone.exception.toolarge.FileTooLargeException;
 import org.example.maridone.exception.badrequest.InvalidActionException;
+import org.example.maridone.exception.unauthorized.UnauthorizedAccessException;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.core.Authentication;
@@ -30,10 +33,8 @@ import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
 import org.example.maridone.payroll.payslip.FileUploadBatchRequest;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
+import java.io.FileNotFoundException;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
@@ -91,13 +92,18 @@ public class DocumentService {
             uploadedS3Keys.add(s3Key);
 
             DocumentPath dp = buildDocumentPath(request.file(), user, s3Key, true);
-            dp.setConnectedEntity(request.subDir().getDisplayName());
-                documents.add(dp);
+
+            DocumentPathLink link = new DocumentPathLink();
+            link.setConnectedEntity(request.subDir().getDisplayName());
+            link.setConnectedId(null);
+            dp.getLinks().add(link);
+
+            documents.add(dp);
         }
 
-        documentPathRepository.saveAll(documents);
         //if dp record creation fails, do s3cleanup to avoid orphaned documents
         applicationEventPublisher.publishEvent(new S3RollbackEvent(uploadedS3Keys));
+        documentPathRepository.saveAll(documents);
     }
 
     //batchUpload() FOR ONE USER
@@ -109,7 +115,7 @@ public class DocumentService {
             throw new MaxFileUploadExceededException("files to upload exceeded. Limit: " + documentConfig.getMaxFileUpload() + " files");
         }
         if (FileValidation.exceedsFileSizeLimit(files, documentConfig.getMaxFileSize().toBytes()))  {
-           throw new FileTooLargeException("One or more files exceeds file size limit of: " + documentConfig.getMaxFileSize() + " bytes");
+            throw new FileTooLargeException("One or more files exceeds file size limit of: " + documentConfig.getMaxFileSize() + " bytes");
         }
 
         UserAccount userAccount = userAccountRepository.findByUsername(username)
@@ -117,20 +123,27 @@ public class DocumentService {
 
         List<DocumentPath> documentPaths = new ArrayList<>();
         List<String> uploadedS3Keys = new ArrayList<>();
+
         for (MultipartFile file : files) {
             String s3Key = cloudStorageService.store(file, userAccount.getEmployeeId().toString(), subDir.getDisplayName());
             uploadedS3Keys.add(s3Key);
+
             DocumentPath dp = buildDocumentPath(file, userAccount, s3Key, false);
-            dp.setConnectedEntity(subDir.getDisplayName());
-            if (connectedIds != null) {
-                dp.setConnectedIds(connectedIds.stream()
-                        .map(String::valueOf)
-                        .collect(Collectors.joining(",")));
+            if (connectedIds != null && !connectedIds.isEmpty()) {
+                String entityType = subDir.getDisplayName();
+
+                for (Long id : connectedIds) {
+                    DocumentPathLink link = new DocumentPathLink();
+                    link.setConnectedEntity(entityType);
+                    link.setConnectedId(id);
+
+                    dp.getLinks().add(link);
+                }
             }
             documentPaths.add(dp);
         }
-        documentPathRepository.saveAll(documentPaths);
         applicationEventPublisher.publishEvent(new S3RollbackEvent(uploadedS3Keys));
+        documentPathRepository.saveAll(documentPaths);
     }
 
     @ExecutionTime
@@ -144,9 +157,8 @@ public class DocumentService {
         UserAccount proxy = userAccountRepository.getReferenceById(userId);
         DocumentPath documentPath = buildDocumentPath(file, proxy, s3Key, true);
 
-        documentPathRepository.save(documentPath);
-
         applicationEventPublisher.publishEvent(new S3RollbackEvent(List.of(s3Key)));
+        documentPathRepository.save(documentPath);
     }
 
     @ExecutionTime
@@ -158,13 +170,17 @@ public class DocumentService {
         String s3Key = cloudStorageService.store(file, userAccount.getEmployeeId().toString(), subDir.getDisplayName());
 
         DocumentPath dp = buildDocumentPath(file, userAccount, s3Key, false);
-        dp.setConnectedEntity(subDir.getDisplayName());
-        dp.setConnectedIds(connectedId.toString());
+
+        DocumentPathLink link = new DocumentPathLink();
+        link.setConnectedEntity(subDir.getDisplayName());
+        link.setConnectedId(connectedId);
+        dp.getLinks().add(link);
+
         applicationEventPublisher.publishEvent(new S3RollbackEvent(List.of(s3Key)));
+        dp = documentPathRepository.save(dp);
 
         return new DocumentResponseDto(
-                dp.getPathId(), dp.getFileName(), dp.getFileType(), dp.getFileSizeBytes(),
-                dp.getConnectedEntity(), dp.getConnectedIds(), dp.getCreatedAt(), dp.getUpdatedAt(), dp.getIsPublic());
+                dp.getPathId(), dp.getFileName(), dp.getFileType(), dp.getFileSizeBytes(), dp.getCreatedAt(), dp.getUpdatedAt(), dp.getIsPublic());
     }
 
     public String getPublicDocument(Long pathId) {
@@ -193,16 +209,25 @@ public class DocumentService {
         return cloudStorageService.generatePresignedUrl(documentPath.getS3Key());
     }
 
+    public String getPrivateDocumentByEntity(String connectedEntity, Long connectedId) {
+        DocumentPath documentPath = documentPathRepository.findDocumentByEntityAndId(connectedEntity,connectedId)
+                .orElseThrow(() -> new DocumentNotFound("Document not found for this connectedEntity and connectedId"));
+
+        return cloudStorageService.generatePresignedUrl(documentPath.getS3Key());
+    }
+
     public List<DocumentResponseDto> getPrivateDocuments(String username, Authentication authentication) {
         boolean isHr = authentication.getAuthorities()
                 .stream()
                 .anyMatch(a -> a.getAuthority().equals("ROLE_HR"));
         List<DocumentResponseDto> documentPaths;
 
+        // if username exists and isHr, finds all documents connected to username
+        // else, get own documents
         if (username != null && isHr) {
-            documentPaths = documentPathRepository.findAllByUsername(username);
+            documentPaths = documentMapper.toDocumentResponseDtos(documentPathRepository.findAllByUsername(username));
         } else {
-            documentPaths = documentPathRepository.findAllByUsername(authentication.getName());
+            documentPaths = documentMapper.toDocumentResponseDtos(documentPathRepository.findAllByUsername(authentication.getName()));
         }
         return documentPaths;
     }

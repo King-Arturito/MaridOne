@@ -5,6 +5,7 @@ import org.example.maridone.document.dto.DocumentResponseDto;
 import org.example.maridone.enums.Directories;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PostAuthorize;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
@@ -67,6 +68,17 @@ public class DocumentController {
             @RequestParam(required = false) String username,
             Authentication authentication) {
         return documentService.getPrivateDocuments(username, authentication);
+    }
+
+    @GetMapping("/private/view/entity")
+    @PreAuthorize("isAuthenticated()")
+    public String getPrivateDocumentByEntity(
+            @RequestParam String connectedEntity,
+            @RequestParam Long connectedId,
+            Authentication authentication
+    ) {
+        sensitiveAccessService.assertSensitiveAccess(authentication);
+        return documentService.getPrivateDocumentByEntity(connectedEntity, connectedId);
     }
 
     //returns a presigned url of that specific file obtained from getPrivateDocuments()

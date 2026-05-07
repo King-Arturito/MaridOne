@@ -17,9 +17,12 @@ public interface DocumentPathRepository extends JpaRepository<DocumentPath, Long
     @Query("select dp.userAccount.username from DocumentPath dp where dp.pathId = :pathId")
     Optional<String> findUsernameByPathId(@Param("pathId") Long pathId);
 
-    @Query("select new " +
-            "org.example.maridone.document.dto.DocumentResponseDto(" +
-            "dp.pathId, dp.fileName, dp.fileType, dp.fileSizeBytes, dp.connectedEntity, dp.connectedIds, dp.createdAt, dp.updatedAt, dp.isPublic" +
-            ") from DocumentPath dp where dp.userAccount.username = :username")
-    List<DocumentResponseDto> findAllByUsername(@Param("username") String username);
+    @Query("SELECT DISTINCT dp FROM DocumentPath dp LEFT JOIN FETCH dp.links WHERE dp.userAccount.username = :username")
+    List<DocumentPath> findAllByUsername(@Param("username") String username);
+
+    @Query("SELECT dp FROM DocumentPath dp JOIN dp.links link  WHERE link.connectedEntity = :entityType AND link.connectedId = :connectedId")
+    Optional<DocumentPath> findDocumentByEntityAndId(@Param("entityType") String entityType, @Param("connectedId") Long connectedId);
+
+    @Query("select dp FROM DocumentPath dp JOIN dp.links link WHERE link.connectedEntity = :entityType AND link.connectedId = null")
+    List<DocumentPath> findAllByEntity(@Param("entityType") String entityType);
 }
