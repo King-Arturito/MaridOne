@@ -109,8 +109,8 @@ public class LeaveController {
     public ResponseEntity<List<LeaveRequest>> createLeaveRequest(
             @Valid @RequestBody LeaveRequestDto payload,
             @PathVariable Long empId,
-            @RequestParam(required = false) MultipartFile file) {
-        List<LeaveRequest> requests = leaveService.createLeaveRequest(payload, empId, file);
+            @RequestParam(required = false) List<MultipartFile> files) {
+        List<LeaveRequest> requests = leaveService.createLeaveRequest(payload, empId, files);
         return ResponseEntity.ok(requests);
     }
 

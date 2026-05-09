@@ -1,7 +1,13 @@
 package org.example.maridone.exception.notfound;
 
-public class BalanceNotFoundException extends RuntimeException {
+import org.example.maridone.enums.ErrorCode;
+import org.example.maridone.exception.BaseException;
+
+public class BalanceNotFoundException extends BaseException {
     public BalanceNotFoundException(String message) {
-        super(message);
+        super(
+                ErrorCode.BALANCE_NOT_FOUND,
+                message
+        );
     }
 }

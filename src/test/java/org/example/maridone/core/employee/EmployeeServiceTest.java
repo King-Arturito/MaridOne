@@ -17,7 +17,7 @@ import org.example.maridone.enums.ManagerTitle;
 import org.example.maridone.enums.Position;
 import org.example.maridone.enums.SeparationReason;
 import org.example.maridone.exception.notfound.EmployeeNotFoundException;
-import org.example.maridone.exception.unauthorized.InvalidActionException;
+import org.example.maridone.exception.badrequest.InvalidActionException;
 import org.example.maridone.leave.balance.LeaveBalance;
 import org.example.maridone.leave.balance.LeaveBalanceRepository;
 import org.example.maridone.leave.request.LeaveRequest;

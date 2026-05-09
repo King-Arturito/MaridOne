@@ -14,7 +14,7 @@ import org.example.maridone.enums.EmploymentStatus;
 import org.example.maridone.enums.AccountStatus;
 import org.example.maridone.exception.notfound.AccountNotFoundException;
 import org.example.maridone.exception.badrequest.InvalidRefreshTokenException;
-import org.example.maridone.exception.badrequest.UnauthorizedAccessException;
+import org.example.maridone.exception.unauthorized.UnauthorizedAccessException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -77,7 +77,7 @@ public class AuthService {
             UserDetails userDetails = (UserDetails) authentication.getPrincipal();
 
             UserAccount userAccount = userAccountRepository.findByUsername(authentication.getName())
-                    .orElseThrow(() -> new AccountNotFoundException("username of: " + loginRequest.getUsername() + " not found"));
+                    .orElseThrow(() -> new AccountNotFoundException(loginRequest.getUsername()));
 
             ensureLoginAllowed(userAccount);
 
@@ -98,7 +98,7 @@ public class AuthService {
 
     public Void sendEmailVerification(String username) {
         UserAccount account = userAccountRepository.findByUsername(username)
-                .orElseThrow(() -> new AccountNotFoundException("username of: " + username));
+                .orElseThrow(() -> new AccountNotFoundException("UserAccount with: " + username + " not found."));
 
         String tokenToSend = jwtService.generateEmailVerificationToken(account.getUsername());
         String email = resolvePersonalEmail(account);
@@ -124,7 +124,7 @@ public class AuthService {
         String username = jwtService.extractUsername(preAuthToken);
 
         UserAccount account = userAccountRepository.findByUsername(username)
-                .orElseThrow(() -> new AccountNotFoundException("username of: " + username));
+                .orElseThrow(() -> new AccountNotFoundException("UserAccount with: " + username + " not found."));
 
         String tokenToSend = totpService.generateCurrentCode(account.getTwoFactorSecret());
         sendVerificationCodeToEmployeeEmails(
@@ -239,7 +239,7 @@ public class AuthService {
 
         String username = jwtService.extractUsername(preAuthToken);
         UserAccount userAccount = userAccountRepository.findByUsername(username)
-                .orElseThrow(() -> new AccountNotFoundException("Account not found"));
+                .orElseThrow(() -> new AccountNotFoundException("UserAccount with: " + username + " not found."));
         ensureLoginAllowed(userAccount);
 
         // Verify the 6-digit code
@@ -266,7 +266,7 @@ public class AuthService {
 
         // update flag
         UserAccount userAccount = userAccountRepository.findByUsername(username)
-                .orElseThrow(() -> new AccountNotFoundException("Account not found"));
+                .orElseThrow(() -> new AccountNotFoundException("UserAccount with: " + username + " not found."));
 
         userAccount.getEmployee().setIsVerified(true);
         userAccountRepository.save(userAccount);

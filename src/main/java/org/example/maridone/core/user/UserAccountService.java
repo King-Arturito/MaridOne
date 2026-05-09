@@ -9,16 +9,16 @@ import org.example.maridone.core.dto.CreateUserAccountDto;
 import org.example.maridone.core.dto.UpdateUserAccountDto;
 import org.example.maridone.core.employee.Employee;
 import org.example.maridone.core.employee.EmployeeRepository;
-import org.example.maridone.document.DocumentPathRepository;
 import org.example.maridone.document.dto.DocumentResponseDto;
+import org.example.maridone.document.path.DocumentPath;
+import org.example.maridone.document.path.DocumentPathRepository;
 import org.example.maridone.document.mapper.DocumentMapper;
+import org.example.maridone.exception.unauthorized.UnauthorizedAccessException;
 import org.example.maridone.document.spec.DocumentSpecs;
 import org.example.maridone.enums.AccountStatus;
-import org.example.maridone.exception.badrequest.UnauthorizedAccessException;
 import org.example.maridone.exception.notfound.AccountNotFoundException;
 import org.example.maridone.exception.notfound.EmployeeNotFoundException;
-import org.example.maridone.exception.unauthorized.DuplicateAccountException;
-import org.springframework.data.domain.Sort;
+import org.example.maridone.exception.conflict.DuplicateAccountException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -66,7 +66,7 @@ public class UserAccountService {
     @ExecutionTime
     public UserAccount getUserAccount(String username) {
         return userAccountRepository.findByUsername(username)
-                .orElseThrow(()-> new AccountNotFoundException(username));
+                .orElseThrow(()-> new AccountNotFoundException("UserAccount with: " + username + " not found."));
     }
 
 
@@ -102,7 +102,7 @@ public class UserAccountService {
     @ExecutionTime
     public UserAccount updateUserAccount(UpdateUserAccountDto payload) {
         UserAccount existing = userAccountRepository.findByEmployee_EmployeeId(payload.getEmployeeId())
-                .orElseThrow(() -> new AccountNotFoundException("employeeId=" + payload.getEmployeeId()));
+                .orElseThrow(() -> new AccountNotFoundException("UserAccount with: " + payload.getUsername() + " not found."));
         Long existingId = existing.getAccountId();
 
         String newUsername = requireUsername(payload.getUsername());
@@ -136,7 +136,7 @@ public class UserAccountService {
     @ExecutionTime
     public void changeOwnPassword(String username, ChangePasswordDto payload) {
         UserAccount existing = userAccountRepository.findByUsername(username)
-                .orElseThrow(() -> new AccountNotFoundException(username));
+                .orElseThrow(() -> new AccountNotFoundException("UserAccount with: " + username + " not found."));
 
         String currentPassword = requirePassword(payload.getCurrentPassword());
         String newPassword = PasswordPolicy.requireUserSelectedPassword(
@@ -170,28 +170,9 @@ public class UserAccountService {
     }
 
     @ExecutionTime
-    public List<DocumentResponseDto> getDocuments(String username, String subDir) {
-        getUserAccount(username);
-        return documentPathRepository.findAll(
-                        DocumentSpecs.hasUsername(username),
-                        Sort.by(Sort.Direction.DESC, "pathId")
-                ).stream()
-                .filter(document -> matchesSubDirectory(document.getFilePath(), subDir))
-                .map(documentMapper::toDocumentResponseDto)
-                .toList();
-    }
-
-    private boolean matchesSubDirectory(String filePath, String subDir) {
-        if (subDir == null || subDir.trim().isEmpty()) {
-            return true;
-        }
-        if (filePath == null || filePath.isBlank()) {
-            return false;
-        }
-
-        String normalizedPath = filePath.replace('\\', '/').toLowerCase();
-        String normalizedSubDir = "/" + subDir.trim().toLowerCase() + "/";
-        return normalizedPath.contains(normalizedSubDir);
+    public List<DocumentResponseDto> getDocuments(String username) {
+        List<DocumentPath> paths = documentPathRepository.findAllByUsername(username);
+        return documentMapper.toDocumentResponseDtos(paths);
     }
 
     private String requireUsername(String username) {

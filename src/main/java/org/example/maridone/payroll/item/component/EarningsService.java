@@ -13,7 +13,7 @@ import org.example.maridone.payroll.item.PayrollItem;
 import org.example.maridone.payroll.run.PayrollItemRepository;
 import org.example.maridone.payroll.mapper.PayrollMapper;
 import org.example.maridone.payroll.run.PayrollRun;
-import org.example.maridone.exception.unauthorized.InvalidActionException;
+import org.example.maridone.exception.badrequest.InvalidActionException;
 import org.example.maridone.enums.RunType;
 import org.example.maridone.schedule.shift.DailyShiftRepository;
 import org.example.maridone.schedule.shift.DailyShiftSchedule;

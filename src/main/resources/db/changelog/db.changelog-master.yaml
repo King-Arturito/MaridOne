@@ -41,3 +41,5 @@ databaseChangeLog:
       file: db/changelog/021-create-employeeSeparation.sql
   - include:
       file: db/changelog/022-create-employerContributionLine.sql
+  - include:
+      file: db/changelog/023-create-documentPathLink.sql

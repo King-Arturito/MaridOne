@@ -3,7 +3,7 @@ package org.example.maridone.component;
 import org.example.maridone.core.employee.EmployeeRepository;
 import org.example.maridone.core.user.UserAccount;
 import org.example.maridone.core.user.UserAccountRepository;
-import org.example.maridone.document.DocumentPathRepository;
+import org.example.maridone.document.path.DocumentPathRepository;
 import org.example.maridone.enums.Position;
 import org.springframework.stereotype.Component;
 

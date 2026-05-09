@@ -14,7 +14,7 @@ import org.example.maridone.enums.Status;
 import org.example.maridone.exception.conflict.OverlappingDatesException;
 import org.example.maridone.exception.notfound.AccountNotFoundException;
 import org.example.maridone.exception.notfound.EmployeeNotFoundException;
-import org.example.maridone.exception.unauthorized.InvalidActionException;
+import org.example.maridone.exception.badrequest.InvalidActionException;
 import org.example.maridone.exception.unauthorized.OvertimeException;
 import org.example.maridone.leave.request.LeaveRequestRepository;
 import org.example.maridone.notification.NotificationMessageFormatter;
@@ -34,7 +34,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
-import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
@@ -80,7 +79,8 @@ public class OvertimeService {
         Specification<Employee> spec = Specification.allOf(
                 EmployeeSpecs.hasUserAccount(username)
         );
-        Employee emp = employeeRepository.findOne(spec).orElseThrow(() -> new AccountNotFoundException(username));
+        Employee emp = employeeRepository.findOne(spec).orElseThrow(
+                () -> new AccountNotFoundException("UserAccount with: " + username + " not found."));
         validateRequestWindow(requestDto);
         validateNoLeaveConflict(emp, requestDto);
         validateOutsideShiftSchedule(emp, requestDto.getStartTime(), requestDto.getEndTime());
@@ -123,7 +123,7 @@ public class OvertimeService {
                 .orElseThrow(() -> new OvertimeException("Overtime Not Found"));
         Employee emp = userAccountRepository.findByUsername(approverUsername)
                 .map(UserAccount::getEmployee)
-                .orElseThrow(() -> new AccountNotFoundException(approverUsername));
+                .orElseThrow(() -> new AccountNotFoundException("Approver's UserAccount with: " + approverUsername + " not found."));
 
         Long requestEmployeeId = req.getEmployeeId() != null
                 ? req.getEmployeeId()
@@ -213,7 +213,7 @@ public class OvertimeService {
     private List<Long> resolveHandledEmployeeIds(String username) {
         Long employeeId = userAccountRepository.findEmployeeIdByUsername(username);
         if (employeeId == null) {
-            throw new AccountNotFoundException(username);
+            throw new AccountNotFoundException("UserAccount with: " + username + " not found.");
         }
         return employeeRepository.findHandledEmployeeIds(employeeId);
     }

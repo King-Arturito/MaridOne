@@ -61,7 +61,7 @@ public class SecurityConfig {
                                 .requestMatchers("/api/**").authenticated()
                 )
                 .formLogin(AbstractHttpConfigurer::disable)
-                .logout(logout -> logout.logoutSuccessUrl(defaultConfig.getUrl()))
+                .logout(logout -> logout.logoutSuccessUrl(defaultConfig.getUrl().toString()))
                 .addFilterBefore(jwtFilter(), UsernamePasswordAuthenticationFilter.class)
                 .build();
     }
@@ -79,7 +79,7 @@ public class SecurityConfig {
         CorsConfiguration configuration = new CorsConfiguration();
         configuration.setAllowedHeaders(List.of("*"));
         configuration.setAllowCredentials(true);
-        configuration.setAllowedOrigins(List.of(defaultConfig.getUrl()));
+        configuration.setAllowedOrigins(List.of(defaultConfig.getUrl().toString()));
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "PATCH"));
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();

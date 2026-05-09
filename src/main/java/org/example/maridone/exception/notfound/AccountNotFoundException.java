@@ -1,7 +1,13 @@
 package org.example.maridone.exception.notfound;
 
-public class AccountNotFoundException extends RuntimeException {
-    public AccountNotFoundException(String username) {
-        super("Account with username: " + username +  "  not found");
+import org.example.maridone.enums.ErrorCode;
+import org.example.maridone.exception.BaseException;
+
+public class AccountNotFoundException extends BaseException {
+    public AccountNotFoundException(String message) {
+        super(
+                ErrorCode.ACCOUNT_NOT_FOUND,
+                message
+        );
     }
 }

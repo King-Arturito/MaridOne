@@ -1,38 +1,34 @@
 package org.example.maridone.document.storage;
 
+import com.fasterxml.uuid.Generators;
 import org.example.maridone.annotation.AuditLog;
 import org.example.maridone.annotation.ExecutionTime;
+import org.example.maridone.common.Sanitizer;
 import org.example.maridone.config.CloudConfig;
-import org.example.maridone.exception.unauthorized.CloudReadException;
-import org.example.maridone.exception.unauthorized.CloudWriteException;
-import org.springframework.context.annotation.Profile;
+import org.example.maridone.exception.servererror.CloudWriteException;
+import org.example.maridone.exception.badrequest.InvalidActionException;
 import org.springframework.core.io.InputStreamResource;
 import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Service;
-import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
+import software.amazon.awssdk.core.ResponseInputStream;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.S3Client;
-import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
-import software.amazon.awssdk.services.s3.model.GetObjectRequest;
-import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
-import software.amazon.awssdk.services.s3.model.PutObjectRequest;
+import software.amazon.awssdk.services.s3.model.*;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 import software.amazon.awssdk.services.s3.presigner.model.GetObjectPresignRequest;
+import software.amazon.awssdk.services.s3.presigner.model.PresignedGetObjectRequest;
 
 import java.io.IOException;
 import java.time.Duration;
-import java.util.UUID;
 
 @Service
-@Profile("prod")
 public class CloudStorageService implements StorageService {
 
     private final S3Client s3Client;
     private final S3Presigner s3Presigner;
     private final CloudConfig cloudConfig;
 
-    // Inject all three dependencies
     public CloudStorageService(S3Client s3Client, S3Presigner s3Presigner, CloudConfig cloudConfig) {
         this.s3Client = s3Client;
         this.s3Presigner = s3Presigner;
@@ -40,123 +36,99 @@ public class CloudStorageService implements StorageService {
     }
 
     @Override
+    @ExecutionTime
     @AuditLog
-    @ExecutionTime
-    public String store(MultipartFile file, String username, String subDir) {
+    public String store(MultipartFile file, String employeeId, String targetDir) {
+        String sanitizedFilename = Sanitizer.sanitizeFilename(file.getOriginalFilename());
+        if (!employeeId.matches("\\d+") && !employeeId.equals("MaridOne")) {
+            throw new InvalidActionException("employeeId is not a valid value. employeeId = " + employeeId);
+        }
+         /*
+            sample for public
+                /cloudConfig.getCompanyDirectory()/MaridOne/UUID-filename
+                /public-documents/MaridOne/UUID-filename
+
+            sample for private(payslips):
+                /payslip/employeeId/UUID-filename
+         */
+        String s3Key = String.format("%s/%s/%s-%s",
+                targetDir,
+                employeeId,
+                Generators.timeBasedGenerator().generate().toString(),
+                sanitizedFilename
+        );
+
+        PutObjectRequest putObjectRequest = PutObjectRequest.builder()
+                .bucket(cloudConfig.getPrivateBucketName())
+                .key(s3Key)
+                .contentType(file.getContentType())
+                .build();
+
         try {
-            String originalName = file.getOriginalFilename() != null
-                    ? file.getOriginalFilename() : "unnamed";
-            String cleanedName = StringUtils.cleanPath(originalName);
-            String uniqueFileName = username + "/" + subDir + "/" + UUID.randomUUID() + "_" + cleanedName; // ✅
-
-            PutObjectRequest putObjectRequest = PutObjectRequest.builder()
-                    .bucket(cloudConfig.getBucketName())
-                    .key(uniqueFileName)
-                    .contentType(file.getContentType())
-                    .build();
-
-            s3Client.putObject(putObjectRequest,
-                    RequestBody.fromInputStream(file.getInputStream(), file.getSize()));
-
-            return uniqueFileName;
-
+            s3Client.putObject(
+                    putObjectRequest,
+                    RequestBody.fromInputStream(file.getInputStream(), file.getSize())
+            );
+            return s3Key;
         } catch (IOException e) {
-            throw new CloudReadException("Failed to read file for upload to DigitalOcean Spaces", e);
-        } catch (Exception e) {
-            throw new CloudWriteException("Failed to upload file to DigitalOcean Spaces", e);
+            throw new CloudWriteException("Failed to store file in S3", e);
         }
     }
 
     @Override
     @ExecutionTime
-    public Resource load(String filePath) {
-        try {
-            GetObjectRequest getObjectRequest = GetObjectRequest.builder()
-                    .bucket(cloudConfig.getBucketName())
-                    .key(filePath)
-                    .build();
+    public Resource load(String s3Key) {
+        GetObjectRequest getObjectRequest = GetObjectRequest.builder()
+                .bucket(cloudConfig.getPrivateBucketName())
+                .key(s3Key)
+                .build();
 
-            var s3ObjectStream = s3Client.getObject(getObjectRequest);
-            return new InputStreamResource(s3ObjectStream);
+        ResponseInputStream<GetObjectResponse> inputStream = s3Client.getObject(getObjectRequest);
+        return new InputStreamResource(inputStream);
+    }
 
-        } catch (Exception e) {
-            throw new CloudReadException("Could not read file from DigitalOcean Spaces at path: " + filePath, e);
-        }
+    //for private buckets
+    @Override
+    @ExecutionTime
+    public String generatePresignedUrl(String s3Key) {
+        GetObjectRequest getObjectRequest = GetObjectRequest.builder()
+                .bucket(cloudConfig.getPrivateBucketName())
+                .key(s3Key)
+                .build();
+
+        GetObjectPresignRequest getObjectPresignRequest = GetObjectPresignRequest.builder()
+                .signatureDuration(Duration.ofMinutes(15))
+                .getObjectRequest(getObjectRequest)
+                .build();
+
+        PresignedGetObjectRequest presignedRequest = s3Presigner.presignGetObject(getObjectPresignRequest);
+        return presignedRequest.url().toString();
+    }
+
+    //for downloading documents
+    @ExecutionTime
+    public String downloadPresignedUrl(String s3Key, String downloadFilename) {
+        GetObjectRequest getObjectRequest = GetObjectRequest.builder()
+                .bucket(cloudConfig.getPrivateBucketName())
+                .key(s3Key)
+                .responseContentDisposition("attachment; filename=\"" + downloadFilename + "\"")
+                .build();
+
+        GetObjectPresignRequest getObjectPresignRequest = GetObjectPresignRequest.builder()
+                .signatureDuration(Duration.ofMinutes(15))
+                .getObjectRequest(getObjectRequest)
+                .build();
+
+        return s3Presigner.presignGetObject(getObjectPresignRequest).url().toString();
     }
 
     @Override
-    @ExecutionTime
-    public Resource loadLibraryDocument(String subDir, String fileName) {
-        DocumentLibraryDirectories.validate(subDir);
+    public void delete(String s3Key) {
+        DeleteObjectRequest deleteObjectRequest = DeleteObjectRequest.builder()
+                .bucket(cloudConfig.getPrivateBucketName())
+                .key(s3Key)
+                .build();
 
-        try {
-            String key = buildLibraryKey(subDir, fileName);
-            GetObjectRequest getObjectRequest = GetObjectRequest.builder()
-                    .bucket(cloudConfig.getBucketName())
-                    .key(key)
-                    .build();
-
-            return new InputStreamResource(s3Client.getObject(getObjectRequest));
-        } catch (Exception e) {
-            throw new CloudReadException("Could not read library file from DigitalOcean Spaces: " + fileName, e);
-        }
-    }
-
-    @Override
-    @ExecutionTime
-    public String probeContentType(String subDir, String fileName) {
-        DocumentLibraryDirectories.validate(subDir);
-
-        try {
-            String key = buildLibraryKey(subDir, fileName);
-            return s3Client.headObject(HeadObjectRequest.builder()
-                            .bucket(cloudConfig.getBucketName())
-                            .key(key)
-                            .build())
-                    .contentType();
-        } catch (Exception e) {
-            return "application/octet-stream";
-        }
-    }
-
-    @Override
-    @ExecutionTime
-    public void delete(String filePath) {
-        try {
-            DeleteObjectRequest deleteObjectRequest = DeleteObjectRequest.builder()
-                    .bucket(cloudConfig.getBucketName())
-                    .key(filePath)
-                    .build();
-
-            s3Client.deleteObject(deleteObjectRequest);
-
-        } catch (Exception e) {
-            throw new CloudReadException("Failed to delete file from DigitalOcean Spaces: " + filePath, e);
-        }
-    }
-
-    @Override
-    @ExecutionTime
-    public String generateDownloadUrl(String filePath) {
-        try {
-            GetObjectRequest getObjectRequest = GetObjectRequest.builder()
-                    .bucket(cloudConfig.getBucketName())
-                    .key(filePath)
-                    .build();
-
-            GetObjectPresignRequest presignRequest = GetObjectPresignRequest.builder()
-                    .signatureDuration(Duration.ofMinutes(15))
-                    .getObjectRequest(getObjectRequest)
-                    .build();
-
-            return s3Presigner.presignGetObject(presignRequest).url().toString();
-
-        } catch (Exception e) {
-            throw new CloudReadException("Failed to generate secure download link for: " + filePath, e);
-        }
-    }
-
-    private String buildLibraryKey(String subDir, String fileName) {
-        return subDir + "/" + fileName;
+        s3Client.deleteObject(deleteObjectRequest);
     }
 }

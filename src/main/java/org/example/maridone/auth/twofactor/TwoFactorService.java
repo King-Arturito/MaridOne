@@ -3,7 +3,7 @@ package org.example.maridone.auth.twofactor;
 import org.example.maridone.core.user.UserAccount;
 import org.example.maridone.core.user.UserAccountRepository;
 import org.example.maridone.exception.notfound.AccountNotFoundException;
-import org.example.maridone.exception.badrequest.UnauthorizedAccessException;
+import org.example.maridone.exception.unauthorized.UnauthorizedAccessException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -21,7 +21,7 @@ public class TwoFactorService {
     @Transactional
     public TwoFactorSetupResponse generateSetupDetails(String username) {
         UserAccount userAccount = userAccountRepository.findByUsername(username)
-                .orElseThrow(() -> new AccountNotFoundException("Account not found"));
+                .orElseThrow(() -> new AccountNotFoundException("UserAccount with: " + username + " not found."));
 
         //generate a cryptographic secret
         String secret = totpService.generateSecret();
@@ -41,7 +41,7 @@ public class TwoFactorService {
     @Transactional
     public void confirmAndEnable2fa(String username, String code) {
         UserAccount userAccount = userAccountRepository.findByUsername(username)
-                .orElseThrow(() -> new AccountNotFoundException("Account not found"));
+                .orElseThrow(() -> new AccountNotFoundException("UserAccount with: " + username + " not found."));
 
         String savedSecret = userAccount.getTwoFactorSecret();
         if (savedSecret == null) {
@@ -65,7 +65,7 @@ public class TwoFactorService {
     @Transactional
     public Void disable2fa(String username) {
         UserAccount userAccount = userAccountRepository.findByUsername(username)
-                .orElseThrow(() -> new AccountNotFoundException("Account not found"));
+                .orElseThrow(() -> new AccountNotFoundException("UserAccount with: " + username + " not found."));
 
         userAccount.setTwoFactorEnabled(false);
         userAccount.setTwoFactorSecret(null);

@@ -6,20 +6,22 @@ import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.stereotype.Service;
 import org.springframework.web.util.UriComponentsBuilder;
 
+import java.net.URI;
+
 @Service
 //todo: change to prod
 public class EmailService {
 
     private final JavaMailSender mailSender;
-    private final String apiUrl;
+    private final URI apiUrl;
 
     public EmailService(JavaMailSender mailSender, DefaultConfig defaultConfig) {
         this.mailSender = mailSender;
-        this.apiUrl = defaultConfig.getApiUrlOrDefault();
+        this.apiUrl = defaultConfig.getApiUrl();
     }
 
     public void sendVerificationEmail(String toEmail, String jwtToken) {
-        String verifyUrl = UriComponentsBuilder.fromUriString(apiUrl)
+        String verifyUrl = UriComponentsBuilder.fromUri(apiUrl)
                 .path("/api/auth/verify-email")
                 .queryParam("token", jwtToken)
                 .build()

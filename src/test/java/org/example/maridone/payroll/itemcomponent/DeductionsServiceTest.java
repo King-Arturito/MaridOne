@@ -3,7 +3,7 @@ package org.example.maridone.payroll.itemcomponent;
 import org.example.maridone.enums.DeductionType;
 import org.example.maridone.enums.PayrollStatus;
 import org.example.maridone.enums.RunType;
-import org.example.maridone.exception.unauthorized.InvalidActionException;
+import org.example.maridone.exception.badrequest.InvalidActionException;
 import org.example.maridone.payroll.dto.DeductionsDto;
 import org.example.maridone.payroll.item.PayrollItem;
 import org.example.maridone.payroll.item.component.DeductionsLine;

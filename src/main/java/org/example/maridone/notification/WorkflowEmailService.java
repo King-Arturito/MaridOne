@@ -409,7 +409,7 @@ public class WorkflowEmailService {
     }
 
     private String resolvePortalUrl() {
-        String configuredUrl = defaultConfig.getUrl();
+        String configuredUrl = defaultConfig.getUrl().toString();
         return StringUtils.hasText(configuredUrl) ? configuredUrl.trim() : "http://localhost:5173";
     }
 

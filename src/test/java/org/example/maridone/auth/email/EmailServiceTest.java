@@ -10,6 +10,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 
+import java.net.URI;
+
 import static org.mockito.Mockito.verify;
 
 @ExtendWith(MockitoExtension.class)
@@ -21,8 +23,8 @@ class EmailServiceTest {
     @Test
     void sendVerificationEmail_ShouldUseBackendVerificationEndpoint() {
         DefaultConfig config = new DefaultConfig();
-        config.setUrl("http://localhost:5173");
-        config.setApiUrl("http://localhost:8080");
+        config.setUrl(URI.create("http://localhost:5173"));
+        config.setApiUrl(URI.create("http://localhost:8080"));
 
         EmailService emailService = new EmailService(mailSender, config);
 

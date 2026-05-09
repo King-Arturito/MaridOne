@@ -1,7 +1,13 @@
 package org.example.maridone.exception.badrequest;
 
-public class BadCredentialsException extends RuntimeException {
+import org.example.maridone.enums.ErrorCode;
+import org.example.maridone.exception.BaseException;
+
+public class BadCredentialsException extends BaseException {
     public BadCredentialsException() {
-        super("Invalid username or password");
+        super(
+                ErrorCode.BAD_CREDENTIALS,
+                "Invalid username or password"
+        );
     }
 }

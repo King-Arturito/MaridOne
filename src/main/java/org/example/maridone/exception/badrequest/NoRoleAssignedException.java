@@ -1,8 +1,14 @@
 package org.example.maridone.exception.badrequest;
 
 
-public class NoRoleAssignedException extends RuntimeException{
+import org.example.maridone.enums.ErrorCode;
+import org.example.maridone.exception.BaseException;
+
+public class NoRoleAssignedException extends BaseException {
     public NoRoleAssignedException(String message) {
-        super(message);
+        super(
+                ErrorCode.NO_ROLE_ASSIGNED,
+                message
+        );
     }
 }

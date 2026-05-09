@@ -4,7 +4,11 @@ public enum Directories {
     PAYSLIP("payslip"),
     LEAVE_REQUEST("leave-request"),
     MATERIALS("training-materials"),
-    DISPUTE("dispute-request");
+    DISPUTE("dispute-request"),
+    PAYROLL_ITEM("payroll-item"),
+    OVERTIME("overtime-request"),
+    PERSONAL("personal-files"),
+    PUBLIC("public-documents");
 
     private String displayName;
 

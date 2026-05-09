@@ -7,7 +7,7 @@ import org.example.maridone.core.user.UserAccountRepository;
 import org.example.maridone.enums.EmploymentStatus;
 import org.example.maridone.exception.notfound.AccountNotFoundException;
 import org.example.maridone.exception.notfound.EmployeeNotFoundException;
-import org.example.maridone.exception.unauthorized.InvalidActionException;
+import org.example.maridone.exception.badrequest.InvalidActionException;
 import org.example.maridone.leave.request.LeaveRequest;
 import org.example.maridone.leave.request.LeaveRequestRepository;
 import org.example.maridone.log.attendance.AttendanceLog;
@@ -31,7 +31,6 @@ import java.time.LocalTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -90,7 +89,7 @@ public class AttendanceReportService {
         validateDateRange(from, to);
         Long managerId = userAccountRepository.findEmployeeIdByUsername(username);
         if (managerId == null) {
-            throw new AccountNotFoundException(username);
+            throw new AccountNotFoundException("UserAccount with: " + username + " not found.");
         }
 
         List<Employee> employees;

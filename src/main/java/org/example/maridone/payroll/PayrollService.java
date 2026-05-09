@@ -36,7 +36,7 @@ import org.example.maridone.enums.Position;
 import org.example.maridone.enums.RunType;
 import org.example.maridone.enums.Status;
 import org.example.maridone.exception.notfound.RunNotFoundException;
-import org.example.maridone.exception.unauthorized.InvalidActionException;
+import org.example.maridone.exception.badrequest.InvalidActionException;
 import org.example.maridone.holiday.HolidayLookup;
 import org.example.maridone.holiday.HolidayService;
 import org.example.maridone.leave.request.LeaveRequest;

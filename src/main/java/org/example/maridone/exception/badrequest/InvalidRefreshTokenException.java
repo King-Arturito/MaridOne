@@ -1,7 +1,12 @@
 package org.example.maridone.exception.badrequest;
 
-public class InvalidRefreshTokenException extends RuntimeException {
+import org.example.maridone.enums.ErrorCode;
+import org.example.maridone.exception.BaseException;
+
+public class InvalidRefreshTokenException extends BaseException {
     public InvalidRefreshTokenException() {
-        super("Invalid or expired refresh token.");
+        super(
+                ErrorCode.INVALID_REFRESH_TOKEN,
+                "Invalid or expired refresh token.");
     }
 }

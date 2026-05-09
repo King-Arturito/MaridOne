@@ -5,7 +5,8 @@ import org.example.maridone.auth.email.EmailService;
 import org.example.maridone.auth.twofactor.TotpService;
 import org.example.maridone.core.user.UserAccount;
 import org.example.maridone.core.user.UserAccountRepository;
-import org.example.maridone.exception.badrequest.UnauthorizedAccessException;
+import org.example.maridone.exception.preconditionrequired.SensitiveAccessRequiredException;
+import org.example.maridone.exception.unauthorized.UnauthorizedAccessException;
 import org.example.maridone.exception.notfound.AccountNotFoundException;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -83,7 +84,8 @@ public class SensitiveAccessService {
         emails.forEach(email -> emailService.sendVerificationCode(email, tokenToSend));
     }
 
-    public void assertHrSensitiveAccess(Authentication authentication) {
+    public void assertSensitiveAccess(Authentication authentication) {
+        //remove this if statement if ever we want to assert sensitive access for all users
         if (!hasAuthority(authentication, "ROLE_HR")) {
             return;
         }
@@ -146,7 +148,7 @@ public class SensitiveAccessService {
 
     private UserAccount findAccount(String username) {
         return userAccountRepository.findByUsername(username)
-                .orElseThrow(() -> new AccountNotFoundException("username of: " + username));
+                .orElseThrow(() -> new AccountNotFoundException(username));
     }
 
     private boolean hasAuthority(Authentication authentication, String authority) {

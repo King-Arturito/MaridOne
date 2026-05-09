@@ -112,7 +112,7 @@ public class AuthController {
     }
 
     private URI buildEmailVerificationRedirect(String status, String message) {
-        return UriComponentsBuilder.fromUriString(defaultConfig.getUrl())
+        return UriComponentsBuilder.fromUri(defaultConfig.getUrl())
                 .path("/verify-email")
                 .queryParam("status", status)
                 .queryParam("message", message)

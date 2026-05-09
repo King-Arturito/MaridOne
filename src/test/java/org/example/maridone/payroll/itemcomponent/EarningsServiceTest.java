@@ -5,7 +5,7 @@ import org.example.maridone.core.employee.Employee;
 import org.example.maridone.enums.EarningsType;
 import org.example.maridone.enums.PayrollStatus;
 import org.example.maridone.enums.RunType;
-import org.example.maridone.exception.unauthorized.InvalidActionException;
+import org.example.maridone.exception.badrequest.InvalidActionException;
 import org.example.maridone.holiday.HolidayLookup;
 import org.example.maridone.holiday.HolidayService;
 import org.example.maridone.overtime.OvertimeRequest;
