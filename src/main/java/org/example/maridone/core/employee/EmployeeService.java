@@ -2,6 +2,8 @@ package org.example.maridone.core.employee;
 
 import org.example.maridone.annotation.ExecutionTime;
 import org.example.maridone.config.PayrollConfig;
+import org.example.maridone.core.bank.BankAccount;
+import org.example.maridone.core.bank.BankService;
 import org.example.maridone.core.dto.EmployeeDetailsDto;
 import org.example.maridone.core.dto.EmployeeOptionDto;
 import org.example.maridone.core.dto.EmployeeRequestDto;
@@ -19,6 +21,8 @@ import org.example.maridone.enums.ExemptionStatus;
 import org.example.maridone.enums.LeaveType;
 import org.example.maridone.enums.ManagerTitle;
 import org.example.maridone.enums.Position;
+import org.example.maridone.enums.SeparationReason;
+import org.example.maridone.enums.AccountStatus;
 import org.example.maridone.leave.balance.LeaveBalance;
 import org.example.maridone.leave.balance.LeaveBalanceRepository;
 import org.example.maridone.leave.LeaveBalancePolicy;
@@ -62,6 +66,7 @@ public class EmployeeService {
     private final EmployeeSeparationRepository employeeSeparationRepository;
     private final LeaveRequestRepository leaveRequestRepository;
     private final OvertimeRequestRepository overtimeRequestRepository;
+    private final BankService bankService;
 
     EmployeeService(EmployeeRepository employeeRepository,
                     CoreMapper coreMapper,
@@ -73,7 +78,8 @@ public class EmployeeService {
                     LeaveBalanceRepository leaveBalanceRepository,
                     EmployeeSeparationRepository employeeSeparationRepository,
                     LeaveRequestRepository leaveRequestRepository,
-                    OvertimeRequestRepository overtimeRequestRepository) {
+                    OvertimeRequestRepository overtimeRequestRepository,
+                    BankService bankService) {
         this.employeeRepository = employeeRepository;
         this.coreMapper = coreMapper;
         this.userAccountRepository = userAccountRepository;
@@ -85,6 +91,7 @@ public class EmployeeService {
         this.employeeSeparationRepository = employeeSeparationRepository;
         this.leaveRequestRepository = leaveRequestRepository;
         this.overtimeRequestRepository = overtimeRequestRepository;
+        this.bankService = bankService;
     }
 
 
@@ -104,6 +111,7 @@ public class EmployeeService {
         applyDepartmentAssignment(employee, employeeRequestDto);
         employee.setManager(resolveAssignedManager(employee, employeeRequestDto, null));
         employeeRepository.save(employee);
+        applyBankAccountUpdate(employee, employeeRequestDto);
         shiftService.createShifts(employee);
         seedDefaultLeaveBalances(employee);
         return toEmployeeResponse(employee);
@@ -241,6 +249,7 @@ public class EmployeeService {
         }
 
         employeeRepository.save(emp);
+        applyBankAccountUpdate(emp, updated);
 
         return toEmployeeResponse(emp);
     }
@@ -271,6 +280,7 @@ public class EmployeeService {
         Optional.ofNullable(updated.getEmergencyContactNumber()).ifPresent(emp::setEmergencyContactNumber);
 
         employeeRepository.save(emp);
+        applyBankAccountUpdate(emp, updated);
         return toEmployeeResponse(emp);
     }
 
@@ -314,6 +324,7 @@ public class EmployeeService {
         response.setManagerName(resolveManagerName(employee));
         response.setManagerHeadLabel(resolveManagerHeadLabel(employee));
         response.setUserAccountName(findUsername(employee.getEmployeeId()));
+        response.setAccountStatus(findAccountStatus(employee.getEmployeeId()));
         response.setShiftSchedules(resolveShiftSchedules(employee.getEmployeeId(), schedulesByEmployeeId));
         applyLatestSeparation(response, employee);
         return response;
@@ -361,8 +372,58 @@ public class EmployeeService {
         response.setManagerName(resolveManagerName(employee));
         response.setManagerHeadLabel(resolveManagerHeadLabel(employee));
         response.setUserAccountName(findUsername(employee.getEmployeeId()));
+        response.setAccountStatus(findAccountStatus(employee.getEmployeeId()));
+        applyBankAccounts(response, employee);
         applyLatestSeparation(response, employee);
         return response;
+    }
+
+    private void applyBankAccounts(EmployeeDetailsDto response, Employee employee) {
+        if (response == null || employee == null || employee.getEmployeeId() == null) {
+            return;
+        }
+
+        List<BankAccount> bankAccounts = bankService.getBankAccounts(employee.getEmployeeId());
+        response.setBankAccounts(coreMapper.toBankAccountDtos(bankAccounts));
+        if (bankAccounts.isEmpty()) {
+            return;
+        }
+
+        BankAccount account = bankAccounts.get(0);
+        response.setBankName(account.getBankName());
+        response.setBankAccountNumber(account.getAccountNumber());
+        response.setBankAccountHolder(formatEmployeeName(employee));
+    }
+
+    private void applyBankAccountUpdate(Employee employee, EmployeeRequestDto updated) {
+        if (!hasBankAccountPayload(updated)) {
+            return;
+        }
+
+        String bankName = normalizeOptionalText(updated.getBankName());
+        String bankAccountNumber = normalizeOptionalText(updated.getBankAccountNumber());
+
+        if (bankName == null && bankAccountNumber == null) {
+            return;
+        }
+
+        if (bankName == null || bankAccountNumber == null) {
+            throw new InvalidActionException("Bank name and bank account number are required when updating bank details.");
+        }
+
+        bankService.upsertPrimaryBankAccount(employee, bankName, bankAccountNumber);
+    }
+
+    private boolean hasBankAccountPayload(EmployeeRequestDto updated) {
+        return updated != null
+                && (updated.getBankName() != null
+                || updated.getBankAccountNumber() != null);
+    }
+
+    private AccountStatus findAccountStatus(Long employeeId) {
+        return userAccountRepository.findByEmployee_EmployeeId(employeeId)
+                .map(userAccount -> userAccount.getAccountStatus())
+                .orElse(null);
     }
 
     private void recordSeparation(Employee employee, EmployeeRequestDto request, String actorUsername) {
@@ -511,6 +572,14 @@ public class EmployeeService {
     }
 
     private String normalizeOptionalEmail(String value) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    private String normalizeOptionalText(String value) {
         if (value == null) {
             return null;
         }

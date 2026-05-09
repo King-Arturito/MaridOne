@@ -2,18 +2,17 @@ package org.example.maridone.core.bank;
 
 import jakarta.validation.Valid;
 import org.example.maridone.annotation.ExecutionTime;
-import org.example.maridone.common.CommonSpecs;
 import org.example.maridone.core.dto.BankAccountDto;
 import org.example.maridone.core.employee.Employee;
 import org.example.maridone.core.employee.EmployeeRepository;
-import org.example.maridone.exception.unauthorized.BankInactiveException;
 import org.example.maridone.exception.notfound.BankNotFoundException;
 import org.example.maridone.exception.notfound.EmployeeNotFoundException;
-import org.springframework.data.jpa.domain.Specification;
+import org.example.maridone.exception.unauthorized.BankInactiveException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Optional;
 
 @Service
 public class BankService {
@@ -41,9 +40,13 @@ public class BankService {
 
     @Transactional
     @ExecutionTime
-    public BankAccount updateBankAccount(@Valid BankAccountDto payload) {
+    public BankAccount updateBankAccount(Long empId, @Valid BankAccountDto payload) {
+        employeeRepository.findById(empId).orElseThrow(() -> new EmployeeNotFoundException(empId));
         BankAccount bankAccount = bankAccountRepository.findById(payload.getBankId()).orElse(null);
         if (bankAccount == null) {
+            throw new BankNotFoundException("No bank accounts found");
+        }
+        if (!empId.equals(bankAccount.getEmployeeId())) {
             throw new BankNotFoundException("No bank accounts found");
         }
         if (bankAccount.getActive() == Boolean.FALSE) {
@@ -58,11 +61,31 @@ public class BankService {
     @ExecutionTime
     public List<BankAccount> getBankAccounts(Long empId) {
         employeeRepository.findById(empId).orElseThrow(() -> new EmployeeNotFoundException(empId));
+        return bankAccountRepository.findAllByEmployeeIdAndIsActiveTrueOrderByBankIdDesc(empId);
+    }
 
-        Specification<BankAccount> specs = Specification.allOf(
-                CommonSpecs.fieldEquals("isActive", Boolean.TRUE),
-                CommonSpecs.fieldEquals("employeeId", empId)
-        );
-        return bankAccountRepository.findAll(specs);
+    @ExecutionTime
+    public Optional<BankAccount> getPrimaryBankAccount(Long empId) {
+        return getBankAccounts(empId).stream().findFirst();
+    }
+
+    @Transactional
+    @ExecutionTime
+    public BankAccount upsertPrimaryBankAccount(Employee employee, String bankName, String accountNumber) {
+        if (employee == null || employee.getEmployeeId() == null) {
+            throw new IllegalArgumentException("Employee is required when saving bank details.");
+        }
+
+        BankAccount bankAccount = getPrimaryBankAccount(employee.getEmployeeId()).orElseGet(() -> {
+            BankAccount created = new BankAccount();
+            created.setEmployee(employee);
+            created.setActive(Boolean.TRUE);
+            return created;
+        });
+
+        bankAccount.setEmployee(employee);
+        bankAccount.setBankName(bankName);
+        bankAccount.setAccountNumber(accountNumber);
+        return bankAccountRepository.save(bankAccount);
     }
 }

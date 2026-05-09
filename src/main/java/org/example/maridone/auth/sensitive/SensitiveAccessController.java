@@ -17,13 +17,13 @@ public class SensitiveAccessController {
     }
 
     @GetMapping("/state")
-    @PreAuthorize("hasAnyRole('HR', 'MANAGEMENT')")
+    @PreAuthorize("hasAnyRole('HR', 'MANAGEMENT', 'ACCOUNTING')")
     public SensitiveAccessStateDto getState(Authentication authentication) {
         return sensitiveAccessService.getState(authentication.getName());
     }
 
     @PostMapping("/verify")
-    @PreAuthorize("hasAnyRole('HR', 'MANAGEMENT')")
+    @PreAuthorize("hasAnyRole('HR', 'MANAGEMENT', 'ACCOUNTING')")
     @AuditLog
     public ResponseEntity<SensitiveAccessVerifyResponse> verify(Authentication authentication,
                                                                 @RequestBody SensitiveAccessVerifyRequest request) {
@@ -31,7 +31,7 @@ public class SensitiveAccessController {
     }
 
     @PostMapping("/send-email-code")
-    @PreAuthorize("hasAnyRole('HR', 'MANAGEMENT')")
+    @PreAuthorize("hasAnyRole('HR', 'MANAGEMENT', 'ACCOUNTING')")
     @AuditLog
     public ResponseEntity<Void> sendEmailCode(Authentication authentication) {
         sensitiveAccessService.sendEmailCode(authentication.getName());

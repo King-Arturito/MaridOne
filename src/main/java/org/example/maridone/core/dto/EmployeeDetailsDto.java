@@ -2,8 +2,10 @@ package org.example.maridone.core.dto;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.List;
 
 import org.example.maridone.embeddable.Address;
+import org.example.maridone.enums.AccountStatus;
 import org.example.maridone.enums.EmploymentStatus;
 import org.example.maridone.enums.ExemptionStatus;
 import org.example.maridone.enums.Gender;
@@ -30,6 +32,7 @@ public class EmployeeDetailsDto {
     private Position position;
     private String department;
     private String userAccountName;
+    private AccountStatus accountStatus;
     private Long managerId;
     private String managerName;
     private String managerHeadLabel;
@@ -48,6 +51,10 @@ public class EmployeeDetailsDto {
     private String emergencyContactName;
     private String emergencyContactRelationship;
     private String emergencyContactNumber;
+    private String bankName;
+    private String bankAccountNumber;
+    private String bankAccountHolder;
+    private List<BankAccountDto> bankAccounts;
 
     public Long getId() {
         return id;
@@ -265,6 +272,14 @@ public class EmployeeDetailsDto {
         this.userAccountName = userAccountName;
     }
 
+    public AccountStatus getAccountStatus() {
+        return accountStatus;
+    }
+
+    public void setAccountStatus(AccountStatus accountStatus) {
+        this.accountStatus = accountStatus;
+    }
+
     public String getSssNumber() {
         return sssNumber;
     }
@@ -319,5 +334,37 @@ public class EmployeeDetailsDto {
 
     public void setEmergencyContactNumber(String emergencyContactNumber) {
         this.emergencyContactNumber = emergencyContactNumber;
+    }
+
+    public String getBankName() {
+        return bankName;
+    }
+
+    public void setBankName(String bankName) {
+        this.bankName = bankName;
+    }
+
+    public String getBankAccountNumber() {
+        return bankAccountNumber;
+    }
+
+    public void setBankAccountNumber(String bankAccountNumber) {
+        this.bankAccountNumber = bankAccountNumber;
+    }
+
+    public String getBankAccountHolder() {
+        return bankAccountHolder;
+    }
+
+    public void setBankAccountHolder(String bankAccountHolder) {
+        this.bankAccountHolder = bankAccountHolder;
+    }
+
+    public List<BankAccountDto> getBankAccounts() {
+        return bankAccounts;
+    }
+
+    public void setBankAccounts(List<BankAccountDto> bankAccounts) {
+        this.bankAccounts = bankAccounts;
     }
 }

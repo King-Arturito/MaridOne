@@ -2,6 +2,7 @@ package org.example.maridone.log;
 
 import org.example.maridone.annotation.ExecutionTime;
 import org.example.maridone.common.CommonSpecs;
+import org.example.maridone.log.filter.ActivityLogFilter;
 import org.example.maridone.log.activity.ActivityLog;
 import org.example.maridone.log.dto.ActivityRequestDto;
 import org.springframework.data.domain.Page;
@@ -35,9 +36,11 @@ public class ActivityLogService {
     }
 
     @ExecutionTime
-    public Page<ActivityLog> getActivity(Long empId, Pageable pageable) {
+    public Page<ActivityLog> getActivity(Long empId, ActivityLogFilter filter, Pageable pageable) {
         Specification<ActivityLog> spec = Specification.allOf(
-                CommonSpecs.fieldEquals("employeeId", empId)
+                CommonSpecs.fieldEquals("employeeId", empId),
+                CommonSpecs.fieldGreaterThanOrEqual("timestamp", filter != null ? filter.startDate() : null),
+                CommonSpecs.fieldLessThanOrEqual("timestamp", filter != null ? filter.endDate() : null)
         );
 
         return activityLogRepository.findAll(spec, pageable);

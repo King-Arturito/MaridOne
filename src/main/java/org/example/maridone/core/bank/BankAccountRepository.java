@@ -8,4 +8,5 @@ import org.springframework.stereotype.Repository;
 
 @Repository
 public interface BankAccountRepository extends JpaRepository<BankAccount, Long>, JpaSpecificationExecutor<BankAccount> {
+    java.util.List<BankAccount> findAllByEmployeeIdAndIsActiveTrueOrderByBankIdDesc(Long employeeId);
 }

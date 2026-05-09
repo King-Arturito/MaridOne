@@ -11,6 +11,7 @@ import org.example.maridone.core.user.UserAccount;
 import org.example.maridone.core.user.UserAccountRepository;
 import org.example.maridone.core.user.UserLoginService;
 import org.example.maridone.enums.EmploymentStatus;
+import org.example.maridone.enums.AccountStatus;
 import org.example.maridone.exception.notfound.AccountNotFoundException;
 import org.example.maridone.exception.badrequest.InvalidRefreshTokenException;
 import org.example.maridone.exception.unauthorized.UnauthorizedAccessException;
@@ -276,8 +277,8 @@ public class AuthService {
         if (status == EmploymentStatus.TERMINATED) {
             throw new UnauthorizedAccessException("You may not login. Your account has been terminated.");
         }
-        if (status == EmploymentStatus.SUSPENDED) {
-            throw new UnauthorizedAccessException("You are currently suspended.");
+        if (userAccount.getAccountStatus() == AccountStatus.INACTIVE) {
+            throw new UnauthorizedAccessException("Your portal access is currently disabled.");
         }
     }
 

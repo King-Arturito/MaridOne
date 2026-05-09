@@ -10,7 +10,7 @@ public class UpdateUserAccountDto {
     @NotNull
     private String password;
     @NotNull
-    private final AccountStatus accountStatus = AccountStatus.ACTIVE;
+    private AccountStatus accountStatus = AccountStatus.ACTIVE;
     @NotNull
     private Long employeeId;
 
@@ -32,6 +32,10 @@ public class UpdateUserAccountDto {
 
     public AccountStatus getAccountStatus() {
         return accountStatus;
+    }
+
+    public void setAccountStatus(AccountStatus accountStatus) {
+        this.accountStatus = accountStatus;
     }
 
     public Long getEmployeeId() {

@@ -9,6 +9,8 @@ public record ActivityLogFilter(
         Long employeeId,
         Activity activityType,
         String message,
-        Instant timestamp
+        Instant timestamp,
+        Instant startDate,
+        Instant endDate
 )
 {}

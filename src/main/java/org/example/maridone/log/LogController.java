@@ -1,6 +1,7 @@
 package org.example.maridone.log;
 
 import org.example.maridone.log.activity.ActivityLog;
+import org.example.maridone.log.filter.ActivityLogFilter;
 import org.example.maridone.log.attendance.AttendanceLog;
 import org.example.maridone.log.dto.ActivityRequestDto;
 import org.example.maridone.log.dto.AttendanceImportSummaryDto;
@@ -140,7 +141,13 @@ public class LogController {
     @PreAuthorize("hasRole('HR')")
     public Page<ActivityLog> getActivity(
             @RequestParam(required = false) Long empId,
+            @RequestParam(required = false) java.time.Instant startDate,
+            @RequestParam(required = false) java.time.Instant endDate,
             @PageableDefault(size = 25, sort = "timestamp", direction = Sort.Direction.DESC) Pageable pageable) {
-        return activityLogService.getActivity(empId, pageable);
+        return activityLogService.getActivity(
+                empId,
+                new ActivityLogFilter(null, empId, null, null, null, startDate, endDate),
+                pageable
+        );
     }
 }
