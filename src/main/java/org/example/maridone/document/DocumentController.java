@@ -72,7 +72,7 @@ public class DocumentController {
 
     @GetMapping("/private/view/entity")
     @PreAuthorize("isAuthenticated()")
-    public String getPrivateDocumentByEntity(
+    public List<String> getPrivateDocumentByEntity(
             @RequestParam String connectedEntity,
             @RequestParam Long connectedId,
             Authentication authentication

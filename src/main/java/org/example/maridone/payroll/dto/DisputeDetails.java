@@ -3,9 +3,10 @@ package org.example.maridone.payroll.dto;
 import org.example.maridone.enums.Status;
 
 import java.time.Instant;
+import java.util.List;
 
 public class DisputeDetails {
-    private Long id;
+    private Long disputeId;
     private String subject;
     private String reason;
     private Status status;
@@ -15,32 +16,16 @@ public class DisputeDetails {
     private Long itemId;
     private Long employeeId;
     private String employeeName;
-    private Long pathId;
+    private List<Long> pathId;
 
     public DisputeDetails() {}
 
-    public DisputeDetails(Long id, String subject, String reason,
-                          Status status, Instant createdAt, Instant updatedAt,
-                          String statusReason, Long itemId, Long employeeId,
-                          String employeeName) {
-        this.id = id;
-        this.subject = subject;
-        this.reason = reason;
-        this.status = status;
-        this.createdAt = createdAt;
-        this.updatedAt = updatedAt;
-        this.statusReason = statusReason;
-        this.itemId = itemId;
-        this.employeeId = employeeId;
-        this.employeeName = employeeName;
+    public Long getDisputeId() {
+        return disputeId;
     }
 
-    public Long getId() {
-        return id;
-    }
-
-    public void setId(Long id) {
-        this.id = id;
+    public void setDisputeId(Long disputeId) {
+        this.disputeId = disputeId;
     }
 
     public String getSubject() {
@@ -115,11 +100,11 @@ public class DisputeDetails {
         this.employeeName = employeeName;
     }
 
-    public Long getPathId() {
+    public List<Long> getPathId() {
         return pathId;
     }
 
-    public void setPathId(Long pathId) {
+    public void setPathId(List<Long> pathId) {
         this.pathId = pathId;
     }
 }

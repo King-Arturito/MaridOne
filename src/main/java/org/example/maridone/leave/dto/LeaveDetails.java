@@ -3,6 +3,7 @@ package org.example.maridone.leave.dto;
 import org.example.maridone.enums.Status;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 public class LeaveDetails {
 
@@ -17,7 +18,7 @@ public class LeaveDetails {
     private String approverReason;
     private Boolean isPaid;
     //if it has document
-    private Long pathId;
+    private List<Long> pathId;
 
     public LeaveDetails() {}
 
@@ -116,11 +117,11 @@ public class LeaveDetails {
         isPaid = paid;
     }
 
-    public Long getPathId() {
+    public List<Long> getPathId() {
         return pathId;
     }
 
-    public void setPathId(Long pathId) {
+    public void setPathId(List<Long> pathId) {
         this.pathId = pathId;
     }
 }

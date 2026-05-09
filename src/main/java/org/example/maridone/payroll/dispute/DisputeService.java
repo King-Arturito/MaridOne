@@ -185,35 +185,22 @@ public class DisputeService {
     public DisputeDetails getDisputeRequestDetails(long disputeId) {
         DisputeRequest request = disputeRepository.findByIdWithEmployee(disputeId)
                 .orElseThrow(() -> new RequestNotFoundException("Dispute Request", disputeId));
-        DisputeResponseDto responseDto = payrollMapper.toResponseDto(request);
 
-        String username = request.getPayrollItem().getEmployee().getUserAccount().getUsername();
-
-        Specification<DocumentPath> spec = Specification.allOf(
-                CommonSpecs.fieldLike("filePath", Directories.DISPUTE.getDisplayName()),
-                DocumentSpecs.hasUsername(username)
-        );
+        List<DocumentPath> paths = documentPathRepository.findDocumentsByEntityAndId
+                (Directories.PAYROLL_ITEM.getDisplayName(), request.getPayrollItem().getItemId());
 
         DisputeDetails details = new DisputeDetails();
-        details.setId(responseDto.getId());
+        details.setDisputeId(request.getDisputeId());
         details.setSubject(request.getSubject());
-        details.setStatus(responseDto.getStatus());
-        details.setUpdatedAt(responseDto.getUpdatedAt());
-        details.setCreatedAt(responseDto.getCreatedAt());
-        details.setStatusReason(responseDto.getStatusReason());
-        details.setItemId(responseDto.getItemId());
-        details.setEmployeeId(responseDto.getEmployeeId());
-        details.setEmployeeName(responseDto.getEmployeeName());
+        details.setStatus(request.getStatus());
+        details.setUpdatedAt(request.getUpdatedAt());
+        details.setCreatedAt(request.getCreatedAt());
+        details.setStatusReason(request.getStatusReason());
+        details.setItemId(request.getPayrollItem().getItemId());
+        details.setEmployeeId(request.getPayrollItem().getEmployee().getEmployeeId());
+        details.setEmployeeName(request.getPayrollItem().getEmployee().getFirstName() + " " + request.getPayrollItem().getEmployee().getLastName());
 
-        Page<DocumentPath> result = documentPathRepository.findAll(
-                spec,
-                PageRequest.of(0, 1, Sort.by(Sort.Direction.DESC, "pathId"))
-        );
-
-        details.setPathId(result.stream()
-                .findFirst()
-                .map(DocumentPath::getPathId)
-                .orElse(null));
+        details.setPathId(paths.stream().map(DocumentPath::getPathId).toList());
         return details;
     }
 

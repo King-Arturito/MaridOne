@@ -209,11 +209,14 @@ public class DocumentService {
         return cloudStorageService.generatePresignedUrl(documentPath.getS3Key());
     }
 
-    public String getPrivateDocumentByEntity(String connectedEntity, Long connectedId) {
-        DocumentPath documentPath = documentPathRepository.findDocumentByEntityAndId(connectedEntity,connectedId)
-                .orElseThrow(() -> new DocumentNotFound("Document not found for this connectedEntity and connectedId"));
-
-        return cloudStorageService.generatePresignedUrl(documentPath.getS3Key());
+    public List<String> getPrivateDocumentByEntity(String connectedEntity, Long connectedId) {
+        List<DocumentPath> documentPath = documentPathRepository.findDocumentsByEntityAndId(connectedEntity,connectedId);
+        if (documentPath.isEmpty()) {
+            throw new DocumentNotFound("No documents found for this entity and id.");
+        }
+        return documentPath.stream()
+                .map(dp -> cloudStorageService.generatePresignedUrl(dp.getS3Key()))
+                .toList();
     }
 
     public List<DocumentResponseDto> getPrivateDocuments(String username, Authentication authentication) {

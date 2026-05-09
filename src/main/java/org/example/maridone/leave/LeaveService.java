@@ -971,19 +971,9 @@ public class LeaveService {
 
     public LeaveDetails getLeaveRequestDetails(Long requestId) {
         LeaveDetails details = leaveRequestRepository.getLeaveRequestDetails(requestId);
-        Specification<DocumentPath> spec = Specification.allOf(
-                CommonSpecs.fieldLike("filePath", "leave-request"),
-                DocumentSpecs.hasUsername(details.getUsername())
-        );
-        Page<DocumentPath> result = documentPathRepository.findAll(
-                spec,
-                PageRequest.of(0, 1, Sort.by(Sort.Direction.DESC, "pathId"))
-        );
 
-        details.setPathId(result.stream()
-                .findFirst()
-                .map(DocumentPath::getPathId)
-                .orElse(null));
+        List<DocumentPath> paths = documentPathRepository.findDocumentsByEntityAndId(Directories.LEAVE_REQUEST.getDisplayName(),requestId);
+        details.setPathId(paths.stream().map(DocumentPath::getPathId).toList());
         return details;
     }
 
