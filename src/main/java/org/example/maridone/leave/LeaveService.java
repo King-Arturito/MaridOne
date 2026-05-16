@@ -10,7 +10,6 @@ import org.example.maridone.config.PayrollConfig;
 import org.example.maridone.document.path.DocumentPathRepository;
 import org.example.maridone.document.DocumentService;
 import org.example.maridone.document.path.DocumentPath;
-import org.example.maridone.document.spec.DocumentSpecs;
 import org.example.maridone.enums.*;
 import org.example.maridone.core.employee.Employee;
 import org.example.maridone.core.employee.EmployeeRepository;
@@ -31,17 +30,17 @@ import org.example.maridone.leave.request.LeaveRequest;
 import org.example.maridone.leave.request.LeaveRequestRepository;
 import org.example.maridone.leave.spec.LeaveSpecs;
 import org.example.maridone.notification.NotificationMessageFormatter;
-import org.example.maridone.notification.NotificationService;
 import org.example.maridone.notification.WorkflowEmailService;
+import org.example.maridone.notification.event.BulkNotificationCreatedEvent;
+import org.example.maridone.notification.event.NotificationCreatedEvent;
 import org.example.maridone.overtime.OvertimeRequestRepository;
 import org.example.maridone.schedule.shift.DailyShiftRepository;
 import org.example.maridone.schedule.shift.DailyShiftSchedule;
 import org.example.maridone.schedule.shift.TemplateShiftRepository;
 import org.example.maridone.schedule.shift.TemplateShiftSchedule;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -81,10 +80,10 @@ public class LeaveService {
     private final PayrollConfig payrollConfig;
     private final DefaultConfig defaultConfig;
     private final DocumentConfig documentConfig;
-    private final NotificationService notificationService;
     private final OvertimeRequestRepository overtimeRequestRepository;
     private final WorkflowEmailService workflowEmailService;
     private final HolidayService holidayService;
+    private final ApplicationEventPublisher eventPublisher;
 
     public LeaveService(
             LeaveBalanceRepository leaveBalanceRepository,
@@ -99,10 +98,10 @@ public class LeaveService {
             PayrollConfig payrollConfig,
             DefaultConfig defaultConfig,
             DocumentConfig documentConfig,
-            NotificationService notificationService,
             OvertimeRequestRepository overtimeRequestRepository,
             WorkflowEmailService workflowEmailService,
-            HolidayService holidayService) {
+            HolidayService holidayService,
+            ApplicationEventPublisher eventPublisher) {
         this.leaveBalanceRepository = leaveBalanceRepository;
         this.leaveRequestRepository = leaveRequestRepository;
         this.employeeRepository = employeeRepository;
@@ -115,10 +114,10 @@ public class LeaveService {
         this.payrollConfig = payrollConfig;
         this.defaultConfig = defaultConfig;
         this.documentConfig = documentConfig;
-        this.notificationService = notificationService;
         this.overtimeRequestRepository = overtimeRequestRepository;
         this.workflowEmailService = workflowEmailService;
         this.holidayService = holidayService;
+        this.eventPublisher = eventPublisher;
     }
 
     @Transactional
@@ -201,7 +200,7 @@ public class LeaveService {
                 request.getStartDateTime().toLocalDate(),
                 request.getEndDateTime().toLocalDate()
         );
-        notifyHr("Leave request from " + employeeName + " (" + leaveDates + ") was cancelled.");
+        notifyRole("Leave request from " + employeeName + " (" + leaveDates + ") was cancelled.", Position.HR);
         notifyManager(
                 request.getEmployee(),
                 "Team leave request from " + employeeName + " (" + leaveDates + ") was cancelled."
@@ -342,8 +341,9 @@ public class LeaveService {
             );
             workflowEmailService.sendLeaveSubmittedToManager(emp, payload);
         } else {
-            notifyManagement("New leave request from " + emp.getFirstName() + " " + emp.getLastName()
-                    + " (" + payload.getStartDateTime().toLocalDate() + " to " + payload.getEndDateTime().toLocalDate() + ") is waiting for management review.");
+            notifyRole("New leave request from " + emp.getFirstName() + " " + emp.getLastName()
+                    + " (" + payload.getStartDateTime().toLocalDate() + " to " + payload.getEndDateTime().toLocalDate() + ") is waiting for management review.",
+                    Position.MANAGEMENT);
             workflowEmailService.sendLeaveSubmittedToManagement(emp, payload);
         }
         return requests;
@@ -773,21 +773,16 @@ public class LeaveService {
         if (manager == null || manager.getPosition() != Position.MANAGER) {
             return;
         }
-        notificationService.createNotification(manager, message, "HIGH");
+        eventPublisher.publishEvent(new NotificationCreatedEvent(List.of(manager.getEmployeeId()), message, "HIGH"));
+
     }
 
-    private void notifyHr(String message) {
-        List<Long> hrEmployeeIds = employeeRepository.findEmployeeIdsByPosition(Position.HR, EmploymentStatus.TERMINATED);
-        for (Long employeeId : hrEmployeeIds) {
-            notificationService.createNotification(employeeRepository.getReferenceById(employeeId), message, "HIGH");
-        }
-    }
-
-    private void notifyManagement(String message) {
-        List<Long> managementEmployeeIds = employeeRepository.findEmployeeIdsByPosition(Position.MANAGEMENT, EmploymentStatus.TERMINATED);
-        for (Long employeeId : managementEmployeeIds) {
-            notificationService.createNotification(employeeRepository.getReferenceById(employeeId), message, "HIGH");
-        }
+    private void notifyRole(String message, Position position) {
+        eventPublisher.publishEvent(new BulkNotificationCreatedEvent(
+                message,
+                "HIGH",
+                position
+        ));
     }
 
     private LeaveRequest handleManagerLeaveReview(LeaveRequest request, LeaveRequestDto payload, UserAccount user) {
@@ -817,7 +812,7 @@ public class LeaveService {
                     request.getStartDateTime().toLocalDate(),
                     request.getEndDateTime().toLocalDate()
             );
-            notifyHr("Leave request from " + employeeName + " (" + leaveDates + ") is ready for HR review.");
+            notifyRole("Leave request from " + employeeName + " (" + leaveDates + ") is ready for HR review.", Position.HR);
             notifyEmployee(
                     request.getEmployee(),
                     "Your leave request (" + leaveDates + ") was endorsed by " + reviewerLabel + " and is now waiting for HR review."
@@ -965,7 +960,7 @@ public class LeaveService {
         if (employee == null) {
             return;
         }
-        notificationService.createNotification(employee, message, "HIGH");
+        eventPublisher.publishEvent(new NotificationCreatedEvent(List.of(employee.getEmployeeId()), message, "HIGH"));
     }
 
 

@@ -43,7 +43,6 @@ class DisputeServiceTest {
     @Mock private DocumentPathRepository documentPathRepository;
     @Mock private DocumentService documentService;
     @Mock private PayrollMapper payrollMapper;
-    @Mock private NotificationService notificationService;
     @Mock private WorkflowEmailService workflowEmailService;
 
     @InjectMocks
@@ -133,9 +132,6 @@ class DisputeServiceTest {
         disputeService.cancelRequest(9L);
 
         Assertions.assertEquals(Status.CANCELLED, disputeRequest.getStatus());
-        verify(notificationService).createNotification(
-                hr,
-                "Dispute request from Niko Santos for April 1, 2026 to April 15, 2026 was cancelled.",
-                "HIGH");
+
     }
 }

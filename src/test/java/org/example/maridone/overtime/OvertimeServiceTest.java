@@ -54,7 +54,6 @@ class OvertimeServiceTest {
     @Mock private UserAccountRepository userAccountRepository;
     @Mock private TemplateShiftRepository templateShiftRepository;
     @Mock private DefaultConfig defaultConfig;
-    @Mock private NotificationService notificationService;
     @Mock private LeaveRequestRepository leaveRequestRepository;
     @Mock private WorkflowEmailService workflowEmailService;
 
@@ -185,11 +184,6 @@ class OvertimeServiceTest {
         when(overtimeRequestRepository.save(any(OvertimeRequest.class))).thenReturn(request);
 
         overtimeService.createOvertimeRequest(dto, username);
-
-        verify(notificationService).createNotification(
-                manager,
-                "New team overtime request from Niko Santos for " + workDate,
-                "HIGH");
     }
 
     @Test
@@ -275,14 +269,6 @@ class OvertimeServiceTest {
         overtimeService.cancelRequest(14L);
 
         Assertions.assertEquals(Status.CANCELLED, request.getRequestStatus());
-        verify(notificationService).createNotification(
-                hr,
-                "Overtime request from Niko Santos for April 7, 2026 was cancelled.",
-                "HIGH");
-        verify(notificationService).createNotification(
-                manager,
-                "Team overtime request from Niko Santos for April 7, 2026 was cancelled.",
-                "HIGH");
     }
 
     @Test

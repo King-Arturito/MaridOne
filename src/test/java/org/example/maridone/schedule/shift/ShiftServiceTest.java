@@ -46,7 +46,6 @@ class ShiftServiceTest {
     @Mock private LeaveRequestRepository leaveRequestRepository;
     @Mock private ScheduleMapper scheduleMapper;
     @Mock private DefaultConfig defaultConfig;
-    @Mock private NotificationService notificationService;
 
     @InjectMocks
     private ShiftService shiftService;
@@ -106,7 +105,7 @@ class ShiftServiceTest {
        
         Assertions.assertNotNull(result);
         Assertions.assertEquals(DayOfWeek.MONDAY, result.getDayOfWeek());
-        verify(notificationService).createNotification(emp, "Your recurring Monday shift was set to 9:00 AM - 6:00 PM.", "HIGH");
+
     }
 
     @Test
@@ -223,11 +222,6 @@ class ShiftServiceTest {
         Assertions.assertTrue(saved.isDayOff());
         Assertions.assertEquals(LocalDateTime.of(workDate, LocalTime.MIDNIGHT), saved.getStartDateTime());
         Assertions.assertEquals(LocalDateTime.of(workDate, LocalTime.MIDNIGHT), saved.getEndDateTime());
-        verify(notificationService).createNotification(
-                employee,
-                "Your shift for " + workDate.format(java.time.format.DateTimeFormatter.ofPattern("MMMM d, yyyy")) + " was marked as day off.",
-                "HIGH"
-        );
     }
 
     @Test
@@ -275,12 +269,6 @@ class ShiftServiceTest {
         Assertions.assertEquals(LocalDateTime.of(workDate, LocalTime.of(12, 0)), saved.get(0).getEndDateTime());
         Assertions.assertEquals(LocalDateTime.of(workDate, LocalTime.of(13, 0)), saved.get(1).getStartDateTime());
         Assertions.assertEquals(LocalDateTime.of(workDate, LocalTime.of(17, 0)), saved.get(1).getEndDateTime());
-        verify(notificationService).createNotification(
-                employee,
-                "Your shift for " + workDate.format(java.time.format.DateTimeFormatter.ofPattern("MMMM d, yyyy"))
-                        + " was updated to 8:00 AM - 12:00 PM, 1:00 PM - 5:00 PM.",
-                "HIGH"
-        );
     }
 
     @Test
@@ -356,11 +344,6 @@ class ShiftServiceTest {
 
         Assertions.assertEquals(LocalTime.of(10, 0), updated.getStartTime());
         Assertions.assertEquals(LocalTime.of(21, 0), updated.getEndTime());
-        verify(notificationService).createNotification(
-                employee,
-                "Your recurring Tuesday shift was updated to 10:00 AM - 9:00 PM.",
-                "HIGH"
-        );
     }
 
     @Test

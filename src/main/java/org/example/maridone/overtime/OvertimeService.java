@@ -8,7 +8,6 @@ import org.example.maridone.core.employee.EmployeeRepository;
 import org.example.maridone.core.spec.EmployeeSpecs;
 import org.example.maridone.core.user.UserAccount;
 import org.example.maridone.core.user.UserAccountRepository;
-import org.example.maridone.enums.EmploymentStatus;
 import org.example.maridone.enums.Position;
 import org.example.maridone.enums.Status;
 import org.example.maridone.exception.conflict.OverlappingDatesException;
@@ -18,8 +17,9 @@ import org.example.maridone.exception.badrequest.InvalidActionException;
 import org.example.maridone.exception.unauthorized.OvertimeException;
 import org.example.maridone.leave.request.LeaveRequestRepository;
 import org.example.maridone.notification.NotificationMessageFormatter;
-import org.example.maridone.notification.NotificationService;
 import org.example.maridone.notification.WorkflowEmailService;
+import org.example.maridone.notification.event.BulkNotificationCreatedEvent;
+import org.example.maridone.notification.event.NotificationCreatedEvent;
 import org.example.maridone.overtime.dto.OvertimeRequestDto;
 import org.example.maridone.overtime.dto.OvertimeResponseDto;
 import org.example.maridone.overtime.dto.OvertimeUpdateDto;
@@ -27,6 +27,7 @@ import org.example.maridone.overtime.mapper.OvertimeMapper;
 import org.example.maridone.overtime.spec.OvertimeSpecs;
 import org.example.maridone.schedule.shift.TemplateShiftRepository;
 import org.example.maridone.schedule.shift.TemplateShiftSchedule;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
@@ -49,9 +50,9 @@ public class OvertimeService {
     private final UserAccountRepository userAccountRepository;
     private final TemplateShiftRepository templateShiftRepository;
     private final DefaultConfig defaultConfig;
-    private final NotificationService notificationService;
     private final LeaveRequestRepository leaveRequestRepository;
     private final WorkflowEmailService workflowEmailService;
+    private final ApplicationEventPublisher eventPublisher;
 
     public OvertimeService(OvertimeRequestRepository overtimeRequestRepository,
                            OvertimeMapper overtimeMapper,
@@ -59,18 +60,18 @@ public class OvertimeService {
                            UserAccountRepository userAccountRepository,
                            TemplateShiftRepository templateShiftRepository,
                            DefaultConfig defaultConfig,
-                           NotificationService notificationService,
                            LeaveRequestRepository leaveRequestRepository,
-                           WorkflowEmailService workflowEmailService) {
+                           WorkflowEmailService workflowEmailService,
+                           ApplicationEventPublisher eventPublisher) {
         this.overtimeRequestRepository = overtimeRequestRepository;
         this.overtimeMapper = overtimeMapper;
         this.employeeRepository = employeeRepository;
         this.userAccountRepository = userAccountRepository;
         this.templateShiftRepository = templateShiftRepository;
         this.defaultConfig = defaultConfig;
-        this.notificationService = notificationService;
         this.leaveRequestRepository = leaveRequestRepository;
         this.workflowEmailService = workflowEmailService;
+        this.eventPublisher = eventPublisher;
     }
 
     @Transactional
@@ -109,8 +110,9 @@ public class OvertimeService {
             );
             workflowEmailService.sendOvertimeSubmittedToManager(savedRequest);
         } else {
-            notifyManagement("New overtime request from " + emp.getFirstName() + " " + emp.getLastName()
-                    + " for " + requestDto.getWorkDate() + " is waiting for management review.");
+            notifyRole("New overtime request from " + emp.getFirstName() + " " + emp.getLastName()
+                    + " for " + requestDto.getWorkDate() + " is waiting for management review.",
+                    Position.MANAGEMENT);
             workflowEmailService.sendOvertimeSubmittedToManagement(savedRequest);
         }
         return savedRequest;
@@ -202,7 +204,7 @@ public class OvertimeService {
         overtimeRequestRepository.save(overtimeRequest);
         String employeeName = NotificationMessageFormatter.formatEmployeeName(overtimeRequest.getEmployee());
         String workDate = NotificationMessageFormatter.formatDate(overtimeRequest.getWorkDate());
-        notifyHr("Overtime request from " + employeeName + " for " + workDate + " was cancelled.");
+        notifyRole("Overtime request from " + employeeName + " for " + workDate + " was cancelled.", Position.HR);
         notifyManager(
                 overtimeRequest.getEmployee(),
                 "Team overtime request from " + employeeName + " for " + workDate + " was cancelled."
@@ -255,22 +257,13 @@ public class OvertimeService {
         if (manager == null || manager.getPosition() != Position.MANAGER) {
             return;
         }
-        notificationService.createNotification(manager, message, "HIGH");
+        eventPublisher.publishEvent(new NotificationCreatedEvent(List.of(manager.getEmployeeId()), message, "HIGH"));
     }
 
-    private void notifyHr(String message) {
-        List<Long> hrEmployeeIds = employeeRepository.findEmployeeIdsByPosition(Position.HR, EmploymentStatus.TERMINATED);
-        for (Long employeeId : hrEmployeeIds) {
-            notificationService.createNotification(employeeRepository.getReferenceById(employeeId), message, "HIGH");
-        }
+    private void notifyRole(String message, Position position) {
+        eventPublisher.publishEvent(new BulkNotificationCreatedEvent(message, "HIGH", position));
     }
 
-    private void notifyManagement(String message) {
-        List<Long> managementEmployeeIds = employeeRepository.findEmployeeIdsByPosition(Position.MANAGEMENT, EmploymentStatus.TERMINATED);
-        for (Long employeeId : managementEmployeeIds) {
-            notificationService.createNotification(employeeRepository.getReferenceById(employeeId), message, "HIGH");
-        }
-    }
 
     private OvertimeResponseDto handleManagerOvertimeReview(
             OvertimeRequest request,
@@ -299,7 +292,7 @@ public class OvertimeService {
             overtimeRequestRepository.save(request);
             String employeeName = NotificationMessageFormatter.formatEmployeeName(request.getEmployee());
             String workDate = NotificationMessageFormatter.formatDate(request.getWorkDate());
-            notifyHr("Overtime request from " + employeeName + " for " + workDate + " is ready for HR review.");
+            notifyRole("Overtime request from " + employeeName + " for " + workDate + " is ready for HR review.", Position.HR);
             notifyEmployee(
                     request.getEmployee(),
                     "Your overtime request for " + workDate + " was endorsed by " + reviewerLabel + " and is now waiting for HR review."
@@ -418,7 +411,7 @@ public class OvertimeService {
         if (employee == null) {
             return;
         }
-        notificationService.createNotification(employee, message, "HIGH");
+        eventPublisher.publishEvent(new NotificationCreatedEvent(List.of(employee.getEmployeeId()), message, "HIGH"));
     }
 
     private void validateRequestWindow(OvertimeRequestDto requestDto) {

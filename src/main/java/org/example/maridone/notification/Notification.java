@@ -3,6 +3,7 @@ package org.example.maridone.notification;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import org.example.maridone.core.employee.Employee;
+import org.hibernate.annotations.CreationTimestamp;
 
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -19,7 +20,8 @@ public class Notification {
     @Column(name = "message", nullable = false)
     private String message;
 
-    @Column(name = "created_at", nullable = false)
+    @CreationTimestamp
+    @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
     @Column(name = "read_status", nullable = false)

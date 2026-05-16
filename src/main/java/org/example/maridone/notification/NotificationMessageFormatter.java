@@ -13,8 +13,8 @@ import java.util.stream.Stream;
 
 public final class NotificationMessageFormatter {
 
-    private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("MMMM d, uuuu", Locale.ENGLISH);
-    private static final DateTimeFormatter DATE_TIME_FORMATTER =
+    public static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("MMMM d, uuuu", Locale.ENGLISH);
+    public static final DateTimeFormatter DATE_TIME_FORMATTER =
             DateTimeFormatter.ofPattern("MMMM d, uuuu h:mm a", Locale.ENGLISH);
 
     private NotificationMessageFormatter() {}

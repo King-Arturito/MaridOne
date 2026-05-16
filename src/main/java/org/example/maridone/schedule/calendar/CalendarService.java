@@ -6,16 +6,17 @@ import org.example.maridone.core.employee.Employee;
 import org.example.maridone.core.employee.EmployeeRepository;
 import org.example.maridone.core.user.UserAccount;
 import org.example.maridone.core.user.UserAccountRepository;
-import org.example.maridone.enums.EmploymentStatus;
-import org.example.maridone.enums.Position;
 import org.example.maridone.exception.badrequest.InvalidRangeException;
 import org.example.maridone.exception.notfound.AccountNotFoundException;
 import org.example.maridone.exception.notfound.CalendarEventNotFound;
+import org.example.maridone.exception.notfound.EmployeeNotFoundException;
 import org.example.maridone.notification.NotificationMessageFormatter;
 import org.example.maridone.notification.NotificationService;
+import org.example.maridone.notification.event.NotificationCreatedEvent;
 import org.example.maridone.schedule.dto.CalendarDto;
 import org.example.maridone.schedule.dto.CalendarEventResponseDto;
 import org.example.maridone.schedule.mapper.CalendarMapper;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -32,6 +33,7 @@ public class CalendarService {
     private final DefaultConfig defaultConfig;
     private final EmployeeRepository employeeRepository;
     private final NotificationService notificationService;
+    private final ApplicationEventPublisher eventPublisher;
 
     public CalendarService(
             CalendarRepository calendarRepository,
@@ -39,7 +41,8 @@ public class CalendarService {
             UserAccountRepository userAccountRepository,
             DefaultConfig defaultConfig,
             EmployeeRepository employeeRepository,
-            NotificationService notificationService)
+            NotificationService notificationService,
+            ApplicationEventPublisher eventPublisher)
     {
         this.calendarRepository = calendarRepository;
         this.calendarMapper = calendarMapper;
@@ -47,6 +50,7 @@ public class CalendarService {
         this.defaultConfig = defaultConfig;
         this.employeeRepository = employeeRepository;
         this.notificationService = notificationService;
+        this.eventPublisher = eventPublisher;
     }
 
     @Transactional
@@ -66,6 +70,7 @@ public class CalendarService {
         companyCalendar.setEmployee(userAccount.getEmployee());
         companyCalendar.setCreatedAt(Instant.now());
         CompanyCalendar savedCalendar = calendarRepository.save(companyCalendar);
+
         notifyAnnouncementRecipients(savedCalendar);
         return calendarMapper.toCalendarEventResponseDto(savedCalendar);
     }
@@ -126,6 +131,9 @@ public class CalendarService {
 
         Employee author = companyCalendar.getEmployee();
         Long authorId = author.getEmployeeId();
+        if  (authorId == null) {
+            throw new EmployeeNotFoundException(null);
+        }
         String message = NotificationMessageFormatter.formatAnnouncementMessage(
                 author,
                 companyCalendar.getStartDate(),
@@ -133,17 +141,7 @@ public class CalendarService {
                 companyCalendar.getTitle(),
                 defaultConfig.getTimeZone()
         );
-
-        for (Employee employee : employeeRepository.findByEmploymentStatusNotOrderByLastNameAscFirstNameAsc(EmploymentStatus.TERMINATED)) {
-            if (employee == null
-                    || employee.getUserAccount() == null
-                    || employee.getEmploymentStatus() == EmploymentStatus.SUSPENDED
-                    || employee.getPosition() == Position.ACCOUNTING
-                    || (authorId != null && authorId.equals(employee.getEmployeeId()))) {
-                continue;
-            }
-
-            notificationService.createNotification(employee, message, "HIGH");
-        }
+        List<Long> employeeIds = employeeRepository.findIdsbyStatusAndPosition(authorId);
+        eventPublisher.publishEvent(new NotificationCreatedEvent(employeeIds, message, "HIGH"));
     }
 }
