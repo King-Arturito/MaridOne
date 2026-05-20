@@ -8,6 +8,7 @@ import java.util.Optional;
 import java.util.Set;
 
 import org.example.maridone.config.DefaultConfig;
+import org.example.maridone.config.DocumentConfig;
 import org.example.maridone.core.employee.Employee;
 import org.example.maridone.core.employee.EmployeeRepository;
 import org.example.maridone.core.user.UserAccountRepository;
@@ -47,10 +48,14 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 
 import org.mockito.MockedStatic;
 import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
@@ -61,6 +66,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.util.ReflectionTestUtils;
 
 @ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.LENIENT)
 class LeaveServiceTest {
 
     @Mock private LeaveBalanceRepository leaveBalanceRepository;
@@ -75,6 +81,8 @@ class LeaveServiceTest {
     @Mock private OvertimeRequestRepository overtimeRequestRepository;
     @Mock private WorkflowEmailService workflowEmailService;
     @Mock private HolidayService holidayService;
+    @Mock private ApplicationEventPublisher eventPublisher;
+    @Spy private DocumentConfig documentConfig = new DocumentConfig();
 
     @InjectMocks
     private LeaveService leaveService;

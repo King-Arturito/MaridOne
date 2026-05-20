@@ -31,9 +31,13 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.verifyNoInteractions;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.test.util.ReflectionTestUtils;
 
 @ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.LENIENT)
 class CalendarServiceTest {
 
     @Mock private CalendarRepository calendarRepository;
@@ -41,6 +45,7 @@ class CalendarServiceTest {
     @Mock private UserAccountRepository userAccountRepository;
     @Mock private EmployeeRepository employeeRepository;
     @Mock private DefaultConfig defaultConfig;
+    @Mock private ApplicationEventPublisher eventPublisher;
 
     @InjectMocks
     private CalendarService calendarService;

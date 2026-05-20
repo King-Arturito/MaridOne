@@ -254,11 +254,12 @@ public class LeaveService {
     @Transactional
     @ExecutionTime
     public List<LeaveRequest> createLeaveRequest(LeaveRequestDto payload, Long empId, List<MultipartFile> files) {
+        int fileCount = files == null ? 0 : files.size();
         if (FileValidation.exceedsFileSizeLimit(files, documentConfig.getMaxFileSize().toBytes()))  {
             throw new FileTooLargeException("1 or more file exceeded Max file size: " + documentConfig.getMaxFileSize().toMegabytes() +  "MB");
 
         }
-        if (FileValidation.exceedsFileUploadLimit(files.size(), documentConfig.getMaxFileUpload())) {
+        if (FileValidation.exceedsFileUploadLimit(fileCount, documentConfig.getMaxFileUpload())) {
             throw new MaxFileUploadExceededException("files to upload exceeded. Limit: " + documentConfig.getMaxFileUpload() + " files");
         }
         Employee emp =  employeeRepository.findById(empId).orElseThrow(() -> new EmployeeNotFoundException(empId));
@@ -330,7 +331,9 @@ public class LeaveService {
         }
         leaveRequestRepository.saveAllAndFlush(requests);
         List<Long> requestIds = requests.stream().map(LeaveRequest::getRequestId).toList();
-        documentService.batchUploadPrivateDocuments(files, emp.getUserAccount().getUsername(), Directories.LEAVE_REQUEST, requestIds);
+        if (fileCount > 0) {
+            documentService.batchUploadPrivateDocuments(files, emp.getUserAccount().getUsername(), Directories.LEAVE_REQUEST, requestIds);
+        }
 
 
         if (emp.getManager() != null) {
@@ -770,7 +773,7 @@ public class LeaveService {
 
     private void notifyManager(Employee employee, String message) {
         Employee manager = employee.getManager();
-        if (manager == null || manager.getPosition() != Position.MANAGER) {
+        if (manager == null || manager.getPosition() != Position.MANAGER || manager.getEmployeeId() == null) {
             return;
         }
         eventPublisher.publishEvent(new NotificationCreatedEvent(List.of(manager.getEmployeeId()), message, "HIGH"));

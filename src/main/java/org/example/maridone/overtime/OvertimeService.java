@@ -254,7 +254,7 @@ public class OvertimeService {
 
     private void notifyManager(Employee employee, String message) {
         Employee manager = employee.getManager();
-        if (manager == null || manager.getPosition() != Position.MANAGER) {
+        if (manager == null || manager.getPosition() != Position.MANAGER || manager.getEmployeeId() == null) {
             return;
         }
         eventPublisher.publishEvent(new NotificationCreatedEvent(List.of(manager.getEmployeeId()), message, "HIGH"));

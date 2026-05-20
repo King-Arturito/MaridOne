@@ -87,10 +87,11 @@ public class DisputeService {
     @Transactional
     @ExecutionTime
     public DisputeRequest createDisputeRequest(Long itemId, DisputeRequestDto payload, List<MultipartFile> files) {
+        int fileCount = files == null ? 0 : files.size();
         if (FileValidation.exceedsFileSizeLimit(files, documentConfig.getMaxFileSize().toBytes())) {
             throw new FileTooLargeException("One or more files exceeds file size limit: " + documentConfig.getMaxFileSize().toMegabytes() + "MB");
         }
-        if (FileValidation.exceedsFileUploadLimit(files.size(), documentConfig.getMaxFileUpload())) {
+        if (FileValidation.exceedsFileUploadLimit(fileCount, documentConfig.getMaxFileUpload())) {
             throw new MaxFileUploadExceededException("files to upload exceeded. Limit: " + documentConfig.getMaxFileUpload() + " files");
         }
         PayrollItem item = payrollItemRepository

@@ -33,6 +33,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.test.util.ReflectionTestUtils;
 
 @ExtendWith(MockitoExtension.class)
@@ -46,6 +47,7 @@ class ShiftServiceTest {
     @Mock private LeaveRequestRepository leaveRequestRepository;
     @Mock private ScheduleMapper scheduleMapper;
     @Mock private DefaultConfig defaultConfig;
+    @Mock private ApplicationEventPublisher eventPublisher;
 
     @InjectMocks
     private ShiftService shiftService;

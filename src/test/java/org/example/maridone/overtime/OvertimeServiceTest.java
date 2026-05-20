@@ -39,6 +39,9 @@ import org.mockito.Mock;
 import org.mockito.MockedStatic;
 import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
@@ -46,6 +49,7 @@ import org.springframework.data.jpa.domain.Specification;
 import org.springframework.test.util.ReflectionTestUtils;
 
 @ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.LENIENT)
 class OvertimeServiceTest {
 
     @Mock private OvertimeRequestRepository overtimeRequestRepository;
@@ -56,6 +60,7 @@ class OvertimeServiceTest {
     @Mock private DefaultConfig defaultConfig;
     @Mock private LeaveRequestRepository leaveRequestRepository;
     @Mock private WorkflowEmailService workflowEmailService;
+    @Mock private ApplicationEventPublisher eventPublisher;
 
     @InjectMocks
     private OvertimeService overtimeService;

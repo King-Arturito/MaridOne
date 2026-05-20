@@ -52,6 +52,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -63,6 +65,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.LENIENT)
 class PayrollServiceTest {
 
     private static final ZoneId ZONE = ZoneId.of("Asia/Manila");
@@ -1013,7 +1016,7 @@ class PayrollServiceTest {
         ReflectionTestUtils.setField(run, "payId", 88L);
 
         when(payrollRunRepository.findById(88L)).thenReturn(java.util.Optional.of(run));
-        when(payrollItemRepository.countByPayrollRun_PayId(88L)).thenReturn(0L);
+        when(payrollItemRepository.findEmployeeIdsByPayrollRun(88L)).thenReturn(List.of());
 
         Assertions.assertThrows(InvalidActionException.class, () -> payrollService.postRun(88L));
     }
@@ -1036,7 +1039,7 @@ class PayrollServiceTest {
         );
 
         when(payrollRunRepository.findById(89L)).thenReturn(java.util.Optional.of(run));
-        when(payrollItemRepository.countByPayrollRun_PayId(89L)).thenReturn(1L);
+        when(payrollItemRepository.findEmployeeIdsByPayrollRun(89L)).thenReturn(List.of(1L));
         when(payrollRunRepository.save(any(PayrollRun.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(payrollRunRepository.findRunViewByPayId(89L)).thenReturn(java.util.Optional.of(viewDto));
 

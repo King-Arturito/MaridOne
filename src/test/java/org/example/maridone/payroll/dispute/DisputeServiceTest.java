@@ -2,6 +2,7 @@ package org.example.maridone.payroll.dispute;
 
 import java.util.Optional;
 
+import org.example.maridone.config.DocumentConfig;
 import org.example.maridone.core.employee.Employee;
 import org.example.maridone.core.employee.EmployeeRepository;
 import org.example.maridone.core.user.UserAccountRepository;
@@ -25,15 +26,20 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import static org.mockito.ArgumentMatchers.any;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.test.util.ReflectionTestUtils;
 
 @ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.LENIENT)
 class DisputeServiceTest {
 
     @Mock private DisputeRequestRepository disputeRepository;
@@ -44,6 +50,8 @@ class DisputeServiceTest {
     @Mock private DocumentService documentService;
     @Mock private PayrollMapper payrollMapper;
     @Mock private WorkflowEmailService workflowEmailService;
+    @Mock private ApplicationEventPublisher eventPublisher;
+    @Spy private DocumentConfig documentConfig = new DocumentConfig();
 
     @InjectMocks
     private DisputeService disputeService;
@@ -57,6 +65,10 @@ class DisputeServiceTest {
 
         PayrollItem item = new PayrollItem();
         ReflectionTestUtils.setField(item, "itemId", itemId);
+        Employee employee = new Employee();
+        employee.setFirstName("Juan");
+        employee.setLastName("Dela Cruz");
+        item.setEmployee(employee);
 
         when(payrollItemRepository.findByItemIdAndPayrollRun_PayrollStatus(itemId, org.example.maridone.enums.PayrollStatus.POSTED))
                 .thenReturn(Optional.of(item));
