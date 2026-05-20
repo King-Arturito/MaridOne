@@ -1094,7 +1094,7 @@ public class PayrollService {
         }
 
         LocalDate paymentDate = run.getPaymentDate() != null ? run.getPaymentDate() : run.getPeriodEnd();
-        if (paymentDate == null || paymentDate.getDayOfMonth() != 30) {
+        if (!PayrollCalculator.isSecondHalfPaymentDate(paymentDate)) {
             return PayrollCalculator.RegularTaxContext.empty();
         }
 
@@ -1198,7 +1198,7 @@ public class PayrollService {
         }
 
         LocalDate paymentDate = run.getPaymentDate() != null ? run.getPaymentDate() : run.getPeriodEnd();
-        return paymentDate != null && paymentDate.getDayOfMonth() == 30;
+        return PayrollCalculator.isSecondHalfPaymentDate(paymentDate);
     }
 
     private BigDecimal resolveItemGrossPay(PayrollItem item) {

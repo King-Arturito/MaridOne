@@ -183,6 +183,39 @@ class PayrollCalculatorTest {
     }
 
     @Test
+    void setDeductions_ShouldTreatFebruaryLastDayAsSecondHalfPayroll() {
+        Employee emp = buildEmployee(ExemptionStatus.EXEMPT, "624000.00");
+        List<LocalDate> paymentDates = List.of(
+                LocalDate.of(2026, 2, 28),
+                LocalDate.of(2028, 2, 29)
+        );
+
+        for (LocalDate paymentDate : paymentDates) {
+            PayrollItem item = buildItem("26000.00", paymentDate);
+
+            List<DeductionsLine> deductions = payrollCalculator.setDeductions(
+                    emp,
+                    item,
+                    BigDecimal.ZERO,
+                    BigDecimal.ZERO,
+                    new PayrollCalculator.RegularTaxContext(
+                            new BigDecimal("52000.00"),
+                            new BigDecimal("52000.00"),
+                            new BigDecimal("26000.00"),
+                            new BigDecimal("2479.10"),
+                            true
+                    )
+            );
+
+            Assertions.assertEquals(4, deductions.size());
+            assertDeduction(deductions, DeductionType.SSS, "1750.00");
+            assertDeduction(deductions, DeductionType.PHILHEALTH, "1300.00");
+            assertDeduction(deductions, DeductionType.PAGIBIG, "200.00");
+            assertDeduction(deductions, DeductionType.BRACKET_LEVEL_THREE, "2479.10");
+        }
+    }
+
+    @Test
     void computeSssEmployerShareMonthly_ShouldApplyRegularWispAndEcComponents() {
         BigDecimal result = payrollCalculator.computeSssEmployerShareMonthly(new BigDecimal("25000.00"));
 

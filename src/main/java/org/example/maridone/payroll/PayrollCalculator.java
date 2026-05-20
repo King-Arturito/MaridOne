@@ -137,6 +137,16 @@ public class PayrollCalculator {
         return item.getPayrollRun().getPeriodEnd();
     }
 
+    public static boolean isSecondHalfPaymentDate(LocalDate paymentDate) {
+        if (paymentDate == null) {
+            return false;
+        }
+
+        int dayOfMonth = paymentDate.getDayOfMonth();
+        return dayOfMonth == 30
+                || (paymentDate.getMonthValue() == 2 && dayOfMonth == paymentDate.lengthOfMonth());
+    }
+
     private RegularTaxSchedule resolveRegularTaxSchedule(PayrollItem item) {
         LocalDate paymentDate = resolvePaymentDate(item);
         if (paymentDate == null) {
@@ -147,7 +157,7 @@ public class PayrollCalculator {
         if (dayOfMonth == 15) {
             return RegularTaxSchedule.FIRST_HALF;
         }
-        if (dayOfMonth == 30) {
+        if (isSecondHalfPaymentDate(paymentDate)) {
             return RegularTaxSchedule.SECOND_HALF;
         }
         return RegularTaxSchedule.NONE;
