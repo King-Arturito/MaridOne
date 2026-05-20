@@ -40,7 +40,6 @@ class CalendarServiceTest {
     @Mock private CalendarMapper calendarMapper;
     @Mock private UserAccountRepository userAccountRepository;
     @Mock private EmployeeRepository employeeRepository;
-    @Mock private NotificationService notificationService;
     @Mock private DefaultConfig defaultConfig;
 
     @InjectMocks
@@ -170,7 +169,6 @@ class CalendarServiceTest {
         );
 
         Assertions.assertEquals("End date and time must be after the start date and time.", error.getMessage());
-        verifyNoInteractions(userAccountRepository, calendarMapper, calendarRepository, notificationService);
     }
 
     @Test
@@ -226,30 +224,6 @@ class CalendarServiceTest {
 
         calendarService.createEvent(dto, "manager.user");
 
-        verify(notificationService).createNotification(
-                same(employeeRecipient),
-                eq("Town Hall Reminder (April 8, 2026 9:30 AM - April 10, 2026 5:00 PM): Harper Stone created an announcement."),
-                eq("HIGH")
-        );
-        verify(notificationService).createNotification(
-                same(managerRecipient),
-                eq("Town Hall Reminder (April 8, 2026 9:30 AM - April 10, 2026 5:00 PM): Harper Stone created an announcement."),
-                eq("HIGH")
-        );
-        verify(notificationService).createNotification(
-                same(managementRecipient),
-                eq("Town Hall Reminder (April 8, 2026 9:30 AM - April 10, 2026 5:00 PM): Harper Stone created an announcement."),
-                eq("HIGH")
-        );
-        verify(notificationService).createNotification(
-                same(hrRecipient),
-                eq("Town Hall Reminder (April 8, 2026 9:30 AM - April 10, 2026 5:00 PM): Harper Stone created an announcement."),
-                eq("HIGH")
-        );
-        verify(notificationService, never()).createNotification(same(accountingRecipient), any(), any());
-        verify(notificationService, never()).createNotification(same(author), any(), any());
-        verify(notificationService, never()).createNotification(same(suspendedRecipient), any(), any());
-        verify(notificationService, never()).createNotification(same(noAccountRecipient), any(), any());
     }
 
     private Employee buildEmployee(

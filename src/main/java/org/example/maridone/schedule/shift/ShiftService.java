@@ -13,12 +13,13 @@ import org.example.maridone.exception.notfound.ShiftsNotFoundException;
 import org.example.maridone.exception.badrequest.InvalidActionException;
 import org.example.maridone.leave.request.LeaveRequest;
 import org.example.maridone.leave.request.LeaveRequestRepository;
-import org.example.maridone.notification.NotificationService;
+import org.example.maridone.notification.event.NotificationCreatedEvent;
 import org.example.maridone.schedule.dto.DailyShiftOverrideRequestDto;
 import org.example.maridone.schedule.dto.DailyShiftSegmentDto;
 import org.example.maridone.schedule.dto.ShiftRequestDto;
 import org.example.maridone.schedule.dto.ShiftResponseDto;
 import org.example.maridone.schedule.mapper.ScheduleMapper;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -49,7 +50,7 @@ public class ShiftService {
     private final LeaveRequestRepository leaveRequestRepository;
     private final ScheduleMapper scheduleMapper;
     private final DefaultConfig defaultConfig;
-    private final NotificationService notificationService;
+    private final ApplicationEventPublisher eventPublisher;
 
     public ShiftService(
             TemplateShiftRepository templateShiftRepository,
@@ -58,14 +59,14 @@ public class ShiftService {
             LeaveRequestRepository leaveRequestRepository,
             ScheduleMapper scheduleMapper,
             DefaultConfig defaultConfig,
-            NotificationService notificationService) {
+            ApplicationEventPublisher eventPublisher) {
         this.templateShiftRepository = templateShiftRepository;
         this.employeeRepository = employeeRepository;
         this.dailyShiftRepository = dailyShiftRepository;
         this.leaveRequestRepository = leaveRequestRepository;
         this.scheduleMapper = scheduleMapper;
         this.defaultConfig = defaultConfig;
-        this.notificationService = notificationService;
+        this.eventPublisher = eventPublisher;
     }
 
     //create all for 7 days [monday, ...., sunday]
@@ -475,7 +476,7 @@ public class ShiftService {
                 action,
                 formatTimeRange(startTime, endTime)
         );
-        notificationService.createNotification(employee, message, "HIGH");
+        eventPublisher.publishEvent(new NotificationCreatedEvent(List.of(employee.getEmployeeId()), message, "HIGH"));
     }
 
     private void notifyTemplateShiftDayOff(Employee employee, DayOfWeek dayOfWeek) {
@@ -487,7 +488,7 @@ public class ShiftService {
                 "Your recurring %s schedule was marked as day off.",
                 formatDayOfWeek(dayOfWeek)
         );
-        notificationService.createNotification(employee, message, "HIGH");
+        eventPublisher.publishEvent(new NotificationCreatedEvent(List.of(employee.getEmployeeId()), message, "HIGH"));
     }
 
     private void notifyDailyShiftOverride(Employee employee, LocalDate workDate, LocalTime startTime, LocalTime endTime, boolean dayOff) {
@@ -502,7 +503,7 @@ public class ShiftService {
                 DATE_FORMATTER.format(workDate),
                 formatTimeRange(startTime, endTime)
         );
-        notificationService.createNotification(employee, message, "HIGH");
+        eventPublisher.publishEvent(new NotificationCreatedEvent(List.of(employee.getEmployeeId()), message, "HIGH"));
     }
 
     private void notifyDailyShiftOverrides(Employee employee, LocalDate workDate, List<DailyShiftSchedule> shifts) {
@@ -521,7 +522,7 @@ public class ShiftService {
                         .map(shift -> formatTimeRange(shift.getStartTime(), shift.getEndTime()))
                         .collect(Collectors.joining(", "))
         );
-        notificationService.createNotification(employee, message, "HIGH");
+        eventPublisher.publishEvent(new NotificationCreatedEvent(List.of(employee.getEmployeeId()), message, "HIGH"));
     }
 
     private String formatDayOfWeek(DayOfWeek dayOfWeek) {

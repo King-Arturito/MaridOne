@@ -52,6 +52,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.test.util.ReflectionTestUtils;
 
@@ -77,6 +78,7 @@ class PayrollServiceTest {
     @Mock private HolidayService holidayService;
     @Mock private DefaultConfig defaultConfig;
     @Mock private PayrollItemService payrollItemService;
+    @Mock private ApplicationEventPublisher eventPublisher;
 
     private PayrollService payrollService;
     private PayrollCalculator payrollCalculator;
@@ -104,7 +106,9 @@ class PayrollServiceTest {
                 payrollCalculator,
                 defaultConfig,
                 payrollConfig,
-                payrollItemService
+                payrollItemService,
+                eventPublisher
+
         );
     }
 

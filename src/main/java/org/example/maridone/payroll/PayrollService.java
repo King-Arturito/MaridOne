@@ -8,6 +8,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.EnumSet;
@@ -20,7 +21,6 @@ import java.util.stream.Collectors;
 
 import org.example.maridone.annotation.ExecutionTime;
 import org.example.maridone.annotation.GeneratePayslip;
-import org.example.maridone.annotation.NotifyPayRun;
 import org.example.maridone.common.CommonCalculator;
 import org.example.maridone.common.CommonSpecs;
 import org.example.maridone.config.DefaultConfig;
@@ -43,11 +43,13 @@ import org.example.maridone.leave.request.LeaveRequest;
 import org.example.maridone.leave.request.LeaveRequestRepository;
 import org.example.maridone.log.AttendanceLogRepository;
 import org.example.maridone.log.attendance.AttendanceLog;
+import org.example.maridone.notification.NotificationMessageFormatter;
 import org.example.maridone.overtime.OvertimeRequest;
 import org.example.maridone.overtime.OvertimeRequestRepository;
 import org.example.maridone.overtime.spec.OvertimeSpecs;
 import org.example.maridone.payroll.dto.PayrollRunViewDto;
 import org.example.maridone.payroll.dto.RunCreateDto;
+import org.example.maridone.payroll.event.PayRunNotifyEvent;
 import org.example.maridone.payroll.item.PayrollItem;
 import org.example.maridone.payroll.item.PayrollItemService;
 import org.example.maridone.payroll.item.component.DeductionsLine;
@@ -60,6 +62,7 @@ import org.example.maridone.schedule.shift.DailyShiftRepository;
 import org.example.maridone.schedule.shift.DailyShiftSchedule;
 import org.example.maridone.schedule.shift.TemplateShiftRepository;
 import org.example.maridone.schedule.shift.TemplateShiftSchedule;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
@@ -94,6 +97,7 @@ public class PayrollService {
     private final DefaultConfig defaultConfig;
     private final PayrollConfig payrollConfig;
     private final PayrollItemService payrollItemService;
+    private final ApplicationEventPublisher eventPublisher;
 
     public PayrollService(
             PayrollRunRepository payrollRunRepository,
@@ -108,7 +112,8 @@ public class PayrollService {
             PayrollCalculator payrollCalculator,
             DefaultConfig defaultConfig,
             PayrollConfig payrollConfig,
-            PayrollItemService payrollItemService
+            PayrollItemService payrollItemService,
+            ApplicationEventPublisher eventPublisher
     )
     {
         this.payrollRunRepository = payrollRunRepository;
@@ -124,6 +129,7 @@ public class PayrollService {
         this.defaultConfig = defaultConfig;
         this.payrollConfig = payrollConfig;
         this.payrollItemService = payrollItemService;
+        this.eventPublisher = eventPublisher;
     }
 
 
@@ -145,7 +151,6 @@ public class PayrollService {
 
     @Transactional
     @ExecutionTime
-    @NotifyPayRun
     @GeneratePayslip
     public PayrollRunViewDto postRun(Long payId) {
         PayrollRun run = payrollRunRepository.findById(payId)
@@ -153,12 +158,30 @@ public class PayrollService {
         if (run.getPayrollStatus() == PayrollStatus.POSTED) {
             throw new InvalidActionException("This payroll run has already been posted.");
         }
-        if (payrollItemRepository.countByPayrollRun_PayId(payId) <= 0) {
+        List<Long> empIds = payrollItemRepository.findEmployeeIdsByPayrollRun(payId);
+        if (empIds.isEmpty()) {
             throw new InvalidActionException("This payroll run has no generated payroll items to post yet.");
         }
         run.setPayrollStatus(PayrollStatus.POSTED);
         payrollRunRepository.save(run);
+
+        eventPublisher.publishEvent(new PayRunNotifyEvent(empIds, formatPayRunNotification(run), payId));
         return getRun(payId);
+    }
+
+    private String formatPayRunNotification(PayrollRun payrollRun) {
+        LocalDate periodStart = payrollRun.getPeriodStart();
+        LocalDate periodEnd = payrollRun.getPeriodEnd();
+
+        if (periodStart == null || periodEnd == null) {
+            return "Your payslip is ready.";
+        }
+
+        return "Your payslip for "
+                + periodStart.format(NotificationMessageFormatter.DATE_FORMATTER)
+                + " to "
+                + periodEnd.format(NotificationMessageFormatter.DATE_FORMATTER)
+                + " is ready.";
     }
 
     @Transactional(readOnly = true)

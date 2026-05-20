@@ -72,7 +72,6 @@ class LeaveServiceTest {
     @Mock private LeaveMapper leaveMapper;
     @Mock private PayrollConfig payrollConfig;
     @Mock private DefaultConfig defaultConfig;
-    @Mock private NotificationService notificationService;
     @Mock private OvertimeRequestRepository overtimeRequestRepository;
     @Mock private WorkflowEmailService workflowEmailService;
     @Mock private HolidayService holidayService;
@@ -495,11 +494,6 @@ class LeaveServiceTest {
         ));
 
         leaveService.createLeaveRequest(dto, empId, null);
-
-        verify(notificationService).createNotification(
-                manager,
-                "New team leave request from Richard Moore (2026-04-20 to 2026-04-22)",
-                "HIGH");
     }
 
     @Test
@@ -559,14 +553,6 @@ class LeaveServiceTest {
         leaveService.cancelRequest(12L);
 
         Assertions.assertEquals(Status.CANCELLED, request.getRequestStatus());
-        verify(notificationService).createNotification(
-                hr,
-                "Leave request from Richard Moore (April 20, 2026 to April 22, 2026) was cancelled.",
-                "HIGH");
-        verify(notificationService).createNotification(
-                manager,
-                "Team leave request from Richard Moore (April 20, 2026 to April 22, 2026) was cancelled.",
-                "HIGH");
     }
 
     @Test

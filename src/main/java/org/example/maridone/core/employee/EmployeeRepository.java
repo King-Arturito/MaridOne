@@ -36,6 +36,16 @@ public interface EmployeeRepository extends JpaRepository<Employee, Long>, JpaSp
             EmploymentStatus employmentStatus
     );
 
+    @Query(
+            "select e.employeeId from Employee e " +
+                    "where e.position != 'ACCOUNTING' " +
+                    "and e.employmentStatus != 'TERMINATED' " +
+                    "and e.employmentStatus != 'SUSPENDED' " +
+                    "and e.employeeId != :authorId " +
+                    "and e.userAccount is not null"
+    )
+    List<Long> findIdsbyStatusAndPosition(@Param("authorId") Long authorId);
+
     List<Employee> findByManager_EmployeeIdAndEmploymentStatusNotOrderByLastNameAscFirstNameAsc(
             Long managerId,
             EmploymentStatus employmentStatus
