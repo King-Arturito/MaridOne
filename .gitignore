@@ -32,3 +32,10 @@ build/
 ### VS Code ###
 .vscode/
 .cache/
+local-documents/
+backend-run.*.log
+personal-upload-test.txt
+
+.env
+.env.*
+!.env.example
