@@ -91,7 +91,7 @@ public class DocumentService {
             String s3Key = cloudStorageService.store(request.file(), request.employeeId().toString(), request.subDir().getDisplayName());
             uploadedS3Keys.add(s3Key);
 
-            DocumentPath dp = buildDocumentPath(request.file(), user, s3Key, true);
+            DocumentPath dp = buildDocumentPath(request.file(), user, s3Key, false);
 
             DocumentPathLink link = new DocumentPathLink();
             link.setConnectedEntity(request.subDir().getDisplayName());
