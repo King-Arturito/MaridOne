@@ -120,7 +120,10 @@ public class DocumentController {
             @RequestParam("subDir") Directories subDir,
             @RequestParam(value = "connectedId", required = false) Long connectedId,
             Authentication authentication) {
-        documentService.batchUploadPrivateDocuments(files, authentication.getName(), subDir, List.of(connectedId));
+        if (connectedId != null) {
+            documentService.batchUploadPrivateDocuments(files, authentication.getName(), subDir, List.of(connectedId));
+        }
+        documentService.batchUploadPrivateDocuments(files, authentication.getName(), subDir, List.of());
         return ResponseEntity.status(HttpStatus.CREATED).build();
     }
 
