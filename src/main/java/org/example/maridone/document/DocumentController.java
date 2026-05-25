@@ -27,7 +27,7 @@ public class DocumentController {
     }
 
     @PostMapping("/public/upload")
-    @PreAuthorize("hasRole('MANAGEMENT')")
+    @PreAuthorize("hasAnyRole('MANAGEMENT', 'HR')")
     public ResponseEntity<Void> uploadPublicDocument(MultipartFile file, Authentication authentication) {
         String uploadedBy = authentication.getName();
         documentService.uploadPublicDocument(file, uploadedBy);
@@ -54,7 +54,7 @@ public class DocumentController {
     }
 
     @DeleteMapping("/public/delete/{pathId}")
-    @PreAuthorize("hasRole('MANAGEMENT')")
+    @PreAuthorize("hasAnyRole('MANAGEMENT', 'HR')")
     public ResponseEntity<String> deletePublicDocument(@PathVariable("pathId") Long pathId) {
         documentService.deletePublicDocument(pathId);
         return ResponseEntity.ok("Document deleted successfully.");
