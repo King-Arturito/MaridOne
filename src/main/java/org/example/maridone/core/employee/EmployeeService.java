@@ -4,6 +4,7 @@ import org.example.maridone.annotation.ExecutionTime;
 import org.example.maridone.config.PayrollConfig;
 import org.example.maridone.core.bank.BankAccount;
 import org.example.maridone.core.bank.BankService;
+import org.example.maridone.core.dto.CreateUserAccountDto;
 import org.example.maridone.core.dto.EmployeeDetailsDto;
 import org.example.maridone.core.dto.EmployeeOptionDto;
 import org.example.maridone.core.dto.EmployeeRequestDto;
@@ -12,6 +13,7 @@ import org.example.maridone.core.mapper.CoreMapper;
 import org.example.maridone.core.filter.EmployeeFilter;
 import org.example.maridone.core.spec.EmployeeSpecs;
 import org.example.maridone.core.user.UserAccountRepository;
+import org.example.maridone.core.user.UserAccountService;
 import org.example.maridone.embeddable.Address;
 import org.example.maridone.exception.notfound.AccountNotFoundException;
 import org.example.maridone.exception.notfound.EmployeeNotFoundException;
@@ -67,6 +69,7 @@ public class EmployeeService {
     private final LeaveRequestRepository leaveRequestRepository;
     private final OvertimeRequestRepository overtimeRequestRepository;
     private final BankService bankService;
+    private final UserAccountService userAccountService;
 
     EmployeeService(EmployeeRepository employeeRepository,
                     CoreMapper coreMapper,
@@ -79,7 +82,8 @@ public class EmployeeService {
                     EmployeeSeparationRepository employeeSeparationRepository,
                     LeaveRequestRepository leaveRequestRepository,
                     OvertimeRequestRepository overtimeRequestRepository,
-                    BankService bankService) {
+                    BankService bankService,
+                    UserAccountService userAccountService) {
         this.employeeRepository = employeeRepository;
         this.coreMapper = coreMapper;
         this.userAccountRepository = userAccountRepository;
@@ -92,6 +96,7 @@ public class EmployeeService {
         this.leaveRequestRepository = leaveRequestRepository;
         this.overtimeRequestRepository = overtimeRequestRepository;
         this.bankService = bankService;
+        this.userAccountService = userAccountService;
     }
 
 
@@ -111,10 +116,22 @@ public class EmployeeService {
         applyDepartmentAssignment(employee, employeeRequestDto);
         employee.setManager(resolveAssignedManager(employee, employeeRequestDto, null));
         employeeRepository.save(employee);
+        createInitialUserAccount(employee, employeeRequestDto);
         applyBankAccountUpdate(employee, employeeRequestDto);
         shiftService.createShifts(employee);
         seedDefaultLeaveBalances(employee);
         return toEmployeeResponse(employee);
+    }
+
+    private void createInitialUserAccount(Employee employee, EmployeeRequestDto employeeRequestDto) {
+        CreateUserAccountDto accountDto = new CreateUserAccountDto();
+        accountDto.setEmployeeId(employee.getEmployeeId());
+        accountDto.setUsername(employeeRequestDto.getUsername());
+        accountDto.setPassword(employeeRequestDto.getPassword());
+        accountDto.setAccountStatus(
+                Optional.ofNullable(employeeRequestDto.getAccountStatus()).orElse(AccountStatus.ACTIVE)
+        );
+        userAccountService.createUserAccount(accountDto);
     }
 
     @ExecutionTime

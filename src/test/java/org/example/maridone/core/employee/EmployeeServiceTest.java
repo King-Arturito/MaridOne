@@ -5,10 +5,12 @@ import java.util.List;
 import java.util.ArrayList;
 
 import org.example.maridone.config.PayrollConfig;
+import org.example.maridone.core.bank.BankService;
 import org.example.maridone.core.dto.EmployeeRequestDto;
 import org.example.maridone.core.dto.EmployeeResponseDto;
 import org.example.maridone.core.mapper.CoreMapper;
 import org.example.maridone.core.user.UserAccountRepository;
+import org.example.maridone.core.user.UserAccountService;
 import org.example.maridone.embeddable.Address;
 import org.example.maridone.enums.EmploymentStatus;
 import org.example.maridone.enums.ExemptionStatus;
@@ -80,6 +82,12 @@ class EmployeeServiceTest {
     @Mock
     private OvertimeRequestRepository overtimeRequestRepository;
 
+    @Mock
+    private BankService bankService;
+
+    @Mock
+    private UserAccountService userAccountService;
+
     @InjectMocks
     private EmployeeService employeeService;
 
@@ -121,6 +129,9 @@ class EmployeeServiceTest {
         Assertions.assertNotNull(employee.getEmploymentDateStart());
         Assertions.assertEquals(ExemptionStatus.NON_EXEMPT, employee.getExemptionStatus());
         verify(employeeRepository).save(any(Employee.class));
+        verify(userAccountService).createUserAccount(argThat(account ->
+                account.getEmployeeId().equals(1L)
+        ));
         verify(shiftService).createShifts(employee);
         verify(leaveBalanceRepository).saveAll(argThat(balances -> {
                     List<LeaveBalance> collected = new ArrayList<>();

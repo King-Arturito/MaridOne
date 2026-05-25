@@ -5,6 +5,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import org.example.maridone.embeddable.Address;
+import org.example.maridone.enums.AccountStatus;
 import org.example.maridone.enums.EmploymentStatus;
 import org.example.maridone.enums.ExemptionStatus;
 import org.example.maridone.enums.Gender;
@@ -56,6 +57,12 @@ public class EmployeeRequestDto {
     private String emergencyContactNumber;
     private String bankName;
     private String bankAccountNumber;
+    @NotBlank(groups = OnCreate.class, message = "Username is required.")
+    private String username;
+    @NotBlank(groups = OnCreate.class, message = "Password is required.")
+    private String password;
+    @NotNull(groups = OnCreate.class, message = "Account status is required.")
+    private AccountStatus accountStatus = AccountStatus.ACTIVE;
     private SeparationReason separationReason;
     private Boolean eligibleForRehire;
     private String separationNotes;
@@ -266,6 +273,30 @@ public class EmployeeRequestDto {
 
     public void setBankAccountNumber(String bankAccountNumber) {
         this.bankAccountNumber = bankAccountNumber;
+    }
+
+    public String getUsername() {
+        return username;
+    }
+
+    public void setUsername(String username) {
+        this.username = username;
+    }
+
+    public String getPassword() {
+        return password;
+    }
+
+    public void setPassword(String password) {
+        this.password = password;
+    }
+
+    public AccountStatus getAccountStatus() {
+        return accountStatus;
+    }
+
+    public void setAccountStatus(AccountStatus accountStatus) {
+        this.accountStatus = accountStatus;
     }
 
     public SeparationReason getSeparationReason() {
