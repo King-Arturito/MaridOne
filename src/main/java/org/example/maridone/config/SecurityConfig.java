@@ -4,6 +4,8 @@ import org.example.maridone.auth.JwtFilter;
 import org.example.maridone.auth.JwtService;
 import org.example.maridone.core.user.UserAccountRepository;
 import org.example.maridone.core.user.UserLoginService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -28,6 +30,8 @@ import java.util.List;
 @EnableWebSecurity
 @EnableMethodSecurity
 public class SecurityConfig {
+    private static final Logger log = LoggerFactory.getLogger(SecurityConfig.class);
+
     private final DefaultConfig defaultConfig;
     private final JwtService jwtService;
     private final UserLoginService userLoginService;
@@ -58,7 +62,24 @@ public class SecurityConfig {
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .exceptionHandling(exceptions -> exceptions
                         .authenticationEntryPoint((request, response, authException) ->
-                                response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Authentication required")))
+                                response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Authentication required"))
+                        .accessDeniedHandler((request, response, accessDeniedException) -> {
+                            var authentication = org.springframework.security.core.context.SecurityContextHolder
+                                    .getContext()
+                                    .getAuthentication();
+                            log.warn(
+                                    "Access denied for {} {} as {} with authorities {}",
+                                    request.getMethod(),
+                                    request.getRequestURI(),
+                                    authentication != null ? authentication.getName() : "anonymous",
+                                    authentication != null ? authentication.getAuthorities() : "none"
+                            );
+                            response.setStatus(HttpServletResponse.SC_FORBIDDEN);
+                            response.setContentType("application/json");
+                            response.getWriter().write("""
+                                    {"code":"ACCESS_DENIED","message":"You do not have permission to perform this action.","status":403}
+                                    """);
+                        }))
                 .authorizeHttpRequests(authorizeRequests ->
                         authorizeRequests
                                 .requestMatchers("/actuator/health").permitAll()

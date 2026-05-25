@@ -21,6 +21,7 @@ import java.io.IOException;
 @Component
 public class JwtFilter extends OncePerRequestFilter {
     private static final String FORCED_LOGOUT_HEADER = "X-Session-Ended-Reason";
+    private static final String PASSWORD_CHANGE_REQUIRED_HEADER = "X-Password-Change-Required";
     private static final String PORTAL_ACCESS_REMOVED_REASON = "portal-access-removed";
 
     private final JwtService jwtService;
@@ -81,10 +82,12 @@ public class JwtFilter extends OncePerRequestFilter {
                 if (userAccount != null
                         && Boolean.TRUE.equals(userAccount.getPasswordChangeRequired())
                         && !isPasswordChangeAllowedPath(request)) {
-                    response.sendError(
-                            HttpServletResponse.SC_FORBIDDEN,
-                            "You must change your temporary password before continuing."
-                    );
+                    response.setStatus(HttpServletResponse.SC_FORBIDDEN);
+                    response.setHeader(PASSWORD_CHANGE_REQUIRED_HEADER, "true");
+                    response.setContentType("application/json");
+                    response.getWriter().write("""
+                            {"code":"PASSWORD_CHANGE_REQUIRED","message":"You must change your temporary password before continuing.","status":403}
+                            """);
                     return;
                 }
 
