@@ -80,6 +80,7 @@ class UserAccountServiceTest {
         UserAccount result = userAccountService.createUserAccount(dto);
     
         Assertions.assertNotNull(result);
+        Assertions.assertEquals(1L, result.getAccountId());
         Assertions.assertEquals("niko123", result.getUsername());
         Assertions.assertEquals("hashed_secret", result.getPasswordHash());
         Assertions.assertEquals(AccountStatus.ACTIVE, result.getAccountStatus());

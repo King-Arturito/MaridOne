@@ -85,6 +85,7 @@ public class UserAccountService {
         Employee emp = employeeRepository.findById(payload.getEmployeeId()).orElseThrow(() -> new EmployeeNotFoundException(payload.getEmployeeId()));
 
         UserAccount user = new UserAccount();
+        user.setAccountId(payload.getEmployeeId());
         user.setUsername(username);
         user.setPasswordHash(passwordEncoder.encode(password));
         user.setPasswordChangeRequired(true);
