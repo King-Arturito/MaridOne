@@ -27,8 +27,8 @@ public class DocumentController {
     }
 
     @PostMapping("/public/upload")
-    @PreAuthorize("hasRole('HR')")
-    public ResponseEntity<Void> uploadPublicDocument(MultipartFile file, Authentication authentication) {
+    @PreAuthorize("hasAnyRole('MANAGEMENT', 'HR')")
+    public ResponseEntity<Void> uploadPublicDocument(@RequestParam("file") MultipartFile file, Authentication authentication) {
         String uploadedBy = authentication.getName();
         documentService.uploadPublicDocument(file, uploadedBy);
         return ResponseEntity.status(HttpStatus.CREATED).build();

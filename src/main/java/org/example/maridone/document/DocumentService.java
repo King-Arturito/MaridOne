@@ -149,6 +149,13 @@ public class DocumentService {
     @ExecutionTime
     @Transactional
     public void uploadPublicDocument(MultipartFile file, String uploadedBy) {
+        if (file == null || file.isEmpty()) {
+            throw new InvalidActionException("No file provided for upload.");
+        }
+        if (FileValidation.exceedsFileSizeLimit(List.of(file), documentConfig.getMaxFileSize().toBytes())) {
+            throw new FileTooLargeException("File exceeds file size limit of: " + documentConfig.getMaxFileSize() + " bytes");
+        }
+
         Long userId = userAccountRepository.findIdByUsername(uploadedBy)
                 .orElseThrow(() -> new AccountNotFoundException("UserAccount with: " + uploadedBy + " not found."));
 
