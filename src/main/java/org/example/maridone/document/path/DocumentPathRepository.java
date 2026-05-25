@@ -20,6 +20,9 @@ public interface DocumentPathRepository extends JpaRepository<DocumentPath, Long
     @Query("SELECT DISTINCT dp FROM DocumentPath dp LEFT JOIN FETCH dp.links WHERE dp.userAccount.username = :username")
     List<DocumentPath> findAllByUsername(@Param("username") String username);
 
+    @Query("SELECT DISTINCT dp FROM DocumentPath dp LEFT JOIN FETCH dp.links WHERE dp.userAccount.username = :username AND (dp.isPublic = false OR dp.isPublic IS NULL)")
+    List<DocumentPath> findPrivateByUsername(@Param("username") String username);
+
     @Query("SELECT dp FROM DocumentPath dp JOIN dp.links link WHERE link.connectedEntity = :entityType AND link.connectedId = :connectedId")
     List<DocumentPath> findDocumentsByEntityAndId(
             @Param("entityType") String entityType,

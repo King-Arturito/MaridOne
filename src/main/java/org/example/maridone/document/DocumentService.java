@@ -225,12 +225,12 @@ public class DocumentService {
                 .anyMatch(a -> a.getAuthority().equals("ROLE_HR"));
         List<DocumentResponseDto> documentPaths;
 
-        // if username exists and isHr, finds all documents connected to username
-        // else, get own documents
+        // if username exists and isHr, finds private documents connected to username
+        // else, get own private documents
         if (username != null && isHr) {
-            documentPaths = documentMapper.toDocumentResponseDtos(documentPathRepository.findAllByUsername(username));
+            documentPaths = documentMapper.toDocumentResponseDtos(documentPathRepository.findPrivateByUsername(username));
         } else {
-            documentPaths = documentMapper.toDocumentResponseDtos(documentPathRepository.findAllByUsername(authentication.getName()));
+            documentPaths = documentMapper.toDocumentResponseDtos(documentPathRepository.findPrivateByUsername(authentication.getName()));
         }
         return documentPaths;
     }
