@@ -23,6 +23,7 @@ public class EmployeeResponseDto {
     private String companyEmail;
     private String personalEmail;
     private String phoneNumber;
+    private String designation;
     private Position position;
     private String department;
     private String managerName;
@@ -131,6 +132,14 @@ public class EmployeeResponseDto {
 
     public void setPhoneNumber(String phoneNumber) {
         this.phoneNumber = phoneNumber;
+    }
+
+    public String getDesignation() {
+        return designation;
+    }
+
+    public void setDesignation(String designation) {
+        this.designation = designation;
     }
 
     public Position getPosition() {

@@ -29,6 +29,7 @@ public class EmployeeDetailsDto {
     private String personalEmail;
     private String isVerified;
     private String phoneNumber;
+    private String designation;
     private Position position;
     private String department;
     private String userAccountName;
@@ -158,6 +159,14 @@ public class EmployeeDetailsDto {
 
     public void setPhoneNumber(String phoneNumber) {
         this.phoneNumber = phoneNumber;
+    }
+
+    public String getDesignation() {
+        return designation;
+    }
+
+    public void setDesignation(String designation) {
+        this.designation = designation;
     }
 
     public Position getPosition() {

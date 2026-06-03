@@ -4,6 +4,7 @@ import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Size;
 import org.example.maridone.embeddable.Address;
 import org.example.maridone.enums.AccountStatus;
 import org.example.maridone.enums.EmploymentStatus;
@@ -40,6 +41,8 @@ public class EmployeeRequestDto {
     @NotBlank(groups = OnCreate.class, message = "Phone number is required.")
     @Pattern(regexp = "^\\D*(?:\\d\\D*){11}$", message = "Phone number must be exactly 11 digits.")
     private String phoneNumber;
+    @Size(max = 100, message = "Designation must be 100 characters or fewer.")
+    private String designation;
     private Position position;
     private String department;
     private BigDecimal yearlySalary;
@@ -161,6 +164,14 @@ public class EmployeeRequestDto {
 
     public void setPhoneNumber(String phoneNumber) {
         this.phoneNumber = phoneNumber;
+    }
+
+    public String getDesignation() {
+        return designation;
+    }
+
+    public void setDesignation(String designation) {
+        this.designation = designation;
     }
 
     public Position getPosition() {

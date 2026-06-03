@@ -108,6 +108,7 @@ public class EmployeeService {
         employee.setPersonalEmail(normalizeOptionalEmail(employee.getPersonalEmail()));
         employee.setPhoneNumber(normalizePhoneNumber(employee.getPhoneNumber()));
         employee.setPosition(Optional.ofNullable(employee.getPosition()).orElse(Position.EMPLOYEE));
+        employee.setDesignation(normalizeOptionalText(employee.getDesignation()));
         employee.setEmploymentStatus(Optional.ofNullable(employee.getEmploymentStatus()).orElse(EmploymentStatus.REGULAR));
         employee.setEmploymentDateStart(Optional.ofNullable(employee.getEmploymentDateStart()).orElse(LocalDate.now()));
         employee.setEmploymentDateEnd(employeeRequestDto.getEmploymentDateEnd());
@@ -219,6 +220,10 @@ public class EmployeeService {
         Optional.ofNullable(updated.getPhoneNumber())
                 .filter(v -> !v.equals(emp.getPhoneNumber()))
                 .ifPresent(phone -> updatePhoneNumber(emp, phone));
+
+        if (updated.getDesignation() != null) {
+            emp.setDesignation(normalizeOptionalText(updated.getDesignation()));
+        }
 
         Optional.ofNullable(updated.getPosition())
                 .filter(v -> !v.equals(emp.getPosition()))
@@ -661,6 +666,7 @@ public class EmployeeService {
                         || updated.getEmploymentDateStart() != null
                         || updated.getEmploymentDateEnd() != null
                         || updated.getCompanyEmail() != null
+                        || updated.getDesignation() != null
                         || updated.getPosition() != null
                         || updated.getDepartment() != null
                         || updated.getYearlySalary() != null

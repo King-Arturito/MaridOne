@@ -84,6 +84,9 @@ public class Employee {
     @Enumerated(EnumType.STRING)
     private Position position;
 
+    @Column(name = "designation", length = 100)
+    private String designation;
+
     @Embedded
     private Address address;
 
@@ -275,6 +278,14 @@ public class Employee {
 
     public void setPosition(Position position) {
         this.position = position;
+    }
+
+    public String getDesignation() {
+        return designation;
+    }
+
+    public void setDesignation(String designation) {
+        this.designation = designation;
     }
 
     public Address getAddress() {
