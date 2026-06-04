@@ -16,6 +16,7 @@ import org.example.maridone.document.mapper.DocumentMapper;
 import org.example.maridone.exception.unauthorized.UnauthorizedAccessException;
 import org.example.maridone.document.spec.DocumentSpecs;
 import org.example.maridone.enums.AccountStatus;
+import org.example.maridone.enums.EmploymentStatus;
 import org.example.maridone.exception.notfound.AccountNotFoundException;
 import org.example.maridone.exception.notfound.EmployeeNotFoundException;
 import org.example.maridone.exception.conflict.DuplicateAccountException;
@@ -94,7 +95,7 @@ public class UserAccountService {
         user.setLastPasswordChangedAt(null);
         user.setEmployee(emp);
         emp.setUserAccount(user);
-        user.setAccountStatus(payload.getAccountStatus());
+        user.setAccountStatus(resolveAllowedAccountStatus(emp, payload.getAccountStatus()));
         userAccountRepository.save(user);
         return user;
     }
@@ -125,12 +126,23 @@ public class UserAccountService {
             refreshTokenRepository.deleteAllByUserAccount(existingId);
         }
 
-        existing.setAccountStatus(payload.getAccountStatus());
-        if (payload.getAccountStatus() == AccountStatus.INACTIVE) {
+        AccountStatus nextStatus = resolveAllowedAccountStatus(existing.getEmployee(), payload.getAccountStatus());
+        existing.setAccountStatus(nextStatus);
+        if (nextStatus == AccountStatus.INACTIVE) {
             refreshTokenRepository.deleteAllByUserAccount(existingId);
         }
 
         return userAccountRepository.save(existing);
+    }
+
+    @Transactional
+    @ExecutionTime
+    public void deactivateEmployeePortalAccess(Long employeeId) {
+        userAccountRepository.findByEmployee_EmployeeId(employeeId).ifPresent(account -> {
+            account.setAccountStatus(AccountStatus.INACTIVE);
+            refreshTokenRepository.deleteAllByUserAccount(account.getAccountId());
+            userAccountRepository.save(account);
+        });
     }
 
     @Transactional
@@ -188,5 +200,12 @@ public class UserAccountService {
             throw new IllegalArgumentException("Password is required.");
         }
         return password.trim();
+    }
+
+    private AccountStatus resolveAllowedAccountStatus(Employee employee, AccountStatus requestedStatus) {
+        if (employee != null && employee.getEmploymentStatus() == EmploymentStatus.TERMINATED) {
+            return AccountStatus.INACTIVE;
+        }
+        return requestedStatus == null ? AccountStatus.ACTIVE : requestedStatus;
     }
 }

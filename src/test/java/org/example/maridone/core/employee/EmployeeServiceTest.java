@@ -385,6 +385,7 @@ class EmployeeServiceTest {
         Assertions.assertEquals("Cleared turnover requirements.", result.getSeparationNotes());
         Assertions.assertEquals(java.time.LocalDate.of(2026, 4, 16), result.getSeparationEffectiveDate());
         Assertions.assertEquals("hr.lead", result.getSeparationProcessedBy());
+        verify(userAccountService).deactivateEmployeePortalAccess(35L);
         verify(employeeSeparationRepository).save(argThat(separation ->
                 separation.getEmployee() == employee
                         && separation.getReason() == SeparationReason.VOLUNTARY_RESIGNATION
@@ -421,6 +422,7 @@ class EmployeeServiceTest {
         Assertions.assertEquals(EmploymentStatus.TERMINATED, result.getEmploymentStatus());
         verify(employeeSeparationRepository, never()).save(any(EmployeeSeparation.class));
         verify(employeeRepository).save(employee);
+        verify(userAccountService).deactivateEmployeePortalAccess(36L);
     }
 
     @Test

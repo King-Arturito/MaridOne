@@ -281,6 +281,7 @@ public class EmployeeService {
         }
 
         employeeRepository.save(emp);
+        syncPortalAccessForEmploymentStatus(emp);
         applyBankAccountUpdate(emp, updated);
 
         return toEmployeeResponse(emp);
@@ -345,6 +346,7 @@ public class EmployeeService {
             }
         }
         employeeRepository.save(emp);
+        syncPortalAccessForEmploymentStatus(emp);
         return toEmployeeResponse(emp);
     }
 
@@ -462,6 +464,12 @@ public class EmployeeService {
         return updated != null
                 && (updated.getBankName() != null
                 || updated.getBankAccountNumber() != null);
+    }
+
+    private void syncPortalAccessForEmploymentStatus(Employee employee) {
+        if (employee.getEmploymentStatus() == EmploymentStatus.TERMINATED) {
+            userAccountService.deactivateEmployeePortalAccess(employee.getEmployeeId());
+        }
     }
 
     private AccountStatus findAccountStatus(Long employeeId) {

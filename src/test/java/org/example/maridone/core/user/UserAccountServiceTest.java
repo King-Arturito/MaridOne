@@ -16,6 +16,7 @@ import org.example.maridone.document.path.DocumentPathRepository;
 import org.example.maridone.document.mapper.DocumentMapper;
 import org.example.maridone.document.path.DocumentPath;
 import org.example.maridone.enums.AccountStatus;
+import org.example.maridone.enums.EmploymentStatus;
 import org.example.maridone.exception.notfound.AccountNotFoundException;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
@@ -89,6 +90,27 @@ class UserAccountServiceTest {
     }
 
     @Test
+    void createUserAccount_ShouldForceInactive_WhenEmployeeIsTerminated() {
+        CreateUserAccountDto dto = new CreateUserAccountDto();
+        dto.setEmployeeId(1L);
+        dto.setUsername("niko123");
+        dto.setPassword("secretPassword");
+        dto.setAccountStatus(AccountStatus.ACTIVE);
+
+        Employee emp = new Employee();
+        emp.setEmploymentStatus(EmploymentStatus.TERMINATED);
+
+        when(employeeRepository.findById(1L)).thenReturn(Optional.of(emp));
+        when(passwordEncoder.encode("secretPassword")).thenReturn("hashed_secret");
+        when(userAccountRepository.save(any(UserAccount.class))).thenAnswer(i -> i.getArgument(0));
+
+        UserAccount result = userAccountService.createUserAccount(dto);
+
+        Assertions.assertEquals(AccountStatus.INACTIVE, result.getAccountStatus());
+        verify(userAccountRepository).save(any(UserAccount.class));
+    }
+
+    @Test
     void getUserAccount_ShouldReturnAccount_WhenFound() {
         String username = "niko123";
         UserAccount account = new UserAccount();
@@ -134,6 +156,31 @@ class UserAccountServiceTest {
         verify(userAccountRepository).save(existing);
 
         verifyNoInteractions(documentPathRepository);
+    }
+
+    @Test
+    void updateUserAccount_ShouldForceInactive_WhenEmployeeIsTerminated() {
+        UpdateUserAccountDto dto = new UpdateUserAccountDto();
+        dto.setEmployeeId(21L);
+        dto.setUsername("chloe.old");
+        dto.setAccountStatus(AccountStatus.ACTIVE);
+
+        Employee employee = new Employee();
+        employee.setEmploymentStatus(EmploymentStatus.TERMINATED);
+        UserAccount existing = new UserAccount();
+        ReflectionTestUtils.setField(existing, "accountId", 99L);
+        existing.setUsername("chloe.old");
+        existing.setAccountStatus(AccountStatus.ACTIVE);
+        existing.setEmployee(employee);
+
+        when(userAccountRepository.findByEmployee_EmployeeId(21L)).thenReturn(Optional.of(existing));
+        when(userAccountRepository.save(any(UserAccount.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        UserAccount result = userAccountService.updateUserAccount(dto);
+
+        Assertions.assertEquals(AccountStatus.INACTIVE, result.getAccountStatus());
+        verify(refreshTokenRepository).deleteAllByUserAccount(99L);
+        verify(userAccountRepository).save(existing);
     }
 
     @Test
