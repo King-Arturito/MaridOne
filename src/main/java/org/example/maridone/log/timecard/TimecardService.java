@@ -41,7 +41,7 @@ public class TimecardService {
     private static final String TIMECARD_LOGO_RESOURCE_PATH = "/static/images/marid-logo-transparent.png";
     private static final String COMPANY_NAME = "Marid Industries Corporation";
     private static final String COMPANY_ADDRESS = "Address";
-    private static final String COMPANY_EMAIL = "marid@marid.com";
+    private static final String COMPANY_EMAIL = "operations@marid.global";
 
     private final EmployeeRepository employeeRepository;
     private final AttendanceLogRepository attendanceLogRepository;

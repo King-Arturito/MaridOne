@@ -84,7 +84,31 @@ public class SecurityConfig {
                         authorizeRequests
                                 .requestMatchers("/actuator/health").permitAll()
                                 .requestMatchers("/api/auth/**").permitAll()
+                                .requestMatchers(
+                                        "/",
+                                        "/index.html",
+                                        "/login",
+                                        "/forgot-password",
+                                        "/change-password",
+                                        "/verify-email",
+                                        "/employee/login",
+                                        "/hr/login",
+                                        "/manager/login",
+                                        "/management/login",
+                                        "/accounting/login",
+                                        "/employee/**",
+                                        "/hr/**",
+                                        "/manager/**",
+                                        "/management/**",
+                                        "/accounting/**",
+                                        "/assets/**",
+                                        "/images/**",
+                                        "/marid-tab-icon.png",
+                                        "/favicon.ico",
+                                        "/vite.svg"
+                                ).permitAll()
                                 .requestMatchers("/api/**").authenticated()
+                                .anyRequest().denyAll()
                 )
                 .formLogin(AbstractHttpConfigurer::disable)
                 .logout(logout -> logout.logoutSuccessUrl(defaultConfig.getUrl().toString()))
