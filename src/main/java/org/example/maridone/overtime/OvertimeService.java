@@ -383,10 +383,7 @@ public class OvertimeService {
 
     private String validateDecisionReason(String reason, String message) {
         String trimmed = reason == null ? "" : reason.trim();
-        if (trimmed.length() < 5) {
-            throw new InvalidActionException(message);
-        }
-        return trimmed;
+        return trimmed.isEmpty() ? null : trimmed;
     }
 
     private String validatePaidOverrideReason(boolean overrideApplied, String reason) {
@@ -394,10 +391,7 @@ public class OvertimeService {
             return null;
         }
         String trimmed = reason == null ? "" : reason.trim();
-        if (trimmed.length() < 5) {
-            throw new InvalidActionException("Please explain why HR is overriding the paid or unpaid overtime treatment.");
-        }
-        return trimmed;
+        return trimmed.isEmpty() ? null : trimmed;
     }
 
     private boolean resolveFinalPaidValue(Boolean payloadPaid, Boolean currentPaid) {

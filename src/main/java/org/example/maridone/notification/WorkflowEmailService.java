@@ -110,6 +110,28 @@ public class WorkflowEmailService {
         sendAfterCommit(resolveHrEmails(), subject, body);
     }
 
+    public void sendLeaveForwardedToManagement(LeaveRequest request) {
+        if (request == null) {
+            return;
+        }
+
+        String employeeName = NotificationMessageFormatter.formatEmployeeName(request.getEmployee());
+        String leaveDates = NotificationMessageFormatter.formatDateRange(
+                safeDate(request.getStartDateTime()),
+                safeDate(request.getEndDateTime())
+        );
+        String firstLevelApproverTitle = firstLevelApproverTitle(request.getEmployee());
+        String subject = "Leave Request Ready for Management Final Review";
+        String body = employeeName + "'s leave request for " + leaveDates + " is ready for management final review."
+                + "\nLeave type: " + safeText(request.getLeaveType() == null ? null : formatLabel(request.getLeaveType().name()), "Unspecified")
+                + "\n" + firstLevelApproverTitle + " note: "
+                + safeText(request.getManagerApproverReason(), "No " + firstLevelApproverTitle.toLowerCase() + " note provided.")
+                + "\nSuggested pay treatment: " + (Boolean.TRUE.equals(request.getSuggestedPaid()) ? "Paid" : "Unpaid")
+                + portalFooter("Please log in to MaridOne to review and finalize this HR-owned leave request.");
+
+        sendAfterCommit(resolveManagementEmails(), subject, body);
+    }
+
     @Async
     public void sendLeaveForwardedToEmployee(LeaveRequest request) {
         if (request == null || request.getEmployee() == null) {
@@ -122,8 +144,10 @@ public class WorkflowEmailService {
         );
         String firstLevelApproverLabel = firstLevelApproverLabel(request.getEmployee());
         String firstLevelApproverTitle = firstLevelApproverTitle(request.getEmployee());
-        String subject = "Your Leave Request Is Waiting for HR Review";
-        String body = "Your leave request for " + leaveDates + " was endorsed by " + firstLevelApproverLabel + " and is now waiting for HR review."
+        String finalReviewerTitle = finalLeaveReviewerTitle(request);
+        String finalReviewerLabel = "HR".equals(finalReviewerTitle) ? "HR" : finalReviewerTitle.toLowerCase();
+        String subject = "Your Leave Request Is Waiting for " + finalReviewerTitle + " Review";
+        String body = "Your leave request for " + leaveDates + " was endorsed by " + firstLevelApproverLabel + " and is now waiting for " + finalReviewerLabel + " review."
                 + "\n" + firstLevelApproverTitle + " note: "
                 + safeText(request.getManagerApproverReason(), "No " + firstLevelApproverTitle.toLowerCase() + " note provided.");
 
@@ -161,15 +185,18 @@ public class WorkflowEmailService {
         );
         String subject;
         String body;
+        String finalReviewerTitle = finalLeaveReviewerTitle(request);
         if (request.getRequestStatus() == org.example.maridone.enums.Status.APPROVED) {
             subject = "Your Leave Request Was Approved";
             body = "Your leave request for " + leaveDates + " was approved as "
                     + (Boolean.TRUE.equals(request.getPaid()) ? "paid" : "unpaid") + " leave."
-                    + "\nHR note: " + safeText(request.getApproverReason(), "No HR note provided.");
+                    + "\n" + finalReviewerTitle + " note: "
+                    + safeText(request.getApproverReason(), "No " + finalReviewerTitle.toLowerCase() + " note provided.");
         } else {
             subject = "Your Leave Request Was Rejected";
             body = "Your leave request for " + leaveDates + " was rejected."
-                    + "\nHR note: " + safeText(request.getApproverReason(), "No HR note provided.");
+                    + "\n" + finalReviewerTitle + " note: "
+                    + safeText(request.getApproverReason(), "No " + finalReviewerTitle.toLowerCase() + " note provided.");
         }
 
         sendAfterCommit(resolveEmployeeEmails(request.getEmployee()), subject, body + portalFooter("Please log in to MaridOne for details."));
@@ -353,6 +380,14 @@ public class WorkflowEmailService {
 
     private String firstLevelApproverTitle(Employee employee) {
         return isManagementFirstLevelReview(employee) ? "Management" : "Manager";
+    }
+
+    private String finalLeaveReviewerTitle(LeaveRequest request) {
+        return request != null
+                && request.getEmployee() != null
+                && request.getEmployee().getPosition() == Position.HR
+                ? "Management"
+                : "HR";
     }
 
     private boolean isManagementFirstLevelReview(Employee employee) {

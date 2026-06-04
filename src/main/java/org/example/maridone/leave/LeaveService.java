@@ -388,11 +388,13 @@ public class LeaveService {
             throw new InvalidActionException("You cannot approve your own request.");
         }
 
-        validateApproverAccess(user, requestEmpId);
+        validateApproverAccess(user, request, requestEmpId);
 
         return switch (resolveApproverPosition(user)) {
             case MANAGER -> handleManagerLeaveReview(request, payload, user);
-            case MANAGEMENT -> handleManagerLeaveReview(request, payload, user);
+            case MANAGEMENT -> isHrAlternateFinalReview(request)
+                    ? handleHrLeaveReview(request, payload, user, requestEmpId)
+                    : handleManagerLeaveReview(request, payload, user);
             case HR -> handleHrLeaveReview(request, payload, user, requestEmpId);
             default -> throw new InvalidActionException("Only managers, management, and HR can review leave requests.");
         };
@@ -747,19 +749,21 @@ public class LeaveService {
         return employeeRepository.findHandledEmployeeIds(employeeId);
     }
 
-    private void validateApproverAccess(UserAccount user, Long requestEmpId) {
+    private void validateApproverAccess(UserAccount user, LeaveRequest request, Long requestEmpId) {
         Position position = Optional.ofNullable(user.getEmployee())
                 .map(Employee::getPosition)
                 .orElse(Position.UNKNOWN);
 
         if (position == Position.HR) {
+            if (isHrAlternateFinalReview(request)) {
+                throw new InvalidActionException("HR-owned leave requests must be finalized by management.");
+            }
             return;
         }
 
         if (position == Position.MANAGEMENT) {
-            Employee requestEmployee = employeeRepository.findById(requestEmpId)
-                    .orElseThrow(() -> new EmployeeNotFoundException(requestEmpId));
-            if (requestEmployee.getManager() != null) {
+            Employee requestEmployee = resolveRequestEmployee(request, requestEmpId);
+            if (requestEmployee.getManager() != null && !isHrAlternateFinalReview(request)) {
                 throw new InvalidActionException("Management can only review leave requests from employees without a manager.");
             }
             return;
@@ -792,6 +796,27 @@ public class LeaveService {
         ));
     }
 
+    private Employee resolveRequestEmployee(LeaveRequest request, Long requestEmpId) {
+        if (request != null && request.getEmployee() != null) {
+            return request.getEmployee();
+        }
+        return employeeRepository.findById(requestEmpId)
+                .orElseThrow(() -> new EmployeeNotFoundException(requestEmpId));
+    }
+
+    private boolean isHrOwnedRequest(LeaveRequest request) {
+        return request != null
+                && Optional.ofNullable(request.getEmployee())
+                .map(Employee::getPosition)
+                .orElse(Position.UNKNOWN) == Position.HR;
+    }
+
+    private boolean isHrAlternateFinalReview(LeaveRequest request) {
+        return request != null
+                && request.getRequestStatus() == Status.PENDING_HR
+                && isHrOwnedRequest(request);
+    }
+
     private LeaveRequest handleManagerLeaveReview(LeaveRequest request, LeaveRequestDto payload, UserAccount user) {
         if (request.getRequestStatus() != Status.PENDING_MANAGER && request.getRequestStatus() != Status.PENDING) {
             throw new IllegalStateException("This leave request is no longer waiting for manager review.");
@@ -819,12 +844,21 @@ public class LeaveService {
                     request.getStartDateTime().toLocalDate(),
                     request.getEndDateTime().toLocalDate()
             );
-            notifyRole("Leave request from " + employeeName + " (" + leaveDates + ") is ready for HR review.", Position.HR);
+            boolean routeToManagementFinalReview = isHrOwnedRequest(request);
+            String finalReviewerLabel = routeToManagementFinalReview ? "management final review" : "HR review";
+            notifyRole(
+                    "Leave request from " + employeeName + " (" + leaveDates + ") is ready for " + finalReviewerLabel + ".",
+                    routeToManagementFinalReview ? Position.MANAGEMENT : Position.HR
+            );
             notifyEmployee(
                     request.getEmployee(),
-                    "Your leave request (" + leaveDates + ") was endorsed by " + reviewerLabel + " and is now waiting for HR review."
+                    "Your leave request (" + leaveDates + ") was endorsed by " + reviewerLabel + " and is now waiting for " + finalReviewerLabel + "."
             );
-            workflowEmailService.sendLeaveForwardedToHr(request);
+            if (routeToManagementFinalReview) {
+                workflowEmailService.sendLeaveForwardedToManagement(request);
+            } else {
+                workflowEmailService.sendLeaveForwardedToHr(request);
+            }
             workflowEmailService.sendLeaveForwardedToEmployee(request);
             return request;
         }
@@ -898,9 +932,10 @@ public class LeaveService {
         );
         if (decision == Status.APPROVED) {
             String payLabel = Boolean.TRUE.equals(request.getPaid()) ? "paid" : "unpaid";
+            String finalReviewerLabel = resolveApproverPosition(user) == Position.MANAGEMENT ? "management" : "HR";
             notifyEmployee(
                     request.getEmployee(),
-                    "Your leave request (" + leaveDates + ") was approved by HR as " + payLabel + " leave."
+                    "Your leave request (" + leaveDates + ") was approved by " + finalReviewerLabel + " as " + payLabel + " leave."
             );
             workflowEmailService.sendLeaveDecisionToEmployee(request);
         }
@@ -933,10 +968,7 @@ public class LeaveService {
 
     private String validateDecisionReason(String reason, String message) {
         String trimmed = reason == null ? "" : reason.trim();
-        if (trimmed.length() < 5) {
-            throw new InvalidActionException(message);
-        }
-        return trimmed;
+        return trimmed.isEmpty() ? null : trimmed;
     }
 
     private String validatePaidOverrideReason(boolean overrideApplied, String reason) {
@@ -944,10 +976,7 @@ public class LeaveService {
             return null;
         }
         String trimmed = reason == null ? "" : reason.trim();
-        if (trimmed.length() < 5) {
-            throw new InvalidActionException("Please explain why HR is overriding the paid or unpaid leave treatment.");
-        }
-        return trimmed;
+        return trimmed.isEmpty() ? null : trimmed;
     }
 
     private boolean resolveFinalPaidValue(Boolean payloadPaid, Boolean currentPaid) {

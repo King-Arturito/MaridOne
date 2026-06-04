@@ -1025,4 +1025,155 @@ class LeaveServiceTest {
         Assertions.assertThrows(InvalidActionException.class, () -> leaveService.updateLeaveRequest(payload, 10L));
         SecurityContextHolder.clearContext();
     }
+
+    @Test
+    void updateLeaveRequest_ShouldRouteHrOwnedLeaveToManagementAfterManagerEndorsement() {
+        LeaveRequest request = new LeaveRequest();
+        request.setRequestStatus(Status.PENDING_MANAGER);
+        request.setPaid(false);
+        request.setStartDateTime(mockedDay.plusDays(7).withHour(9));
+        request.setEndDateTime(mockedDay.plusDays(7).withHour(17));
+
+        Employee hrEmployee = new Employee();
+        ReflectionTestUtils.setField(hrEmployee, "employeeId", 3L);
+        hrEmployee.setFirstName("Ethel");
+        hrEmployee.setLastName("Santos");
+        hrEmployee.setPosition(Position.HR);
+        request.setEmployee(hrEmployee);
+
+        Employee managerEmployee = new Employee();
+        ReflectionTestUtils.setField(managerEmployee, "employeeId", 2L);
+        managerEmployee.setFirstName("Adrian");
+        managerEmployee.setLastName("Flores");
+        managerEmployee.setPosition(Position.MANAGER);
+
+        UserAccount managerAccount = new UserAccount();
+        managerAccount.setUsername("manager1");
+        managerAccount.setEmployee(managerEmployee);
+
+        LeaveRequestDto payload = new LeaveRequestDto();
+        payload.setLeaveType(LeaveType.VACATION_LEAVE);
+        payload.setRequestStatus(Status.APPROVED);
+        payload.setApproverReason("");
+
+        Authentication authentication = org.mockito.Mockito.mock(Authentication.class);
+        SecurityContext securityContext = org.mockito.Mockito.mock(SecurityContext.class);
+
+        when(authentication.getName()).thenReturn("manager1");
+        when(securityContext.getAuthentication()).thenReturn(authentication);
+        SecurityContextHolder.setContext(securityContext);
+
+        when(userAccountRepository.findByUsername("manager1")).thenReturn(Optional.of(managerAccount));
+        when(userAccountRepository.findEmployeeIdByUsername("manager1")).thenReturn(2L);
+        when(leaveRequestRepository.findByIdForUpdate(31L)).thenReturn(Optional.of(request));
+        when(leaveRequestRepository.findEmployeeIdByRequestId(31L)).thenReturn(Optional.of(3L));
+        when(employeeRepository.findHandledEmployeeIds(2L)).thenReturn(List.of(3L));
+        when(leaveRequestRepository.save(any(LeaveRequest.class))).thenReturn(request);
+
+        LeaveRequest result = leaveService.updateLeaveRequest(payload, 31L);
+
+        Assertions.assertEquals(Status.PENDING_HR, result.getRequestStatus());
+        Assertions.assertNull(result.getManagerApproverReason());
+        verify(workflowEmailService).sendLeaveForwardedToManagement(request);
+        verify(workflowEmailService, never()).sendLeaveForwardedToHr(request);
+        SecurityContextHolder.clearContext();
+    }
+
+    @Test
+    void updateLeaveRequest_ShouldAllowManagementToFinalizeHrOwnedLeaveWithNoReason() {
+        LeaveRequest request = new LeaveRequest();
+        request.setRequestStatus(Status.PENDING_HR);
+        request.setPaid(false);
+        request.setSuggestedPaid(false);
+        request.setLeaveType(LeaveType.VACATION_LEAVE);
+        request.setStartDateTime(mockedDay.plusDays(7).withHour(9));
+        request.setEndDateTime(mockedDay.plusDays(7).withHour(17));
+
+        Employee hrEmployee = new Employee();
+        ReflectionTestUtils.setField(hrEmployee, "employeeId", 3L);
+        hrEmployee.setFirstName("Ethel");
+        hrEmployee.setLastName("Santos");
+        hrEmployee.setPosition(Position.HR);
+        Employee manager = new Employee();
+        ReflectionTestUtils.setField(manager, "employeeId", 2L);
+        manager.setPosition(Position.MANAGER);
+        hrEmployee.setManager(manager);
+        request.setEmployee(hrEmployee);
+
+        Employee managementEmployee = new Employee();
+        ReflectionTestUtils.setField(managementEmployee, "employeeId", 9L);
+        managementEmployee.setFirstName("Mina");
+        managementEmployee.setLastName("Boss");
+        managementEmployee.setPosition(Position.MANAGEMENT);
+
+        UserAccount managementAccount = new UserAccount();
+        managementAccount.setUsername("management1");
+        managementAccount.setEmployee(managementEmployee);
+
+        LeaveRequestDto payload = new LeaveRequestDto();
+        payload.setLeaveType(LeaveType.VACATION_LEAVE);
+        payload.setRequestStatus(Status.APPROVED);
+
+        Authentication authentication = org.mockito.Mockito.mock(Authentication.class);
+        SecurityContext securityContext = org.mockito.Mockito.mock(SecurityContext.class);
+
+        when(authentication.getName()).thenReturn("management1");
+        when(securityContext.getAuthentication()).thenReturn(authentication);
+        SecurityContextHolder.setContext(securityContext);
+
+        when(userAccountRepository.findByUsername("management1")).thenReturn(Optional.of(managementAccount));
+        when(leaveRequestRepository.findByIdForUpdate(32L)).thenReturn(Optional.of(request));
+        when(leaveRequestRepository.findEmployeeIdByRequestId(32L)).thenReturn(Optional.of(3L));
+        when(leaveRequestRepository.save(any(LeaveRequest.class))).thenReturn(request);
+
+        LeaveRequest result = leaveService.updateLeaveRequest(payload, 32L);
+
+        Assertions.assertEquals(Status.APPROVED, result.getRequestStatus());
+        Assertions.assertNull(result.getApproverReason());
+        Assertions.assertEquals("Boss, Mina", result.getApprover());
+        verify(workflowEmailService).sendLeaveDecisionToEmployee(request);
+        SecurityContextHolder.clearContext();
+    }
+
+    @Test
+    void updateLeaveRequest_ShouldRejectHrFinalizingHrOwnedLeave() {
+        LeaveRequest request = new LeaveRequest();
+        request.setRequestStatus(Status.PENDING_HR);
+
+        Employee hrEmployee = new Employee();
+        ReflectionTestUtils.setField(hrEmployee, "employeeId", 3L);
+        hrEmployee.setPosition(Position.HR);
+        request.setEmployee(hrEmployee);
+
+        Employee hrApprover = new Employee();
+        ReflectionTestUtils.setField(hrApprover, "employeeId", 5L);
+        hrApprover.setPosition(Position.HR);
+
+        UserAccount hrAccount = new UserAccount();
+        hrAccount.setUsername("hr2");
+        hrAccount.setEmployee(hrApprover);
+
+        LeaveRequestDto payload = new LeaveRequestDto();
+        payload.setLeaveType(LeaveType.VACATION_LEAVE);
+        payload.setRequestStatus(Status.APPROVED);
+
+        Authentication authentication = org.mockito.Mockito.mock(Authentication.class);
+        SecurityContext securityContext = org.mockito.Mockito.mock(SecurityContext.class);
+
+        when(authentication.getName()).thenReturn("hr2");
+        when(securityContext.getAuthentication()).thenReturn(authentication);
+        SecurityContextHolder.setContext(securityContext);
+
+        when(userAccountRepository.findByUsername("hr2")).thenReturn(Optional.of(hrAccount));
+        when(leaveRequestRepository.findByIdForUpdate(33L)).thenReturn(Optional.of(request));
+        when(leaveRequestRepository.findEmployeeIdByRequestId(33L)).thenReturn(Optional.of(3L));
+
+        InvalidActionException error = Assertions.assertThrows(
+                InvalidActionException.class,
+                () -> leaveService.updateLeaveRequest(payload, 33L)
+        );
+
+        Assertions.assertTrue(error.getMessage().contains("HR-owned leave requests"));
+        SecurityContextHolder.clearContext();
+    }
 }

@@ -322,7 +322,7 @@ class OvertimeServiceTest {
         OvertimeUpdateDto updateDto = new OvertimeUpdateDto();
         updateDto.setOvertimeId(otId);
         updateDto.setUpdateStatus(Status.APPROVED);
-        updateDto.setApproveReason("HR approved the overtime.");
+        updateDto.setApproveReason("");
 
         OvertimeRequest request = new OvertimeRequest();
         ReflectionTestUtils.setField(request, "overtimeId", otId); 
@@ -348,6 +348,7 @@ class OvertimeServiceTest {
         OvertimeResponseDto result = overtimeService.updateOvertimeRequest(updateDto, approver);
         
         Assertions.assertNotNull(result);
+        Assertions.assertNull(request.getApproveReason());
     }
 
     @Test

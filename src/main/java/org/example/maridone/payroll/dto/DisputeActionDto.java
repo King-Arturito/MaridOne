@@ -1,6 +1,5 @@
 package org.example.maridone.payroll.dto;
 
-import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import org.example.maridone.enums.Status;
 
@@ -8,7 +7,6 @@ public class DisputeActionDto {
 
     @NotNull
     private Status status;
-    @NotBlank
     private String statusReason;
 
     public Status getStatus() {

@@ -5,6 +5,7 @@ import java.util.Optional;
 import org.example.maridone.config.DocumentConfig;
 import org.example.maridone.core.employee.Employee;
 import org.example.maridone.core.employee.EmployeeRepository;
+import org.example.maridone.core.user.UserAccount;
 import org.example.maridone.core.user.UserAccountRepository;
 import org.example.maridone.document.path.DocumentPathRepository;
 import org.example.maridone.document.DocumentService;
@@ -14,6 +15,7 @@ import org.example.maridone.enums.Status;
 import org.example.maridone.exception.notfound.ItemNotFoundException;
 import org.example.maridone.notification.NotificationService;
 import org.example.maridone.notification.WorkflowEmailService;
+import org.example.maridone.payroll.dto.DisputeActionDto;
 import org.example.maridone.payroll.dto.DisputeResponseDto;
 import org.example.maridone.payroll.item.PayrollItem;
 import org.example.maridone.payroll.dto.DisputeRequestDto;
@@ -112,6 +114,44 @@ class DisputeServiceTest {
         Assertions.assertEquals(6L, result.getContent().get(0).getEmployeeId());
         Assertions.assertEquals("Juan Dela Cruz", result.getContent().get(0).getEmployeeName());
         verify(payrollMapper).toResponseDto(disputeRequest);
+    }
+
+    @Test
+    void updateDisputeStatus_ShouldAllowBlankStatusReason() {
+        DisputeRequest disputeRequest = new DisputeRequest();
+        disputeRequest.setStatus(Status.PENDING);
+
+        Employee requester = new Employee();
+        ReflectionTestUtils.setField(requester, "employeeId", 6L);
+        PayrollItem item = new PayrollItem();
+        item.setEmployee(requester);
+        disputeRequest.setPayrollItem(item);
+
+        Employee approverEmployee = new Employee();
+        ReflectionTestUtils.setField(approverEmployee, "employeeId", 7L);
+        approverEmployee.setFirstName("Pat");
+        approverEmployee.setLastName("Reyes");
+
+        UserAccount approver = new UserAccount();
+        approver.setUsername("hr1");
+        approver.setEmployee(approverEmployee);
+
+        DisputeActionDto payload = new DisputeActionDto();
+        payload.setStatus(Status.APPROVED);
+        payload.setStatusReason("");
+
+        DisputeResponseDto responseDto = new DisputeResponseDto();
+        when(disputeRepository.findByIdWithEmployeeForUpdate(12L)).thenReturn(Optional.of(disputeRequest));
+        when(userAccountRepository.findByUsername("hr1")).thenReturn(Optional.of(approver));
+        when(disputeRepository.findEmployeeIdByDisputeRequestId(12L)).thenReturn(6L);
+        when(disputeRepository.save(any(DisputeRequest.class))).thenReturn(disputeRequest);
+        when(payrollMapper.toResponseDto(disputeRequest)).thenReturn(responseDto);
+
+        DisputeResponseDto result = disputeService.updateDisputeStatus(12L, payload, "hr1");
+
+        Assertions.assertSame(responseDto, result);
+        Assertions.assertEquals(Status.APPROVED, disputeRequest.getStatus());
+        Assertions.assertNull(disputeRequest.getStatusReason());
     }
 
     @Test

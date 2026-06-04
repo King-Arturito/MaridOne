@@ -3,6 +3,7 @@ import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 import org.example.maridone.enums.LeaveType;
 import org.example.maridone.enums.Status;
 import org.example.maridone.marker.OnUpdate;
@@ -20,6 +21,7 @@ public class LeaveRequestDto {
     private String approver;
 
     @NotNull
+    @Size(min = 5, max = 255, message = "Reason must be at least 5 characters")
     private String reason;
 
     @NotNull
@@ -30,7 +32,6 @@ public class LeaveRequestDto {
     @NotNull(groups =  OnUpdate.class)
     private Status requestStatus;
 
-    @NotNull(groups = OnUpdate.class)
     private String approverReason;
 
     private Boolean paid;

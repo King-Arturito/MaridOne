@@ -145,7 +145,7 @@ public class DisputeService {
             throw new InvalidActionException("You cannot approve your own request");
         }
         disputeRequest.setStatus(payload.getStatus());
-        disputeRequest.setStatusReason(payload.getStatusReason());
+        disputeRequest.setStatusReason(normalizeOptionalReason(payload.getStatusReason()));
         if (approver.getEmployee() != null) {
             disputeRequest.setApprover(
                     approver.getEmployee().getLastName() + ", " + approver.getEmployee().getFirstName()
@@ -163,6 +163,11 @@ public class DisputeService {
 
         workflowEmailService.sendDisputeDecisionToEmployee(disputeRequest);
         return payrollMapper.toResponseDto(disputeRequest);
+    }
+
+    private String normalizeOptionalReason(String reason) {
+        String trimmed = reason == null ? "" : reason.trim();
+        return trimmed.isEmpty() ? null : trimmed;
     }
 
 
