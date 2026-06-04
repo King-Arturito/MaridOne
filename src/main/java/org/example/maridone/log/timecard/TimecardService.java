@@ -302,6 +302,7 @@ public class TimecardService {
 
         List<TemplateShiftSchedule> templateSchedules = templateShiftMap.getOrDefault(workDate.getDayOfWeek(), List.of());
         return templateSchedules.stream()
+                .filter(schedule -> !schedule.isDayOff())
                 .map(schedule -> toDailyShiftSchedule(workDate, schedule))
                 .filter(Objects::nonNull)
                 .sorted(Comparator.comparing(DailyShiftSchedule::getStartDateTime))

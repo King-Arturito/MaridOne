@@ -12,6 +12,7 @@ public class ShiftResponseDto {
     private LocalTime endTime;
     private DayOfWeek dayOfWeek;
     private EarningsType earningsType;
+    private boolean dayOff;
 
     public Long getShiftId() {
         return shiftId;
@@ -59,5 +60,13 @@ public class ShiftResponseDto {
 
     public void setEarningsType(EarningsType earningsType) {
         this.earningsType = earningsType;
+    }
+
+    public boolean isDayOff() {
+        return dayOff;
+    }
+
+    public void setDayOff(boolean dayOff) {
+        this.dayOff = dayOff;
     }
 }

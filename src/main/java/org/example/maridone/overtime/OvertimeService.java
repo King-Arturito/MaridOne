@@ -441,6 +441,7 @@ public class OvertimeService {
     private void validateOutsideShiftSchedule(Employee employee, LocalDateTime requestStart, LocalDateTime requestEnd) {
         TemplateShiftSchedule shiftSchedule = templateShiftRepository.findAllByEmployeeId(employee.getEmployeeId())
                 .stream()
+                .filter(schedule -> !schedule.isDayOff())
                 .filter(schedule -> schedule.getDayOfWeek() == requestStart.getDayOfWeek())
                 .findFirst()
                 .orElseThrow(() -> new OvertimeException("Your work schedule is not set up yet, so overtime cannot be processed."));

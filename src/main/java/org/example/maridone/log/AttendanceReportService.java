@@ -563,6 +563,7 @@ public class AttendanceReportService {
             List<TemplateShiftSchedule> schedules
     ) {
         return schedules.stream()
+                .filter(schedule -> !schedule.isDayOff())
                 .filter(schedule -> schedule.getEmployeeId() != null && schedule.getDayOfWeek() != null)
                 .collect(Collectors.groupingBy(
                         TemplateShiftSchedule::getEmployeeId,

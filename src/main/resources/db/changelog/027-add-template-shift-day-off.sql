@@ -1,0 +1,2 @@
+ALTER TABLE template_shift_schedule
+    ADD COLUMN IF NOT EXISTS is_day_off BOOLEAN NOT NULL DEFAULT FALSE;

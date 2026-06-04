@@ -166,6 +166,7 @@ public class ShiftService {
         templateShiftSchedule.setStartTime(payload.getStartTime());
         templateShiftSchedule.setEndTime(payload.getEndTime());
         templateShiftSchedule.setDayOfWeek(payload.getDayOfWeek());
+        templateShiftSchedule.setDayOff(false);
         templateShiftRepository.save(templateShiftSchedule);
         notifyTemplateShiftChange(emp, payload.getDayOfWeek(), payload.getStartTime(), payload.getEndTime(), "set");
         return templateShiftSchedule;
@@ -178,6 +179,7 @@ public class ShiftService {
         schedule.setStartTime(payload.getStartTime());
         schedule.setEndTime(payload.getEndTime());
         schedule.setDayOfWeek(payload.getDayOfWeek());
+        schedule.setDayOff(false);
         templateShiftRepository.save(schedule);
         notifyTemplateShiftChange(schedule.getEmployee(), payload.getDayOfWeek(), payload.getStartTime(), payload.getEndTime(), "updated");
         return schedule;
@@ -188,7 +190,8 @@ public class ShiftService {
     public void deleteShiftSchedule(Long shiftId) {
         TemplateShiftSchedule schedule = templateShiftRepository.findById(shiftId)
                 .orElseThrow(() -> new ShiftsNotFoundException("Shift of ID: " + shiftId + " not found."));
-        templateShiftRepository.delete(schedule);
+        schedule.setDayOff(true);
+        templateShiftRepository.save(schedule);
         notifyTemplateShiftDayOff(schedule.getEmployee(), schedule.getDayOfWeek());
     }
 
@@ -266,7 +269,7 @@ public class ShiftService {
                 return;
             }
             List<LeaveRequest> leaves = empToRequests.getOrDefault(empId, List.of());
-            schedules.forEach(schedule -> {
+            schedules.stream().filter(schedule -> !schedule.isDayOff()).forEach(schedule -> {
                 if (leaves.isEmpty()) {
                     schedulesToSave.add(buildShift(schedule,
                             LocalDateTime.of(today, schedule.getStartTime()),
@@ -429,6 +432,7 @@ public class ShiftService {
         templateShiftSchedule.setStartTime(LocalTime.of(8, 0));
         templateShiftSchedule.setEndTime(LocalTime.of(17, 0));
         templateShiftSchedule.setDayOfWeek(dayOfWeek);
+        templateShiftSchedule.setDayOff(false);
         return templateShiftRepository.save(templateShiftSchedule);
     }
 

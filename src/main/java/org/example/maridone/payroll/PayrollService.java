@@ -932,6 +932,7 @@ public class PayrollService {
             List<TemplateShiftSchedule> templateSchedules
     ) {
         return safeList(templateSchedules).stream()
+                .filter(schedule -> !schedule.isDayOff())
                 .filter(schedule -> schedule.getEmployeeId() != null && schedule.getDayOfWeek() != null)
                 .collect(Collectors.groupingBy(
                         TemplateShiftSchedule::getEmployeeId,

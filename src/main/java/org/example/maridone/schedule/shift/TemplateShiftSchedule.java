@@ -35,6 +35,9 @@ public class TemplateShiftSchedule {
     @Enumerated(EnumType.STRING)
     private DayOfWeek dayOfWeek;
 
+    @Column(name = "is_day_off", nullable = false)
+    private boolean dayOff;
+
 
     public Long getShiftId() {
         return shiftId;
@@ -79,5 +82,13 @@ public class TemplateShiftSchedule {
 
     public void setDayOfWeek(DayOfWeek dayOfWeek) {
         this.dayOfWeek = dayOfWeek;
+    }
+
+    public boolean isDayOff() {
+        return dayOff;
+    }
+
+    public void setDayOff(boolean dayOff) {
+        this.dayOff = dayOff;
     }
 }

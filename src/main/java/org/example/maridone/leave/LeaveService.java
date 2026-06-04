@@ -513,6 +513,7 @@ public class LeaveService {
         }
 
         Map<DayOfWeek, TemplateShiftSchedule> scheduleMap = shiftSchedules.stream()
+                .filter(schedule -> !schedule.isDayOff())
                 .collect(Collectors.toMap(TemplateShiftSchedule::getDayOfWeek, s -> s));
         Map<LocalDate, List<DailyShiftSchedule>> dailyShiftMap = dailyShifts.stream()
                 .filter(Objects::nonNull)

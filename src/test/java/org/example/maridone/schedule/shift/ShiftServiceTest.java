@@ -349,6 +349,55 @@ class ShiftServiceTest {
     }
 
     @Test
+    void updateShiftSchedule_ShouldRestoreTemplateFromDayOff() {
+        Long shiftId = 6L;
+
+        TemplateShiftSchedule schedule = new TemplateShiftSchedule();
+        schedule.setDayOff(true);
+        schedule.setDayOfWeek(DayOfWeek.WEDNESDAY);
+        schedule.setStartTime(LocalTime.of(8, 0));
+        schedule.setEndTime(LocalTime.of(17, 0));
+
+        ShiftRequestDto payload = new ShiftRequestDto();
+        ReflectionTestUtils.setField(payload, "shiftId", shiftId);
+        payload.setDayOfWeek(DayOfWeek.WEDNESDAY);
+        payload.setStartTime(LocalTime.of(9, 0));
+        payload.setEndTime(LocalTime.of(18, 0));
+
+        when(templateShiftRepository.findById(shiftId)).thenReturn(Optional.of(schedule));
+        when(templateShiftRepository.save(any(TemplateShiftSchedule.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        TemplateShiftSchedule updated = shiftService.updateShiftSchedule(payload);
+
+        Assertions.assertFalse(updated.isDayOff());
+        Assertions.assertEquals(LocalTime.of(9, 0), updated.getStartTime());
+        Assertions.assertEquals(LocalTime.of(18, 0), updated.getEndTime());
+    }
+
+    @Test
+    void deleteShiftSchedule_ShouldMarkTemplateAsDayOffWithoutDeletingHistoryLink() {
+        Long shiftId = 7L;
+
+        Employee employee = new Employee();
+        ReflectionTestUtils.setField(employee, "employeeId", 1L);
+
+        TemplateShiftSchedule schedule = new TemplateShiftSchedule();
+        schedule.setEmployee(employee);
+        schedule.setDayOfWeek(DayOfWeek.THURSDAY);
+        schedule.setStartTime(LocalTime.of(8, 0));
+        schedule.setEndTime(LocalTime.of(17, 0));
+
+        when(templateShiftRepository.findById(shiftId)).thenReturn(Optional.of(schedule));
+        when(templateShiftRepository.save(any(TemplateShiftSchedule.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        shiftService.deleteShiftSchedule(shiftId);
+
+        Assertions.assertTrue(schedule.isDayOff());
+        verify(templateShiftRepository).save(schedule);
+        verify(templateShiftRepository, never()).delete(schedule);
+    }
+
+    @Test
     void setDailyShifts_ShouldSkipEmployeesOutsideEmploymentWindow() {
         LocalDate today = LocalDate.now(MANILA);
 
@@ -394,6 +443,42 @@ class ShiftServiceTest {
         List<DailyShiftSchedule> savedDailyShifts = dailyShiftsCaptor.getValue();
         Assertions.assertEquals(1, savedDailyShifts.size());
         Assertions.assertEquals(3L, savedDailyShifts.get(0).getEmployeeId());
+    }
+
+    @Test
+    void setDailyShifts_ShouldSkipTemplateMarkedAsDayOff() {
+        LocalDate today = LocalDate.now(MANILA);
+
+        Employee activeEmployee = new Employee();
+        ReflectionTestUtils.setField(activeEmployee, "employeeId", 4L);
+        activeEmployee.setEmploymentStatus(EmploymentStatus.REGULAR);
+        activeEmployee.setEmploymentDateStart(today.minusDays(10));
+
+        TemplateShiftSchedule dayOffTemplate = new TemplateShiftSchedule();
+        dayOffTemplate.setEmployee(activeEmployee);
+        dayOffTemplate.setDayOfWeek(today.getDayOfWeek());
+        dayOffTemplate.setStartTime(LocalTime.of(8, 0));
+        dayOffTemplate.setEndTime(LocalTime.of(17, 0));
+        dayOffTemplate.setDayOff(true);
+
+        when(defaultConfig.getTimeZone()).thenReturn(MANILA);
+        when(employeeRepository.findAll(org.mockito.ArgumentMatchers.<org.springframework.data.jpa.domain.Specification<Employee>>any()))
+                .thenReturn(List.of(activeEmployee));
+        when(dailyShiftRepository.findAllByEmployeeIdsAndPeriod(
+                List.of(4L),
+                today.atStartOfDay(),
+                today.plusDays(1).atStartOfDay()
+        )).thenReturn(List.of());
+        when(templateShiftRepository.findAllByEmployeeIdInAndDayOfWeek(List.of(4L), today.getDayOfWeek()))
+                .thenReturn(List.of(dayOffTemplate));
+        when(leaveRequestRepository.findApprovedLeavesForDay(today.atStartOfDay(), today.plusDays(1).atStartOfDay()))
+                .thenReturn(List.of());
+
+        shiftService.setDailyShifts();
+
+        ArgumentCaptor<List<DailyShiftSchedule>> dailyShiftsCaptor = ArgumentCaptor.forClass(List.class);
+        verify(dailyShiftRepository).saveAll(dailyShiftsCaptor.capture());
+        Assertions.assertTrue(dailyShiftsCaptor.getValue().isEmpty());
     }
 
     @Test
