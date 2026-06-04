@@ -47,3 +47,5 @@ databaseChangeLog:
       file: db/changelog/024-add-payroll-processing-indexes.sql
   - include:
       file: db/changelog/025-add-employee-designation.sql
+  - include:
+      file: db/changelog/026-add-employee-employment-type.sql

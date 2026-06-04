@@ -19,6 +19,7 @@ import org.example.maridone.exception.notfound.AccountNotFoundException;
 import org.example.maridone.exception.notfound.EmployeeNotFoundException;
 import org.example.maridone.exception.badrequest.InvalidActionException;
 import org.example.maridone.enums.EmploymentStatus;
+import org.example.maridone.enums.EmploymentType;
 import org.example.maridone.enums.ExemptionStatus;
 import org.example.maridone.enums.LeaveType;
 import org.example.maridone.enums.ManagerTitle;
@@ -110,6 +111,7 @@ public class EmployeeService {
         employee.setPosition(Optional.ofNullable(employee.getPosition()).orElse(Position.EMPLOYEE));
         employee.setDesignation(normalizeOptionalText(employee.getDesignation()));
         employee.setEmploymentStatus(Optional.ofNullable(employee.getEmploymentStatus()).orElse(EmploymentStatus.REGULAR));
+        employee.setEmploymentType(resolveEmploymentType(employeeRequestDto.getEmploymentType(), employee.getEmploymentStatus()));
         employee.setEmploymentDateStart(Optional.ofNullable(employee.getEmploymentDateStart()).orElse(LocalDate.now()));
         employee.setEmploymentDateEnd(employeeRequestDto.getEmploymentDateEnd());
         employee.setExemptionStatus(Optional.ofNullable(employeeRequestDto.getExemptionStatus()).orElse(resolveExemptionStatus(employee.getPosition())));
@@ -208,6 +210,10 @@ public class EmployeeService {
         Optional.ofNullable(updated.getEmploymentStatus())
                 .filter(v -> !v.equals(emp.getEmploymentStatus()))
                 .ifPresent(emp::setEmploymentStatus);
+
+        Optional.ofNullable(updated.getEmploymentType())
+                .filter(v -> !v.equals(emp.getEmploymentType()))
+                .ifPresent(emp::setEmploymentType);
 
         Optional.ofNullable(updated.getCompanyEmail())
                 .filter(v -> !v.equals(emp.getCompanyEmail()))
@@ -672,6 +678,7 @@ public class EmployeeService {
                         || updated.getMiddleName() != null
                         || updated.getLastName() != null
                         || updated.getEmploymentStatus() != null
+                        || updated.getEmploymentType() != null
                         || updated.getExemptionStatus() != null
                         || updated.getEmploymentDateStart() != null
                         || updated.getEmploymentDateEnd() != null
@@ -691,6 +698,19 @@ public class EmployeeService {
             case EMPLOYEE, ACCOUNTING, UNKNOWN -> ExemptionStatus.NON_EXEMPT;
             default -> ExemptionStatus.EXEMPT;
         };
+    }
+
+    private EmploymentType resolveEmploymentType(EmploymentType employmentType, EmploymentStatus employmentStatus) {
+        if (employmentType != null) {
+            return employmentType;
+        }
+        if (employmentStatus == EmploymentStatus.NEW_HIRE) {
+            return EmploymentType.PROBATIONARY_FULL_TIME;
+        }
+        if (employmentStatus == EmploymentStatus.PART_TIME) {
+            return EmploymentType.PART_TIME;
+        }
+        return EmploymentType.REGULAR_FULL_TIME;
     }
 
     private String resolveDepartment(Employee employee) {

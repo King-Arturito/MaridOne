@@ -24,6 +24,7 @@ import org.example.maridone.core.user.UserAccount;
 import org.example.maridone.embeddable.Address;
 import org.example.maridone.enums.AccountStatus;
 import org.example.maridone.enums.EmploymentStatus;
+import org.example.maridone.enums.EmploymentType;
 import org.example.maridone.enums.ExemptionStatus;
 import org.example.maridone.enums.Gender;
 import org.example.maridone.enums.LeaveType;
@@ -156,6 +157,7 @@ public class SampleRows {
         employee.setPhoneNumber(seed.phoneNumber());
         employee.setGender(seed.gender());
         employee.setEmploymentStatus(seed.employmentStatus());
+        employee.setEmploymentType(resolveEmploymentType(seed.employmentStatus()));
         employee.setExemptionStatus(seed.exemptionStatus());
         employee.setPosition(seed.position());
         employee.setEmpTitle(seed.empTitle());
@@ -176,6 +178,16 @@ public class SampleRows {
             return SEED_START_DATE;
         }
         return seededStart;
+    }
+
+    private EmploymentType resolveEmploymentType(EmploymentStatus employmentStatus) {
+        if (employmentStatus == EmploymentStatus.NEW_HIRE) {
+            return EmploymentType.PROBATIONARY_FULL_TIME;
+        }
+        if (employmentStatus == EmploymentStatus.PART_TIME) {
+            return EmploymentType.PART_TIME;
+        }
+        return EmploymentType.REGULAR_FULL_TIME;
     }
 
     private Address toAddress(EmployeeSeed seed) {

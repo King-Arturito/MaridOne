@@ -9,6 +9,7 @@ import org.example.maridone.enums.ExemptionStatus;
 import org.example.maridone.enums.Gender;
 import org.example.maridone.core.user.UserAccount;
 import org.example.maridone.enums.EmploymentStatus;
+import org.example.maridone.enums.EmploymentType;
 import org.example.maridone.enums.ManagerTitle;
 import org.example.maridone.enums.Position;
 import org.example.maridone.embeddable.Address;
@@ -51,6 +52,10 @@ public class Employee {
     @Column(name = "employment_status", nullable = false)
     @Enumerated(EnumType.STRING)
     private EmploymentStatus employmentStatus;
+
+    @Column(name = "employment_type", nullable = false)
+    @Enumerated(EnumType.STRING)
+    private EmploymentType employmentType;
 
     @Column(name = "exemption_status", nullable = false)
     @Enumerated(EnumType.STRING)
@@ -206,6 +211,31 @@ public class Employee {
 
     public void setEmploymentStatus(EmploymentStatus employmentStatus) {
         this.employmentStatus = employmentStatus;
+    }
+
+    public EmploymentType getEmploymentType() {
+        return employmentType;
+    }
+
+    public void setEmploymentType(EmploymentType employmentType) {
+        this.employmentType = employmentType;
+    }
+
+    @PrePersist
+    private void applyEmploymentTypeDefault() {
+        if (employmentType == null) {
+            employmentType = resolveEmploymentType(employmentStatus);
+        }
+    }
+
+    private EmploymentType resolveEmploymentType(EmploymentStatus status) {
+        if (status == EmploymentStatus.NEW_HIRE) {
+            return EmploymentType.PROBATIONARY_FULL_TIME;
+        }
+        if (status == EmploymentStatus.PART_TIME) {
+            return EmploymentType.PART_TIME;
+        }
+        return EmploymentType.REGULAR_FULL_TIME;
     }
 
     public ExemptionStatus getExemptionStatus() {
