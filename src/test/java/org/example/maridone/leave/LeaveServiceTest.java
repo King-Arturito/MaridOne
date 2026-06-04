@@ -294,13 +294,65 @@ class LeaveServiceTest {
     }
 
     @Test
-    void createLeaveRequest_ShouldReject_WhenRequestWindowAlreadyStarted() {
+    void createLeaveRequest_ShouldAllowSickLeave_WhenRequestWindowAlreadyStarted() {
         Long empId = 1L;
         LeaveRequestDto dto = new LeaveRequestDto();
         dto.setStartDateTime(LocalDateTime.of(2026, 3, 16, 8, 0));
         dto.setEndDateTime(LocalDateTime.of(2026, 3, 16, 17, 0));
         dto.setReason("Late filing");
         dto.setLeaveType(LeaveType.SICK_LEAVE);
+
+        Employee emp = new Employee();
+        ReflectionTestUtils.setField(emp, "employeeId", empId);
+
+        LeaveBalance leaveBalance = new LeaveBalance();
+        leaveBalance.setBalanceHours(BigDecimal.valueOf(9));
+
+        when(employeeRepository.findById(empId)).thenReturn(Optional.of(emp));
+        when(leaveBalanceRepository.findByLeaveTypeAndEmployee_EmployeeId(LeaveType.SICK_LEAVE, empId))
+                .thenReturn(Optional.of(leaveBalance));
+        when(overtimeRequestRepository.existsActiveOnWorkDateRange(any(), any(), any())).thenReturn(false);
+        when(templateShiftRepository.findAllByEmployeeId(empId)).thenReturn(List.of(
+                createSchedule(DayOfWeek.MONDAY, LocalTime.of(8, 0), LocalTime.of(17, 0), emp)
+        ));
+
+        List<LeaveRequest> results = leaveService.createLeaveRequest(dto, empId, null);
+
+        Assertions.assertEquals(1, results.size());
+        Assertions.assertEquals(Status.PENDING_MANAGER, results.get(0).getRequestStatus());
+        Assertions.assertEquals(LeaveType.SICK_LEAVE, results.get(0).getLeaveType());
+    }
+
+    @Test
+    void createLeaveRequest_ShouldAllowEmergencyLeave_WhenRequestWindowAlreadyStarted() {
+        Long empId = 1L;
+        LeaveRequestDto dto = new LeaveRequestDto();
+        dto.setStartDateTime(LocalDateTime.of(2026, 3, 16, 8, 0));
+        dto.setEndDateTime(LocalDateTime.of(2026, 3, 16, 17, 0));
+        dto.setReason("Emergency filing after reporting back to duty.");
+        dto.setLeaveType(LeaveType.EMERGENCY_LEAVE);
+
+        Employee emp = new Employee();
+        ReflectionTestUtils.setField(emp, "employeeId", empId);
+
+        when(employeeRepository.findById(empId)).thenReturn(Optional.of(emp));
+        when(overtimeRequestRepository.existsActiveOnWorkDateRange(any(), any(), any())).thenReturn(false);
+
+        List<LeaveRequest> results = leaveService.createLeaveRequest(dto, empId, null);
+
+        Assertions.assertEquals(1, results.size());
+        Assertions.assertEquals(Status.PENDING_MANAGER, results.get(0).getRequestStatus());
+        Assertions.assertEquals(LeaveType.EMERGENCY_LEAVE, results.get(0).getLeaveType());
+    }
+
+    @Test
+    void createLeaveRequest_ShouldRejectVacationLeave_WhenRequestWindowAlreadyStarted() {
+        Long empId = 1L;
+        LeaveRequestDto dto = new LeaveRequestDto();
+        dto.setStartDateTime(LocalDateTime.of(2026, 3, 16, 8, 0));
+        dto.setEndDateTime(LocalDateTime.of(2026, 3, 16, 17, 0));
+        dto.setReason("Late filing");
+        dto.setLeaveType(LeaveType.VACATION_LEAVE);
 
         Employee emp = new Employee();
         ReflectionTestUtils.setField(emp, "employeeId", empId);
@@ -760,6 +812,65 @@ class LeaveServiceTest {
 
         Assertions.assertEquals(Status.APPROVED, result.getRequestStatus());
         Assertions.assertEquals(new BigDecimal("4.00"), leaveBalance.getBalanceHours());
+        SecurityContextHolder.clearContext();
+    }
+
+    @Test
+    void updateLeaveRequest_ShouldDeductBalance_WhenHrOverridesUnpaidRequestToPaid() {
+        Employee requestEmployee = new Employee();
+        ReflectionTestUtils.setField(requestEmployee, "employeeId", 3L);
+
+        LeaveRequest request = new LeaveRequest();
+        request.setEmployee(requestEmployee);
+        request.setRequestStatus(Status.PENDING_HR);
+        request.setLeaveType(LeaveType.SICK_LEAVE);
+        request.setPaid(false);
+        request.setSuggestedPaid(false);
+        request.setStartDateTime(LocalDateTime.of(2026, 4, 13, 9, 0));
+        request.setEndDateTime(LocalDateTime.of(2026, 4, 13, 13, 0));
+
+        Employee hrEmployee = new Employee();
+        ReflectionTestUtils.setField(hrEmployee, "employeeId", 2L);
+        hrEmployee.setFirstName("Pat");
+        hrEmployee.setLastName("Reyes");
+        hrEmployee.setPosition(Position.HR);
+
+        UserAccount hrAccount = new UserAccount();
+        hrAccount.setUsername("hr1");
+        hrAccount.setEmployee(hrEmployee);
+
+        LeaveBalance leaveBalance = new LeaveBalance();
+        leaveBalance.setLeaveType(LeaveType.SICK_LEAVE);
+        leaveBalance.setBalanceHours(BigDecimal.valueOf(10));
+
+        LeaveRequestDto payload = new LeaveRequestDto();
+        payload.setLeaveType(LeaveType.SICK_LEAVE);
+        payload.setRequestStatus(Status.APPROVED);
+        payload.setApproverReason("Approved with paid override.");
+        payload.setPaid(true);
+        payload.setPaidOverrideReason("Covered by available credits.");
+
+        Authentication authentication = org.mockito.Mockito.mock(Authentication.class);
+        SecurityContext securityContext = org.mockito.Mockito.mock(SecurityContext.class);
+
+        when(authentication.getName()).thenReturn("hr1");
+        when(securityContext.getAuthentication()).thenReturn(authentication);
+        SecurityContextHolder.setContext(securityContext);
+
+        when(userAccountRepository.findByUsername("hr1")).thenReturn(Optional.of(hrAccount));
+        when(leaveRequestRepository.findByIdForUpdate(23L)).thenReturn(Optional.of(request));
+        when(leaveRequestRepository.findEmployeeIdByRequestId(23L)).thenReturn(Optional.of(3L));
+        when(templateShiftRepository.findAllByEmployeeId(3L)).thenReturn(List.of(
+                createSchedule(DayOfWeek.MONDAY, LocalTime.of(9, 0), LocalTime.of(13, 0), requestEmployee)
+        ));
+        when(leaveBalanceRepository.findOne(any(Specification.class))).thenReturn(Optional.of(leaveBalance));
+        when(leaveRequestRepository.save(any(LeaveRequest.class))).thenReturn(request);
+
+        LeaveRequest result = leaveService.updateLeaveRequest(payload, 23L);
+
+        Assertions.assertEquals(Status.APPROVED, result.getRequestStatus());
+        Assertions.assertTrue(result.getPaid());
+        Assertions.assertEquals(0, leaveBalance.getBalanceHours().compareTo(new BigDecimal("6.00")));
         SecurityContextHolder.clearContext();
     }
 

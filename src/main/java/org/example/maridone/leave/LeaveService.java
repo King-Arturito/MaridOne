@@ -487,9 +487,13 @@ public class LeaveService {
         }
 
         LocalDateTime now = LocalDateTime.now(defaultConfig.getTimeZone());
-        if (!payload.getStartDateTime().isAfter(now)) {
+        if (!allowsPastLeaveFiling(payload.getLeaveType()) && !payload.getStartDateTime().isAfter(now)) {
             throw new InvalidActionException("Leave cannot be filed for a time window that has already started or passed.");
         }
+    }
+
+    private boolean allowsPastLeaveFiling(LeaveType leaveType) {
+        return leaveType == LeaveType.SICK_LEAVE || leaveType == LeaveType.EMERGENCY_LEAVE;
     }
 
     private List<LeaveWindow> resolveLeaveWindows(LeaveRequestDto payload, Long empId) {
@@ -864,7 +868,7 @@ public class LeaveService {
                     payload.getPaidOverrideReason()
             );
 
-            if (Boolean.TRUE.equals(request.getSuggestedPaid()) && finalPaid && request.getLeaveType() != LeaveType.EMERGENCY_LEAVE) {
+            if (finalPaid && request.getLeaveType() != LeaveType.EMERGENCY_LEAVE) {
                 LeaveType leaveType = Optional.ofNullable(request.getLeaveType()).orElse(payload.getLeaveType());
                 if (leaveType == null) {
                     throw new IllegalStateException("Leave type is required before approving this request.");
