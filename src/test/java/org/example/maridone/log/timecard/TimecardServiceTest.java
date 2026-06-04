@@ -1,6 +1,7 @@
 package org.example.maridone.log.timecard;
 
 import org.apache.pdfbox.pdmodel.PDDocument;
+import org.apache.pdfbox.text.PDFTextStripper;
 import org.example.maridone.config.DefaultConfig;
 import org.example.maridone.core.employee.Employee;
 import org.example.maridone.core.employee.EmployeeRepository;
@@ -100,6 +101,27 @@ class TimecardServiceTest {
         Assertions.assertEquals("Timecard_Juan_Dela_Cruz_2026-04-14_to_2026-04-14.pdf", pdf.fileName());
         Assertions.assertTrue(pdf.content().length > 0);
         Assertions.assertTrue(new String(pdf.content(), 0, 4, StandardCharsets.US_ASCII).startsWith("%PDF"));
+    }
+
+    @Test
+    void generateTimecardPdf_shouldRenderOpenTimeInWithoutCompletedSession() throws IOException {
+        LocalDate workDate = LocalDate.of(2026, 4, 14);
+        Employee employee = employee(18L, "Juan", "Dela Cruz", Position.EMPLOYEE);
+
+        AttendanceLog inLog = attendanceLog(employee.getEmployeeId(), "IN", "2026-04-14T00:00:00Z");
+
+        stubCommonDependencies(employee, workDate, workDate, List.of(inLog));
+        when(payrollCalculator.findAttendanceSessionsForDate(anyList(), eq(workDate))).thenReturn(List.of());
+        when(payrollCalculator.findInLogForDate(anyList(), eq(workDate))).thenReturn(inLog);
+        when(payrollCalculator.calculateHoursFromAttendanceSessions(List.of())).thenReturn(BigDecimal.ZERO);
+        when(payrollCalculator.deductUnpaidLunchHour(BigDecimal.ZERO)).thenReturn(BigDecimal.ZERO);
+
+        TimecardService.GeneratedTimecardPdf pdf = timecardService.generateTimecardPdf(employee.getEmployeeId(), workDate, workDate);
+
+        try (PDDocument document = PDDocument.load(pdf.content())) {
+            String text = new PDFTextStripper().getText(document);
+            Assertions.assertTrue(text.contains("8:00"), "Expected the open Time In to be present in the PDF.");
+        }
     }
 
     @Test

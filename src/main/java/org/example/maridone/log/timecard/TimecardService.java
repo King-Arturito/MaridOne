@@ -264,7 +264,10 @@ public class TimecardService {
         regularHours = CommonCalculator.normalize(regularHours);
 
         BigDecimal totalHours = CommonCalculator.normalize(regularHours.add(overtimeHours));
-        LocalTime timeIn = attendanceSessions.isEmpty() ? null : toLocalTime(attendanceSessions.get(0).inLog().getTimestamp());
+        AttendanceLog firstInLog = payrollCalculator.findInLogForDate(attendanceLogs, workDate);
+        LocalTime timeIn = firstInLog != null
+                ? toLocalTime(firstInLog.getTimestamp())
+                : attendanceSessions.isEmpty() ? null : toLocalTime(attendanceSessions.get(0).inLog().getTimestamp());
         LocalTime timeOut = attendanceSessions.isEmpty() ? null : toLocalTime(attendanceSessions.get(attendanceSessions.size() - 1).outLog().getTimestamp());
 
         return new DailyLogRow(
