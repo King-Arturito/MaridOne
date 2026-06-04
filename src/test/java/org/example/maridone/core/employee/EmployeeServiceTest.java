@@ -396,7 +396,35 @@ class EmployeeServiceTest {
     }
 
     @Test
-    void updateStatus_ShouldRequireSeparationReason_WhenTerminatingEmployee() {
+    void updateStatus_ShouldTerminateWithoutSeparation_WhenNoSeparationDetailsProvided() {
+        stubScheduleDependencies();
+        Employee employee = new Employee();
+        ReflectionTestUtils.setField(employee, "employeeId", 36L);
+        employee.setEmploymentStatus(EmploymentStatus.REGULAR);
+
+        EmployeeRequestDto requestDto = new EmployeeRequestDto();
+        requestDto.setEmploymentStatus(EmploymentStatus.TERMINATED);
+
+        EmployeeResponseDto responseDto = new EmployeeResponseDto();
+        responseDto.setId(36L);
+        responseDto.setEmploymentStatus(EmploymentStatus.TERMINATED);
+
+        when(employeeRepository.findById(36L)).thenReturn(Optional.of(employee));
+        when(employeeRepository.save(any(Employee.class))).thenReturn(employee);
+        when(coreMapper.toEmployeeResponse(employee)).thenReturn(responseDto);
+        when(userAccountRepository.findUsernameByEmployeeEmployeeId(36L)).thenReturn(Optional.empty());
+
+        EmployeeResponseDto result = employeeService.updateStatus(36L, requestDto, "hr.user");
+
+        Assertions.assertEquals(EmploymentStatus.TERMINATED, employee.getEmploymentStatus());
+        Assertions.assertNotNull(employee.getEmploymentDateEnd());
+        Assertions.assertEquals(EmploymentStatus.TERMINATED, result.getEmploymentStatus());
+        verify(employeeSeparationRepository, never()).save(any(EmployeeSeparation.class));
+        verify(employeeRepository).save(employee);
+    }
+
+    @Test
+    void updateStatus_ShouldRequireCompleteSeparationDetails_WhenSeparationPayloadIsProvided() {
         Employee employee = new Employee();
         ReflectionTestUtils.setField(employee, "employeeId", 36L);
         employee.setEmploymentStatus(EmploymentStatus.REGULAR);

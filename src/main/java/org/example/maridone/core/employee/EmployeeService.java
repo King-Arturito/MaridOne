@@ -338,7 +338,11 @@ public class EmployeeService {
 
         emp.setEmploymentStatus(updated.getEmploymentStatus());
         if (updated.getEmploymentStatus() == EmploymentStatus.TERMINATED) {
-            recordSeparation(emp, updated, actorUsername);
+            LocalDate effectiveDate = Optional.ofNullable(updated.getEmploymentDateEnd()).orElse(LocalDate.now());
+            emp.setEmploymentDateEnd(effectiveDate);
+            if (hasSeparationPayload(updated)) {
+                recordSeparation(emp, updated, actorUsername, effectiveDate);
+            }
         }
         employeeRepository.save(emp);
         return toEmployeeResponse(emp);
@@ -466,7 +470,13 @@ public class EmployeeService {
                 .orElse(null);
     }
 
-    private void recordSeparation(Employee employee, EmployeeRequestDto request, String actorUsername) {
+    private boolean hasSeparationPayload(EmployeeRequestDto request) {
+        return request.getSeparationReason() != null
+                || request.getEligibleForRehire() != null
+                || normalizeOptionalText(request.getSeparationNotes()) != null;
+    }
+
+    private void recordSeparation(Employee employee, EmployeeRequestDto request, String actorUsername, LocalDate effectiveDate) {
         if (request.getSeparationReason() == null) {
             throw new InvalidActionException("Separation reason is required when terminating an employee.");
         }
@@ -474,7 +484,6 @@ public class EmployeeService {
             throw new InvalidActionException("Eligible for rehire must be specified when terminating an employee.");
         }
 
-        LocalDate effectiveDate = Optional.ofNullable(request.getEmploymentDateEnd()).orElse(LocalDate.now());
         employee.setEmploymentDateEnd(effectiveDate);
 
         EmployeeSeparation separation = new EmployeeSeparation();
