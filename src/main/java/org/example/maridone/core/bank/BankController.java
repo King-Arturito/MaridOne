@@ -38,7 +38,7 @@ public class BankController {
             @PathVariable Long empId,
             Authentication authentication,
             @RequestBody @Validated(OnCreate.class) BankAccountDto payload) {
-        sensitiveAccessService.assertHrSensitiveAccessForEmployee(authentication, empId);
+        sensitiveAccessService.assertSensitiveAccessForEmployee(authentication, empId);
         BankAccount bankAccount = bankService.addBankAccount(empId, payload);
         URI location = ServletUriComponentsBuilder
                 .fromCurrentRequest()
@@ -56,7 +56,7 @@ public class BankController {
             Authentication authentication,
             @RequestBody @Validated(OnUpdate.class) BankAccountDto payload
     ) {
-        sensitiveAccessService.assertHrSensitiveAccessForEmployee(authentication, empId);
+        sensitiveAccessService.assertSensitiveAccessForEmployee(authentication, empId);
         BankAccount bankAccount = bankService.updateBankAccount(empId, payload);
         return ResponseEntity.ok(bankAccount);
     }
@@ -64,7 +64,7 @@ public class BankController {
     @PreAuthorize("hasRole('HR') or @userCheck.isSelf(#empId, authentication.getName())")
     @AuditLog
     public List<BankAccountDto> getBankAccounts(@PathVariable Long empId, Authentication authentication) {
-        sensitiveAccessService.assertHrSensitiveAccessForEmployee(authentication, empId);
+        sensitiveAccessService.assertSensitiveAccessForEmployee(authentication, empId);
         return coreMapper.toBankAccountDtos(bankService.getBankAccounts(empId));
     }
 }

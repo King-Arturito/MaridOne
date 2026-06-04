@@ -23,7 +23,7 @@ public class SensitiveAccessController {
     }
 
     @PostMapping("/verify")
-    @PreAuthorize("hasAnyRole('HR', 'MANAGEMENT', 'ACCOUNTING')")
+    @PreAuthorize("isAuthenticated()")
     @AuditLog
     public ResponseEntity<SensitiveAccessVerifyResponse> verify(Authentication authentication,
                                                                 @RequestBody SensitiveAccessVerifyRequest request) {

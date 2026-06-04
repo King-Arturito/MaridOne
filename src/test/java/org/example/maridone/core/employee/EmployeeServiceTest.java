@@ -14,6 +14,7 @@ import org.example.maridone.core.user.UserAccountService;
 import org.example.maridone.embeddable.Address;
 import org.example.maridone.enums.EmploymentStatus;
 import org.example.maridone.enums.ExemptionStatus;
+import org.example.maridone.enums.Gender;
 import org.example.maridone.enums.LeaveType;
 import org.example.maridone.enums.ManagerTitle;
 import org.example.maridone.enums.Position;
@@ -417,10 +418,12 @@ class EmployeeServiceTest {
     }
 
     @Test
-    void updateSelfEmployeeProfile_ShouldOnlyChangeContactFields() {
+    void updateSelfEmployeeProfile_ShouldChangeSelfEditableFields() {
         stubScheduleDependencies();
         Employee employee = new Employee();
         ReflectionTestUtils.setField(employee, "employeeId", 21L);
+        employee.setBirthDate(java.time.LocalDate.of(1995, 2, 14));
+        employee.setGender(Gender.FEMALE);
         employee.setCompanyEmail("old@company.example.com");
         employee.setPersonalEmail("old@example.com");
         employee.setPhoneNumber("09170000000");
@@ -431,6 +434,8 @@ class EmployeeServiceTest {
         employee.setAddress(existingAddress);
 
         EmployeeRequestDto requestDto = new EmployeeRequestDto();
+        requestDto.setBirthDate(java.time.LocalDate.of(1996, 3, 20));
+        requestDto.setGender(Gender.NON_BINARY);
         requestDto.setPersonalEmail("new@example.com");
         requestDto.setPhoneNumber("09171234567");
         Address newAddress = new Address();
@@ -444,10 +449,31 @@ class EmployeeServiceTest {
 
         employeeService.updateSelfEmployeeProfile(21L, requestDto);
 
+        Assertions.assertEquals(java.time.LocalDate.of(1996, 3, 20), employee.getBirthDate());
+        Assertions.assertEquals(Gender.NON_BINARY, employee.getGender());
         Assertions.assertEquals("new@example.com", employee.getPersonalEmail());
         Assertions.assertEquals("09171234567", employee.getPhoneNumber());
         Assertions.assertEquals("Pasig", employee.getAddress().getCity());
         Assertions.assertFalse(employee.getIsVerified());
+    }
+
+    @Test
+    void updateSelfEmployeeProfile_ShouldRejectCompanyEmail() {
+        Employee employee = new Employee();
+        ReflectionTestUtils.setField(employee, "employeeId", 23L);
+
+        EmployeeRequestDto requestDto = new EmployeeRequestDto();
+        requestDto.setCompanyEmail("new@company.example.com");
+
+        when(employeeRepository.findById(23L)).thenReturn(Optional.of(employee));
+
+        InvalidActionException error = Assertions.assertThrows(
+                InvalidActionException.class,
+                () -> employeeService.updateSelfEmployeeProfile(23L, requestDto)
+        );
+
+        Assertions.assertEquals("Company email is managed by HR and cannot be updated from self-service.", error.getMessage());
+        verify(employeeRepository, never()).save(any(Employee.class));
     }
 
     @Test
@@ -622,7 +648,7 @@ class EmployeeServiceTest {
                 () -> employeeService.updateSelfEmployeeProfile(22L, requestDto)
         );
 
-        Assertions.assertEquals("You can only update your contact information and address.", error.getMessage());
+        Assertions.assertEquals("HR-managed employment details cannot be updated from self-service.", error.getMessage());
         verify(employeeRepository, never()).save(any(Employee.class));
     }
 }

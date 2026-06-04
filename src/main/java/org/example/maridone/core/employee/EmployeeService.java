@@ -282,6 +282,14 @@ public class EmployeeService {
         Employee emp = employeeRepository.findById(id).orElseThrow(() -> new EmployeeNotFoundException(id));
         assertSelfEditableFieldsOnly(updated);
 
+        Optional.ofNullable(updated.getBirthDate())
+                .filter(v -> !v.equals(emp.getBirthDate()))
+                .ifPresent(emp::setBirthDate);
+
+        Optional.ofNullable(updated.getGender())
+                .filter(v -> !v.equals(emp.getGender()))
+                .ifPresent(emp::setGender);
+
         Optional.ofNullable(updated.getPersonalEmail())
                 .filter(v -> !Objects.equals(v, emp.getPersonalEmail()))
                 .ifPresent(newEmail -> updatePersonalEmail(emp, newEmail));
@@ -655,17 +663,18 @@ public class EmployeeService {
     }
 
     private void assertSelfEditableFieldsOnly(EmployeeRequestDto updated) {
+        if (updated.getCompanyEmail() != null) {
+            throw new InvalidActionException("Company email is managed by HR and cannot be updated from self-service.");
+        }
+
         boolean hasRestrictedField =
                 updated.getFirstName() != null
                         || updated.getMiddleName() != null
                         || updated.getLastName() != null
-                        || updated.getBirthDate() != null
-                        || updated.getGender() != null
                         || updated.getEmploymentStatus() != null
                         || updated.getExemptionStatus() != null
                         || updated.getEmploymentDateStart() != null
                         || updated.getEmploymentDateEnd() != null
-                        || updated.getCompanyEmail() != null
                         || updated.getDesignation() != null
                         || updated.getPosition() != null
                         || updated.getDepartment() != null
@@ -673,7 +682,7 @@ public class EmployeeService {
                         || updated.getManagerId() != null;
 
         if (hasRestrictedField) {
-            throw new InvalidActionException("You can only update your contact information and address.");
+            throw new InvalidActionException("HR-managed employment details cannot be updated from self-service.");
         }
     }
 

@@ -92,6 +92,10 @@ public class SensitiveAccessService {
         assertSensitiveAccessToken(authentication.getName());
     }
 
+    public void assertSensitiveAccessForEmployee(Authentication authentication, Long employeeId) {
+        assertSensitiveAccessToken(authentication.getName());
+    }
+
     public void assertPayrollReportSensitiveAccess(Authentication authentication) {
         if (!hasAuthority(authentication, "ROLE_HR") && !hasAuthority(authentication, "ROLE_MANAGEMENT")) {
             return;
@@ -119,11 +123,11 @@ public class SensitiveAccessService {
     }
 
     private void verifyPassword(UserAccount account, String password) {
-        String normalizedPassword = password == null ? "" : password.trim();
-        if (normalizedPassword.isEmpty()) {
+        String submittedPassword = password == null ? "" : password;
+        if (submittedPassword.isEmpty()) {
             throw new IllegalArgumentException("Current password is required.");
         }
-        if (!passwordEncoder.matches(normalizedPassword, account.getPasswordHash())) {
+        if (!passwordEncoder.matches(submittedPassword, account.getPasswordHash())) {
             throw new UnauthorizedAccessException("Current password is incorrect.");
         }
     }
