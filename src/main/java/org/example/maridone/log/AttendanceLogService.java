@@ -54,6 +54,9 @@ public class AttendanceLogService {
         if (employee.getEmploymentStatus() == EmploymentStatus.TERMINATED) {
             throw new UnauthorizedAccessException("You may not log attendance. Your account has been terminated.");
         }
+        if (!Boolean.TRUE.equals(employee.getIsVerified())) {
+            throw new UnauthorizedAccessException("Verify your account before starting attendance tracking.");
+        }
         Instant timestamp = Instant.now();
         ZoneId timeZone = defaultConfig.getTimeZone();
         LocalDate attendanceDate = resolveAttendanceDate(timestamp, timeZone);

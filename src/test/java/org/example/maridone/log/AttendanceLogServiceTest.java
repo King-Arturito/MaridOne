@@ -69,6 +69,7 @@ class AttendanceLogServiceTest {
         Employee employee = new Employee();
         ReflectionTestUtils.setField(employee, "employeeId", 18L);
         employee.setEmploymentStatus(EmploymentStatus.REGULAR);
+        employee.setIsVerified(true);
 
         AttendanceLog recent = new AttendanceLog();
         recent.setDirection("IN");
@@ -94,6 +95,7 @@ class AttendanceLogServiceTest {
         Employee employee = new Employee();
         ReflectionTestUtils.setField(employee, "employeeId", 18L);
         employee.setEmploymentStatus(EmploymentStatus.REGULAR);
+        employee.setIsVerified(true);
 
         when(employeeRepository.findById(18L)).thenReturn(Optional.of(employee));
         when(defaultConfig.getTimeZone()).thenReturn(ZoneId.of("Asia/Manila"));
@@ -109,6 +111,24 @@ class AttendanceLogServiceTest {
         Assertions.assertEquals(18L, savedLog.getEmployeeId());
         Assertions.assertNotNull(savedLog.getTimestamp());
         verify(attendanceLogRepository, never()).findTopByEmployeeIdOrderByTimestampDescAttendanceIdDesc(18L);
+    }
+
+    @Test
+    void attendance_ShouldThrow_WhenEmployeeIsNotVerified() {
+        Employee employee = new Employee();
+        ReflectionTestUtils.setField(employee, "employeeId", 18L);
+        employee.setEmploymentStatus(EmploymentStatus.REGULAR);
+        employee.setIsVerified(false);
+
+        when(employeeRepository.findById(18L)).thenReturn(Optional.of(employee));
+
+        UnauthorizedAccessException error = Assertions.assertThrows(
+                UnauthorizedAccessException.class,
+                () -> attendanceLogService.attendance(18L)
+        );
+
+        Assertions.assertEquals("Verify your account before starting attendance tracking.", error.getMessage());
+        verify(attendanceLogRepository, never()).save(any());
     }
 
     @Test
