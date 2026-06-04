@@ -7,6 +7,7 @@ import org.example.maridone.core.employee.Employee;
 import org.example.maridone.core.employee.EmployeeRepository;
 import org.example.maridone.core.user.UserAccountRepository;
 import org.example.maridone.enums.EmploymentStatus;
+import org.example.maridone.exception.badrequest.InvalidActionException;
 import org.example.maridone.exception.unauthorized.UnauthorizedAccessException;
 import org.example.maridone.exception.notfound.EmployeeNotFoundException;
 import org.example.maridone.log.attendance.AttendanceLog;
@@ -55,7 +56,7 @@ public class AttendanceLogService {
             throw new UnauthorizedAccessException("You may not log attendance. Your account has been terminated.");
         }
         if (!Boolean.TRUE.equals(employee.getIsVerified())) {
-            throw new UnauthorizedAccessException("Verify your account before starting attendance tracking.");
+            throw new InvalidActionException("Verify your account before starting attendance tracking.");
         }
         Instant timestamp = Instant.now();
         ZoneId timeZone = defaultConfig.getTimeZone();

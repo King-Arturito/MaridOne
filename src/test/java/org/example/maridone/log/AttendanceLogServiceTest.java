@@ -5,6 +5,7 @@ import org.example.maridone.core.employee.Employee;
 import org.example.maridone.core.employee.EmployeeRepository;
 import org.example.maridone.core.user.UserAccountRepository;
 import org.example.maridone.enums.EmploymentStatus;
+import org.example.maridone.exception.badrequest.InvalidActionException;
 import org.example.maridone.exception.unauthorized.UnauthorizedAccessException;
 import org.example.maridone.log.attendance.AttendanceLog;
 import org.junit.jupiter.api.Assertions;
@@ -122,8 +123,8 @@ class AttendanceLogServiceTest {
 
         when(employeeRepository.findById(18L)).thenReturn(Optional.of(employee));
 
-        UnauthorizedAccessException error = Assertions.assertThrows(
-                UnauthorizedAccessException.class,
+        InvalidActionException error = Assertions.assertThrows(
+                InvalidActionException.class,
                 () -> attendanceLogService.attendance(18L)
         );
 
