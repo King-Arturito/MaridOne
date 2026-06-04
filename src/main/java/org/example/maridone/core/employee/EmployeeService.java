@@ -105,8 +105,12 @@ public class EmployeeService {
     @ExecutionTime
     public EmployeeResponseDto createEmployee(EmployeeRequestDto employeeRequestDto) {
         Employee employee = coreMapper.toEmployee(employeeRequestDto);
-        employee.setCompanyEmail(normalizeRequiredEmail(employee.getCompanyEmail(), "Company email is required."));
-        employee.setPersonalEmail(normalizeOptionalEmail(employee.getPersonalEmail()));
+        String companyEmail = normalizeRequiredEmail(employee.getCompanyEmail(), "Company email is required.");
+        assertCompanyEmailAvailable(companyEmail, null);
+        employee.setCompanyEmail(companyEmail);
+        String personalEmail = normalizeOptionalEmail(employee.getPersonalEmail());
+        assertPersonalEmailAvailable(personalEmail, null);
+        employee.setPersonalEmail(personalEmail);
         employee.setPhoneNumber(normalizePhoneNumber(employee.getPhoneNumber()));
         employee.setPosition(Optional.ofNullable(employee.getPosition()).orElse(Position.EMPLOYEE));
         employee.setDesignation(normalizeOptionalText(employee.getDesignation()));
@@ -624,12 +628,40 @@ public class EmployeeService {
     }
 
     private void updateCompanyEmail(Employee employee, String email) {
-        employee.setCompanyEmail(normalizeRequiredEmail(email, "Company email is required."));
+        String normalizedEmail = normalizeRequiredEmail(email, "Company email is required.");
+        assertCompanyEmailAvailable(normalizedEmail, employee.getEmployeeId());
+        employee.setCompanyEmail(normalizedEmail);
     }
 
     private void updatePersonalEmail(Employee employee, String email) {
-        employee.setPersonalEmail(normalizeRequiredEmail(email, "Personal email is required."));
+        String normalizedEmail = normalizeRequiredEmail(email, "Personal email is required.");
+        assertPersonalEmailAvailable(normalizedEmail, employee.getEmployeeId());
+        employee.setPersonalEmail(normalizedEmail);
         employee.setIsVerified(false);
+    }
+
+    private void assertCompanyEmailAvailable(String email, Long employeeId) {
+        if (email == null) {
+            return;
+        }
+        boolean alreadyUsed = employeeId == null
+                ? employeeRepository.existsByCompanyEmailIgnoreCase(email)
+                : employeeRepository.existsByCompanyEmailIgnoreCaseAndEmployeeIdNot(email, employeeId);
+        if (alreadyUsed) {
+            throw new InvalidActionException("That company email is already used by another employee profile.");
+        }
+    }
+
+    private void assertPersonalEmailAvailable(String email, Long employeeId) {
+        if (email == null) {
+            return;
+        }
+        boolean alreadyUsed = employeeId == null
+                ? employeeRepository.existsByPersonalEmailIgnoreCase(email)
+                : employeeRepository.existsByPersonalEmailIgnoreCaseAndEmployeeIdNot(email, employeeId);
+        if (alreadyUsed) {
+            throw new InvalidActionException("That personal email is already used by another employee profile.");
+        }
     }
 
     private void updatePhoneNumber(Employee employee, String phoneNumber) {

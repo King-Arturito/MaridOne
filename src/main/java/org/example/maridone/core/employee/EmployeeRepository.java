@@ -59,6 +59,14 @@ public interface EmployeeRepository extends JpaRepository<Employee, Long>, JpaSp
 
     boolean existsByEmployeeIdAndManager_EmployeeId(Long employeeId, Long managerId);
 
+    boolean existsByCompanyEmailIgnoreCase(String companyEmail);
+
+    boolean existsByCompanyEmailIgnoreCaseAndEmployeeIdNot(String companyEmail, Long employeeId);
+
+    boolean existsByPersonalEmailIgnoreCase(String personalEmail);
+
+    boolean existsByPersonalEmailIgnoreCaseAndEmployeeIdNot(String personalEmail, Long employeeId);
+
     @Query("""
         SELECT e
         FROM Employee e

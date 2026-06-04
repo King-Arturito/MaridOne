@@ -477,6 +477,31 @@ class EmployeeServiceTest {
     }
 
     @Test
+    void updateSelfEmployeeProfile_ShouldRejectDuplicatePersonalEmail() {
+        Employee employee = new Employee();
+        ReflectionTestUtils.setField(employee, "employeeId", 24L);
+        employee.setPersonalEmail("old@example.com");
+        employee.setIsVerified(true);
+
+        EmployeeRequestDto requestDto = new EmployeeRequestDto();
+        requestDto.setPersonalEmail(" npdalisay@gmail.com ");
+
+        when(employeeRepository.findById(24L)).thenReturn(Optional.of(employee));
+        when(employeeRepository.existsByPersonalEmailIgnoreCaseAndEmployeeIdNot("npdalisay@gmail.com", 24L))
+                .thenReturn(true);
+
+        InvalidActionException error = Assertions.assertThrows(
+                InvalidActionException.class,
+                () -> employeeService.updateSelfEmployeeProfile(24L, requestDto)
+        );
+
+        Assertions.assertEquals("That personal email is already used by another employee profile.", error.getMessage());
+        Assertions.assertEquals("old@example.com", employee.getPersonalEmail());
+        Assertions.assertTrue(employee.getIsVerified());
+        verify(employeeRepository, never()).save(any(Employee.class));
+    }
+
+    @Test
     void updateEmployee_ShouldClearManagerDepartment_WhenPositionChangesAwayFromManager() {
         stubScheduleDependencies();
         Employee employee = new Employee();
