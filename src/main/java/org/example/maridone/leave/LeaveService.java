@@ -734,11 +734,7 @@ public class LeaveService {
         if (employeeId == null) {
             throw new AccountNotFoundException("UserAccount with: " + username + " not found.");
         }
-        List<Long> employeeIds = new ArrayList<>(employeeRepository.findHandledEmployeeIds(employeeId));
-        if (!employeeIds.contains(employeeId)) {
-            employeeIds.add(employeeId);
-        }
-        return employeeIds;
+        return employeeRepository.findHandledEmployeeIds(employeeId);
     }
 
     private void validateApproverAccess(UserAccount user, LeaveRequest request, Long requestEmpId) {
@@ -752,11 +748,10 @@ public class LeaveService {
             return;
         }
 
-        if (isSameEmployee(approverEmployee, requestEmpId)) {
-            return;
-        }
-
         if (position == Position.MANAGEMENT) {
+            if (isSameEmployee(approverEmployee, requestEmpId)) {
+                return;
+            }
             Employee requestEmployee = resolveRequestEmployee(request, requestEmpId);
             if (requestEmployee.getManager() != null) {
                 throw new InvalidActionException("Management can only review leave requests from employees without a manager.");
@@ -766,6 +761,10 @@ public class LeaveService {
 
         if (position != Position.MANAGER) {
             throw new InvalidActionException("Only managers, management, and HR can review leave requests.");
+        }
+
+        if (isSameEmployee(approverEmployee, requestEmpId)) {
+            throw new InvalidActionException("Managers cannot review their own leave requests.");
         }
 
         List<Long> handledEmployeeIds = resolveHandledEmployeeIds(user.getUsername());

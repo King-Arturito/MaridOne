@@ -1034,6 +1034,51 @@ class LeaveServiceTest {
     }
 
     @Test
+    void updateLeaveRequest_ShouldRejectManagerForOwnRequest() {
+        LeaveRequest request = new LeaveRequest();
+        request.setRequestStatus(Status.PENDING_MANAGER);
+        request.setPaid(false);
+        request.setStartDateTime(mockedDay.plusDays(7).withHour(9));
+        request.setEndDateTime(mockedDay.plusDays(9).withHour(17));
+
+        Employee managerEmployee = new Employee();
+        ReflectionTestUtils.setField(managerEmployee, "employeeId", 2L);
+        managerEmployee.setFirstName("Adrian");
+        managerEmployee.setLastName("Flores");
+        managerEmployee.setPosition(Position.MANAGER);
+        request.setEmployee(managerEmployee);
+
+        UserAccount managerAccount = new UserAccount();
+        managerAccount.setUsername("manager1");
+        managerAccount.setEmployee(managerEmployee);
+
+        LeaveRequestDto payload = new LeaveRequestDto();
+        payload.setLeaveType(LeaveType.VACATION_LEAVE);
+        payload.setRequestStatus(Status.APPROVED);
+        payload.setApproverReason("Approving my own leave.");
+
+        Authentication authentication = org.mockito.Mockito.mock(Authentication.class);
+        SecurityContext securityContext = org.mockito.Mockito.mock(SecurityContext.class);
+
+        when(authentication.getName()).thenReturn("manager1");
+        when(securityContext.getAuthentication()).thenReturn(authentication);
+        SecurityContextHolder.setContext(securityContext);
+
+        when(userAccountRepository.findByUsername("manager1")).thenReturn(Optional.of(managerAccount));
+        when(leaveRequestRepository.findByIdForUpdate(35L)).thenReturn(Optional.of(request));
+        when(leaveRequestRepository.findEmployeeIdByRequestId(35L)).thenReturn(Optional.of(2L));
+
+        InvalidActionException error = Assertions.assertThrows(
+                InvalidActionException.class,
+                () -> leaveService.updateLeaveRequest(payload, 35L)
+        );
+
+        Assertions.assertTrue(error.getMessage().contains("Managers cannot review their own leave requests"));
+        verify(leaveRequestRepository, never()).save(any(LeaveRequest.class));
+        SecurityContextHolder.clearContext();
+    }
+
+    @Test
     void updateLeaveRequest_ShouldRejectManagerForUnhandledEmployee() {
         LeaveRequest request = new LeaveRequest();
         request.setRequestStatus(Status.PENDING_MANAGER);

@@ -39,7 +39,6 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.ZoneId;
-import java.util.ArrayList;
 import java.util.List;
 
 @Service
@@ -218,11 +217,7 @@ public class OvertimeService {
         if (employeeId == null) {
             throw new AccountNotFoundException("UserAccount with: " + username + " not found.");
         }
-        List<Long> employeeIds = new ArrayList<>(employeeRepository.findHandledEmployeeIds(employeeId));
-        if (!employeeIds.contains(employeeId)) {
-            employeeIds.add(employeeId);
-        }
-        return employeeIds;
+        return employeeRepository.findHandledEmployeeIds(employeeId);
     }
 
     private void validateApproverAccess(Employee approver, String username, Long requestEmployeeId) {
@@ -230,11 +225,10 @@ public class OvertimeService {
             return;
         }
 
-        if (isSameEmployee(approver, requestEmployeeId)) {
-            return;
-        }
-
         if (approver.getPosition() == Position.MANAGEMENT) {
+            if (isSameEmployee(approver, requestEmployeeId)) {
+                return;
+            }
             if (requestEmployeeId == null) {
                 throw new InvalidActionException("The overtime request is missing its employee reference.");
             }
@@ -253,6 +247,10 @@ public class OvertimeService {
 
         if (requestEmployeeId == null) {
             throw new InvalidActionException("The overtime request is missing its employee reference.");
+        }
+
+        if (isSameEmployee(approver, requestEmployeeId)) {
+            throw new InvalidActionException("Managers cannot review their own overtime requests.");
         }
 
         List<Long> handledEmployeeIds = resolveHandledEmployeeIds(username);

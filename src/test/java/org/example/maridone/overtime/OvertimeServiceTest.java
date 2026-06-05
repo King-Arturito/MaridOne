@@ -408,7 +408,7 @@ class OvertimeServiceTest {
     }
 
     @Test
-    void updateOvertimeRequest_ShouldAllowManagerForOwnRequest() {
+    void updateOvertimeRequest_ShouldRejectManagerForOwnRequest() {
         OvertimeRequest request = new OvertimeRequest();
         ReflectionTestUtils.setField(request, "overtimeId", 17L);
         request.setRequestStatus(Status.PENDING_MANAGER);
@@ -431,14 +431,14 @@ class OvertimeServiceTest {
 
         when(overtimeRequestRepository.findByIdForUpdate(17L)).thenReturn(Optional.of(request));
         when(userAccountRepository.findByUsername("manager1")).thenReturn(Optional.of(managerAccount));
-        when(overtimeRequestRepository.save(any(OvertimeRequest.class))).thenReturn(request);
-        when(overtimeMapper.toOvertimeResponseDto(request)).thenReturn(new OvertimeResponseDto());
 
-        OvertimeResponseDto result = overtimeService.updateOvertimeRequest(updateDto, "manager1");
+        InvalidActionException error = Assertions.assertThrows(
+                InvalidActionException.class,
+                () -> overtimeService.updateOvertimeRequest(updateDto, "manager1")
+        );
 
-        Assertions.assertNotNull(result);
-        Assertions.assertEquals(Status.PENDING_HR, request.getRequestStatus());
-        Assertions.assertEquals("Flores, Adrian", request.getManagerApprover());
+        Assertions.assertTrue(error.getMessage().contains("Managers cannot review their own overtime requests"));
+        verify(overtimeRequestRepository, never()).save(any(OvertimeRequest.class));
     }
 
     @Test
