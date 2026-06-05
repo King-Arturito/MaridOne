@@ -39,6 +39,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.ZoneId;
+import java.util.ArrayList;
 import java.util.List;
 
 @Service
@@ -217,11 +218,19 @@ public class OvertimeService {
         if (employeeId == null) {
             throw new AccountNotFoundException("UserAccount with: " + username + " not found.");
         }
-        return employeeRepository.findHandledEmployeeIds(employeeId);
+        List<Long> employeeIds = new ArrayList<>(employeeRepository.findHandledEmployeeIds(employeeId));
+        if (!employeeIds.contains(employeeId)) {
+            employeeIds.add(employeeId);
+        }
+        return employeeIds;
     }
 
     private void validateApproverAccess(Employee approver, String username, Long requestEmployeeId) {
         if (approver.getPosition() == Position.HR) {
+            return;
+        }
+
+        if (isSameEmployee(approver, requestEmployeeId)) {
             return;
         }
 
@@ -250,6 +259,12 @@ public class OvertimeService {
         if (!handledEmployeeIds.contains(requestEmployeeId)) {
             throw new InvalidActionException("Managers can only review overtime requests from their own team.");
         }
+    }
+
+    private boolean isSameEmployee(Employee employee, Long requestEmployeeId) {
+        return employee != null
+                && employee.getEmployeeId() != null
+                && employee.getEmployeeId().equals(requestEmployeeId);
     }
 
     private void notifyManager(Employee employee, String message) {

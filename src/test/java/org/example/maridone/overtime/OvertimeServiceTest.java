@@ -408,6 +408,40 @@ class OvertimeServiceTest {
     }
 
     @Test
+    void updateOvertimeRequest_ShouldAllowManagerForOwnRequest() {
+        OvertimeRequest request = new OvertimeRequest();
+        ReflectionTestUtils.setField(request, "overtimeId", 17L);
+        request.setRequestStatus(Status.PENDING_MANAGER);
+
+        Employee managerEmployee = new Employee();
+        ReflectionTestUtils.setField(managerEmployee, "employeeId", 2L);
+        managerEmployee.setFirstName("Adrian");
+        managerEmployee.setLastName("Flores");
+        managerEmployee.setPosition(Position.MANAGER);
+        request.setEmployee(managerEmployee);
+
+        UserAccount managerAccount = new UserAccount();
+        managerAccount.setUsername("manager1");
+        managerAccount.setEmployee(managerEmployee);
+
+        OvertimeUpdateDto updateDto = new OvertimeUpdateDto();
+        updateDto.setOvertimeId(17L);
+        updateDto.setUpdateStatus(Status.APPROVED);
+        updateDto.setApproveReason("Approving my own overtime coverage.");
+
+        when(overtimeRequestRepository.findByIdForUpdate(17L)).thenReturn(Optional.of(request));
+        when(userAccountRepository.findByUsername("manager1")).thenReturn(Optional.of(managerAccount));
+        when(overtimeRequestRepository.save(any(OvertimeRequest.class))).thenReturn(request);
+        when(overtimeMapper.toOvertimeResponseDto(request)).thenReturn(new OvertimeResponseDto());
+
+        OvertimeResponseDto result = overtimeService.updateOvertimeRequest(updateDto, "manager1");
+
+        Assertions.assertNotNull(result);
+        Assertions.assertEquals(Status.PENDING_HR, request.getRequestStatus());
+        Assertions.assertEquals("Flores, Adrian", request.getManagerApprover());
+    }
+
+    @Test
     void updateOvertimeRequest_ShouldRejectManagerForUnhandledEmployee() {
         OvertimeRequest request = new OvertimeRequest();
         ReflectionTestUtils.setField(request, "overtimeId", 8L);

@@ -985,6 +985,55 @@ class LeaveServiceTest {
     }
 
     @Test
+    void updateLeaveRequest_ShouldAllowManagementToEndorseOwnRequest() {
+        LeaveRequest request = new LeaveRequest();
+        request.setRequestStatus(Status.PENDING_MANAGER);
+        request.setPaid(false);
+        request.setStartDateTime(mockedDay.plusDays(7).withHour(9));
+        request.setEndDateTime(mockedDay.plusDays(9).withHour(17));
+
+        Employee manager = new Employee();
+        ReflectionTestUtils.setField(manager, "employeeId", 2L);
+        manager.setPosition(Position.MANAGER);
+
+        Employee managementEmployee = new Employee();
+        ReflectionTestUtils.setField(managementEmployee, "employeeId", 9L);
+        managementEmployee.setFirstName("Mina");
+        managementEmployee.setLastName("Boss");
+        managementEmployee.setPosition(Position.MANAGEMENT);
+        managementEmployee.setManager(manager);
+        request.setEmployee(managementEmployee);
+
+        UserAccount managementAccount = new UserAccount();
+        managementAccount.setUsername("management1");
+        managementAccount.setEmployee(managementEmployee);
+
+        LeaveRequestDto payload = new LeaveRequestDto();
+        payload.setLeaveType(LeaveType.VACATION_LEAVE);
+        payload.setRequestStatus(Status.APPROVED);
+        payload.setApproverReason("Approving my own leadership leave.");
+
+        Authentication authentication = org.mockito.Mockito.mock(Authentication.class);
+        SecurityContext securityContext = org.mockito.Mockito.mock(SecurityContext.class);
+
+        when(authentication.getName()).thenReturn("management1");
+        when(securityContext.getAuthentication()).thenReturn(authentication);
+        SecurityContextHolder.setContext(securityContext);
+
+        when(userAccountRepository.findByUsername("management1")).thenReturn(Optional.of(managementAccount));
+        when(leaveRequestRepository.findByIdForUpdate(34L)).thenReturn(Optional.of(request));
+        when(leaveRequestRepository.findEmployeeIdByRequestId(34L)).thenReturn(Optional.of(9L));
+        when(leaveRequestRepository.save(any(LeaveRequest.class))).thenReturn(request);
+
+        LeaveRequest result = leaveService.updateLeaveRequest(payload, 34L);
+
+        Assertions.assertEquals(Status.PENDING_HR, result.getRequestStatus());
+        Assertions.assertEquals("Boss, Mina", result.getManagerApprover());
+        verify(workflowEmailService).sendLeaveForwardedToHr(request);
+        SecurityContextHolder.clearContext();
+    }
+
+    @Test
     void updateLeaveRequest_ShouldRejectManagerForUnhandledEmployee() {
         LeaveRequest request = new LeaveRequest();
         request.setRequestStatus(Status.PENDING_MANAGER);
@@ -1027,7 +1076,7 @@ class LeaveServiceTest {
     }
 
     @Test
-    void updateLeaveRequest_ShouldRouteHrOwnedLeaveToManagementAfterManagerEndorsement() {
+    void updateLeaveRequest_ShouldRouteHrOwnedLeaveToHrAfterManagerEndorsement() {
         LeaveRequest request = new LeaveRequest();
         request.setRequestStatus(Status.PENDING_MANAGER);
         request.setPaid(false);
@@ -1074,13 +1123,12 @@ class LeaveServiceTest {
 
         Assertions.assertEquals(Status.PENDING_HR, result.getRequestStatus());
         Assertions.assertNull(result.getManagerApproverReason());
-        verify(workflowEmailService).sendLeaveForwardedToManagement(request);
-        verify(workflowEmailService, never()).sendLeaveForwardedToHr(request);
+        verify(workflowEmailService).sendLeaveForwardedToHr(request);
         SecurityContextHolder.clearContext();
     }
 
     @Test
-    void updateLeaveRequest_ShouldAllowManagementToFinalizeHrOwnedLeaveWithNoReason() {
+    void updateLeaveRequest_ShouldRejectManagementFinalizingPendingHrLeave() {
         LeaveRequest request = new LeaveRequest();
         request.setRequestStatus(Status.PENDING_HR);
         request.setPaid(false);
@@ -1124,29 +1172,37 @@ class LeaveServiceTest {
         when(userAccountRepository.findByUsername("management1")).thenReturn(Optional.of(managementAccount));
         when(leaveRequestRepository.findByIdForUpdate(32L)).thenReturn(Optional.of(request));
         when(leaveRequestRepository.findEmployeeIdByRequestId(32L)).thenReturn(Optional.of(3L));
-        when(leaveRequestRepository.save(any(LeaveRequest.class))).thenReturn(request);
+        InvalidActionException error = Assertions.assertThrows(
+                InvalidActionException.class,
+                () -> leaveService.updateLeaveRequest(payload, 32L)
+        );
 
-        LeaveRequest result = leaveService.updateLeaveRequest(payload, 32L);
-
-        Assertions.assertEquals(Status.APPROVED, result.getRequestStatus());
-        Assertions.assertNull(result.getApproverReason());
-        Assertions.assertEquals("Boss, Mina", result.getApprover());
-        verify(workflowEmailService).sendLeaveDecisionToEmployee(request);
+        Assertions.assertTrue(error.getMessage().contains("employees without a manager"));
+        verify(leaveRequestRepository, never()).save(any(LeaveRequest.class));
         SecurityContextHolder.clearContext();
     }
 
     @Test
-    void updateLeaveRequest_ShouldRejectHrFinalizingHrOwnedLeave() {
+    void updateLeaveRequest_ShouldAllowHrFinalizingHrOwnedLeave() {
         LeaveRequest request = new LeaveRequest();
         request.setRequestStatus(Status.PENDING_HR);
+        request.setPaid(false);
+        request.setSuggestedPaid(false);
+        request.setLeaveType(LeaveType.VACATION_LEAVE);
+        request.setStartDateTime(mockedDay.plusDays(7).withHour(9));
+        request.setEndDateTime(mockedDay.plusDays(7).withHour(17));
 
         Employee hrEmployee = new Employee();
         ReflectionTestUtils.setField(hrEmployee, "employeeId", 3L);
+        hrEmployee.setFirstName("Ethel");
+        hrEmployee.setLastName("Santos");
         hrEmployee.setPosition(Position.HR);
         request.setEmployee(hrEmployee);
 
         Employee hrApprover = new Employee();
         ReflectionTestUtils.setField(hrApprover, "employeeId", 5L);
+        hrApprover.setFirstName("Hera");
+        hrApprover.setLastName("Reyes");
         hrApprover.setPosition(Position.HR);
 
         UserAccount hrAccount = new UserAccount();
@@ -1167,13 +1223,13 @@ class LeaveServiceTest {
         when(userAccountRepository.findByUsername("hr2")).thenReturn(Optional.of(hrAccount));
         when(leaveRequestRepository.findByIdForUpdate(33L)).thenReturn(Optional.of(request));
         when(leaveRequestRepository.findEmployeeIdByRequestId(33L)).thenReturn(Optional.of(3L));
+        when(leaveRequestRepository.save(any(LeaveRequest.class))).thenReturn(request);
 
-        InvalidActionException error = Assertions.assertThrows(
-                InvalidActionException.class,
-                () -> leaveService.updateLeaveRequest(payload, 33L)
-        );
+        LeaveRequest result = leaveService.updateLeaveRequest(payload, 33L);
 
-        Assertions.assertTrue(error.getMessage().contains("HR-owned leave requests"));
+        Assertions.assertEquals(Status.APPROVED, result.getRequestStatus());
+        Assertions.assertEquals("Reyes, Hera", result.getApprover());
+        verify(workflowEmailService).sendLeaveDecisionToEmployee(request);
         SecurityContextHolder.clearContext();
     }
 }

@@ -384,27 +384,14 @@ public class LeaveService {
             throw new IllegalStateException("Employee ID connected to request not found.");
         }
 
-        if  (requestEmpId.equals(verifyOwnEmployeeId(authentication.getName()))) {
-            throw new InvalidActionException("You cannot approve your own request.");
-        }
-
         validateApproverAccess(user, request, requestEmpId);
 
         return switch (resolveApproverPosition(user)) {
             case MANAGER -> handleManagerLeaveReview(request, payload, user);
-            case MANAGEMENT -> isHrAlternateFinalReview(request)
-                    ? handleHrLeaveReview(request, payload, user, requestEmpId)
-                    : handleManagerLeaveReview(request, payload, user);
+            case MANAGEMENT -> handleManagerLeaveReview(request, payload, user);
             case HR -> handleHrLeaveReview(request, payload, user, requestEmpId);
             default -> throw new InvalidActionException("Only managers, management, and HR can review leave requests.");
         };
-    }
-
-    private Long verifyOwnEmployeeId(String name) {
-        UserAccount userAccount = userAccountRepository.findByUsername(name).orElseThrow((
-                () -> new AccountNotFoundException("UserAccount with: " + name + " not found.")
-                ));
-        return userAccount.getEmployeeId();
     }
 
 
@@ -747,24 +734,31 @@ public class LeaveService {
         if (employeeId == null) {
             throw new AccountNotFoundException("UserAccount with: " + username + " not found.");
         }
-        return employeeRepository.findHandledEmployeeIds(employeeId);
+        List<Long> employeeIds = new ArrayList<>(employeeRepository.findHandledEmployeeIds(employeeId));
+        if (!employeeIds.contains(employeeId)) {
+            employeeIds.add(employeeId);
+        }
+        return employeeIds;
     }
 
     private void validateApproverAccess(UserAccount user, LeaveRequest request, Long requestEmpId) {
-        Position position = Optional.ofNullable(user.getEmployee())
+        Employee approverEmployee = Optional.ofNullable(user.getEmployee())
+                .orElseThrow(() -> new AccountNotFoundException("UserAccount with: " + user.getUsername() + " not found."));
+        Position position = Optional.of(approverEmployee)
                 .map(Employee::getPosition)
                 .orElse(Position.UNKNOWN);
 
         if (position == Position.HR) {
-            if (isHrAlternateFinalReview(request)) {
-                throw new InvalidActionException("HR-owned leave requests must be finalized by management.");
-            }
+            return;
+        }
+
+        if (isSameEmployee(approverEmployee, requestEmpId)) {
             return;
         }
 
         if (position == Position.MANAGEMENT) {
             Employee requestEmployee = resolveRequestEmployee(request, requestEmpId);
-            if (requestEmployee.getManager() != null && !isHrAlternateFinalReview(request)) {
+            if (requestEmployee.getManager() != null) {
                 throw new InvalidActionException("Management can only review leave requests from employees without a manager.");
             }
             return;
@@ -778,6 +772,12 @@ public class LeaveService {
         if (!handledEmployeeIds.contains(requestEmpId)) {
             throw new InvalidActionException("Managers can only review leave requests from their own team.");
         }
+    }
+
+    private boolean isSameEmployee(Employee employee, Long requestEmpId) {
+        return employee != null
+                && employee.getEmployeeId() != null
+                && employee.getEmployeeId().equals(requestEmpId);
     }
 
     private void notifyManager(Employee employee, String message) {
@@ -803,19 +803,6 @@ public class LeaveService {
         }
         return employeeRepository.findById(requestEmpId)
                 .orElseThrow(() -> new EmployeeNotFoundException(requestEmpId));
-    }
-
-    private boolean isHrOwnedRequest(LeaveRequest request) {
-        return request != null
-                && Optional.ofNullable(request.getEmployee())
-                .map(Employee::getPosition)
-                .orElse(Position.UNKNOWN) == Position.HR;
-    }
-
-    private boolean isHrAlternateFinalReview(LeaveRequest request) {
-        return request != null
-                && request.getRequestStatus() == Status.PENDING_HR
-                && isHrOwnedRequest(request);
     }
 
     private LeaveRequest handleManagerLeaveReview(LeaveRequest request, LeaveRequestDto payload, UserAccount user) {
@@ -845,21 +832,16 @@ public class LeaveService {
                     request.getStartDateTime().toLocalDate(),
                     request.getEndDateTime().toLocalDate()
             );
-            boolean routeToManagementFinalReview = isHrOwnedRequest(request);
-            String finalReviewerLabel = routeToManagementFinalReview ? "management final review" : "HR review";
+            String finalReviewerLabel = "HR review";
             notifyRole(
                     "Leave request from " + employeeName + " (" + leaveDates + ") is ready for " + finalReviewerLabel + ".",
-                    routeToManagementFinalReview ? Position.MANAGEMENT : Position.HR
+                    Position.HR
             );
             notifyEmployee(
                     request.getEmployee(),
                     "Your leave request (" + leaveDates + ") was endorsed by " + reviewerLabel + " and is now waiting for " + finalReviewerLabel + "."
             );
-            if (routeToManagementFinalReview) {
-                workflowEmailService.sendLeaveForwardedToManagement(request);
-            } else {
-                workflowEmailService.sendLeaveForwardedToHr(request);
-            }
+            workflowEmailService.sendLeaveForwardedToHr(request);
             workflowEmailService.sendLeaveForwardedToEmployee(request);
             return request;
         }
